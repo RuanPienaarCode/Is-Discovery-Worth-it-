@@ -375,7 +375,7 @@ function mountBottomLine(root, ctx) {
     const pr = buildProducts(st, m, ms, s, now(), products);
     /* P looks up any product, chosen or not: the comparisons read all five */
     const P = id => pr.all.find(p => p.id === id);
-    const cmp = { health: compareHealth(P('health'), s), gap: compareGap(P('gap'), s), insure: compareInsure(P('insure'), s), life: compareLife(P('life'), s), home: compareHome(s) };
+    const cmp = { health: compareHealth(P('health'), s, undefined, { now: now() }), gap: compareGap(P('gap'), s, undefined, { now: now() }), insure: compareInsure(P('insure'), s), life: compareLife(P('life'), s), home: compareHome(s) };
     const issues = typeof rates.statusIssues === 'function' ? [].concat(rates.statusIssues(s) || []).map(noteText).filter(Boolean) : [];
     const view = { s, eff, m, ms, st, pr, P, cmp, products, vitality, banking, detected, issues, windowNote: m.windowNote || win.windowNote || '', folderNote: folderNote(budget), bankName: products.bank ? bankName(eff) : '', verdicts: buildVerdicts(st, cmp, products, { now: now() }), sw: buildSwitch(st, cmp, products, { now: now() }), rivals: buildRivals(st, cmp, products, { now: now() }) };
     cur = view;
@@ -826,10 +826,8 @@ function mountBottomLine(root, ctx) {
       el(t, 'span', null, ' ' + dateText(d));
     }
   }
-  /* products.js words the yearly rate change for the date it falls on; say
-     what happens and which rates these figures use */
+  /* products.js words each dated change in full */
   function dateText(d) {
-    if (/new rates usually start now/.test(d.text)) return `Discovery usually changes its rates on 1 January. These figures use ${Number(d.date.slice(0, 4)) - 1} rates.`;
     return d.text;
   }
 
@@ -1189,14 +1187,14 @@ function mountBottomLine(root, ctx) {
       if (l && Math.abs(l.annual) >= 0.5) lineRow(c, l);
     }
     if (v.premium !== null) total(c, `Vitality rewards after its fee, ${perLabel()}`, v.value - v.premium, 'result');
-    const cmp = compareHealth(p, plugin.settings);
+    const cmp = compareHealth(p, plugin.settings, undefined, { now: now() });
     if (!cmp) return;
     const mem = cmp.members || {};
     const fam = `${Math.max(1, Number(mem.adults) || 1)} adult${(Number(mem.adults) || 1) > 1 ? 's' : ''}${Number(mem.children) > 0 ? ` and ${mem.children} child${mem.children > 1 ? 'ren' : ''}` : ''}`;
     renderNeeds(c, cmp);
     const needLabel = id => (NEEDS.find(n => n.id === id) || { label: id }).label.toLowerCase();
     renderMarket(c, {
-      key: 'mk.health', title: 'Compared with other medical aids', line: `2026 prices for ${fam}.`,
+      key: 'mk.health', title: 'Compared with other medical aids', line: `${now().getFullYear() >= 2027 ? '2027 prices (most still to be approved)' : '2026 prices'} for ${fam}.`,
       intro: `Change the family on the Inputs tab. If you leave Discovery Health you also lose Vitality Health, so what Vitality is worth to you after its fee (${R(cmp.vitalityNet)} ${perLabel()} ${cmp.vitalityNet >= 0 ? 'better off' : 'worse off'}) is added to the other medical aids' cost. Discovery's own cheaper plans keep Vitality.`,
       you: 'Discovery Health (now)', cmp, lostLabel: 'Vitality rewards you would lose',
       name: r => r.scheme + ' ' + r.plan,
@@ -1247,12 +1245,12 @@ function mountBottomLine(root, ctx) {
     plainLine(c, 'Claims paid to you', p.claims, 'measured', p.claims ? 'Gap-cover claim payments on your statements (shown as INSGAPCLA).' : 'None in this period.', 'back', false, false, undefined, billItem('product.gapClaim'));
     total(c, `Claims after what you pay, ${perLabel()}`, p.net, 'result');
     if (p.claims) el(moreIn(c, 'gap.claims', 'Why this year may look unusual'), 'p', null, 'One big claim can make a year look unusual. In most years gap cover costs money and pays nothing back; it is there for the year something big happens.');
-    const cmp = compareGap(p, plugin.settings);
+    const cmp = compareGap(p, plugin.settings, undefined, { now: now() });
     /* the rival prices are for someone under 45 */
     const oldest = Number((plugin.settings.members || {}).oldestAge);
     const known = Number.isFinite(oldest) && oldest > 0;
     if (cmp) renderMarket(c, {
-      key: 'mk.gap', title: 'Compared with other gap cover', line: known && oldest < 45 ? '2026 family prices, oldest member under 45.' : `Rival prices shown are for under 45s.${known ? ' Yours may be higher.' : ''}`,
+      key: 'mk.gap', title: 'Compared with other gap cover', line: known && oldest < 45 ? `${now().getFullYear() >= 2027 ? '2027' : '2026'} family prices, oldest member under 45.` : `Rival prices shown are for under 45s.${known ? ' Yours may be higher.' : ''}`,
       intro: 'Most charge more after 45, so type your own quote on the Inputs tab. Gap cover pays what the medical aid does not when you are in hospital. Discovery Gap Cover is only for Discovery Health members, so if you leave the medical aid it has to go too. The others work with any medical aid.',
       you: 'Discovery Gap Cover (now)', cmp,
       name: r => r.provider + ' ' + r.plan, sub: r => r.cover || '',
@@ -1750,7 +1748,7 @@ function mountBottomLine(root, ctx) {
       const key = `${product}.${p.id}`;
       const { f, hint } = field(g, name(p), 'R/month');
       const inp = numberInput(f);
-      const pub = product === 'health' ? healthPremium(p, members) : published(p);
+      const pub = product === 'health' ? healthPremium(p, members, now()) : published(p);
       inp.placeholder = pub !== null && pub !== undefined ? showTyped(Math.round(pub * 100) / 100) : 'your quote';
       inp.value = showTyped(s.quotes[key]);
       bindNumber(inp, s.quotes, key);

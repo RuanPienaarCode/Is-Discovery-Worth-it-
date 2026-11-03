@@ -12,13 +12,23 @@ assert.strictEqual(MARKET.reviewBy, '2026-12-31', 'the day before the other sche
 const firstChange = Object.values(PERIODS).map(p => p.changes).filter(Boolean).sort()[0];
 assert.ok(MARKET.reviewBy < firstChange, 'reviewBy falls before the first known price change');
 // each table's price period
-assert.deepStrictEqual([PERIODS.discoveryHealth.from, PERIODS.discoveryHealth.to, PERIODS.discoveryHealth.changes], ['2026-04-01', '2027-03-31', '2027-04-01']);
+assert.deepStrictEqual([PERIODS.discoveryHealth.from, PERIODS.discoveryHealth.to, PERIODS.discoveryHealth.changes], ['2026-04-01', '2026-12-31', '2027-01-01']);
+// 2027's prices are in the tables already, so the 1 January change follows on
+assert.strictEqual(PERIODS.discoveryHealth.next, 'discoveryHealth2027');
+assert.deepStrictEqual([PERIODS.discoveryHealth2027.from, PERIODS.discoveryHealth2027.to], ['2027-01-01', '2027-12-31']);
+assert.ok(PERIODS.discoveryHealth2027.pending, 'says the 2027 prices still need approval');
+assert.strictEqual(priceValidFor('discoveryHealth', '2027-06'), true, 'a period counts the one that follows it');
+{
+  const only = { asOf: '2026-11-03', reviewBy: '2027-05-03', periods: { a: { label: 'A', from: '2026-01-01', to: '2026-12-31', changes: '2027-01-01', next: 'b' }, b: { label: 'B', from: '2027-01-01', to: '2027-12-31', changes: '2028-01-01' } } };
+  assert.strictEqual(marketAge('2027-02-01', only).stale, false, 'a change whose new prices are in is not staleness');
+  assert.strictEqual(marketAge('2027-05-04', only).stale, true);
+}
 assert.deepStrictEqual([PERIODS.schemes.from, PERIODS.schemes.to, PERIODS.schemes.changes], ['2026-01-01', '2026-12-31', '2027-01-01']);
 assert.strictEqual(PERIODS.bankFees.from, '2026-09-01');
 assert.strictEqual(PERIODS.rewards.from, '2026-11-01');
 for (const [k, p] of Object.entries(PERIODS)) assert.ok(p.label && ISO.test(p.from) && (p.to === null || ISO.test(p.to)), k);
 assert.strictEqual(priceValidFor('discoveryHealth', '2027-03'), true);
-assert.strictEqual(priceValidFor('discoveryHealth', '2027-04-01'), false);
+assert.strictEqual(priceValidFor('discoveryHealth', '2028-01-01'), false, 'no 2028 prices');
 assert.strictEqual(priceValidFor('schemes', '2027-01'), false);
 assert.strictEqual(priceValidFor('bankFees', '2030-01'), true, 'no end published');
 assert.strictEqual(priceValidFor('rewards', '2026-10'), false, 'before the rewards guide');
@@ -252,9 +262,15 @@ for (const b of ALTERNATIVES) assert.ok(b.source && /20\d\d/.test(b.source), `${
 // ── the rival bank: like-for-like by the kind of Discovery Bank product (rt3 item 7) ──
 {
   const { chooseAlternative, altConfirmed, altKinds } = require('../src/rates');
-  const sb = ALTERNATIVES.find(a => a.id === 'sbPrestige');
-  assert.strictEqual(sb.unconfirmed, true, 'its note says not confirmed, so it is marked');
-  assert.strictEqual(altConfirmed(sb), false);
+  const absaRow = ALTERNATIVES.find(a => a.id === 'absaPremium');
+  assert.strictEqual(absaRow.unconfirmed, true, 'its Bank Earn table is from 2024, so it is marked');
+  assert.ok(absaRow.unconfirmedWhy, 'and says why');
+  assert.strictEqual(altConfirmed(absaRow), false);
+  // the bank's own documents confirm these now (3 Nov 2026)
+  for (const id of ['capitec', 'sbPrestige', 'fnbAspire', 'fnbPremier']) assert.strictEqual(altConfirmed(ALTERNATIVES.find(a => a.id === id)), true, id);
+  // FNB pays nothing on general card spend: only at eBucks partners
+  for (const id of ['fnbAspire', 'fnbPremier']) assert.strictEqual(ALTERNATIVES.find(a => a.id === id).backPct, 0, id);
+  assert.ok(!ALTERNATIVES.some(a => a.guess), 'no rival rate is our own guess any more');
   for (const a of ALTERNATIVES) for (const k of altKinds(a)) assert.ok(BANK_KINDS.includes(k), `${a.id} kind ${k}`);
   for (const k of BANK_KINDS) assert.ok(ALTERNATIVES.some(a => altKinds(a).includes(k)), `some bank stands in for ${k}`);
   // model.js results: highest net first, so GoTyme (no fees, no card) would always win on net
@@ -271,7 +287,7 @@ for (const b of ALTERNATIVES) assert.ok(b.source && /20\d\d/.test(b.source), `${
   assert.strictEqual(chooseAlternative(res, 'gone', { bankKind: 'transaction' }).id, 'gotyme', 'a pick that is gone falls back');
   assert.strictEqual(chooseAlternative([], ''), null);
   // a confirmed like-for-like bank beats a cheaper unconfirmed one
-  const withSure = res.concat([{ id: 'sureBank', name: 'Sure Bank', net: -5000, kinds: ['suite', 'card'] }]);
+  const withSure = [{ id: 'absaPremium', name: 'Absa Premium', net: -1000 }, { id: 'sureBank', name: 'Sure Bank', net: -5000, kinds: ['suite', 'card'] }];
   assert.strictEqual(chooseAlternative(withSure, '', { bankKind: 'suite' }).id, 'sureBank');
 }
 {
@@ -296,3 +312,22 @@ for (const b of ALTERNATIVES) assert.ok(b.source && /20\d\d/.test(b.source), `${
   assert.strictEqual(rr({ conditions: { checks: 'both' }, rates: { healthyFoodHealthPct: 12 } }, 'healthyFoodHealthPct', st), 12, 'a typed figure still wins');
 }
 console.log('market: ok');
+
+// ── market data audit, 3 Nov 2026 ─────────────────────────────────────
+{
+  const { RULES } = require('../src/constants');
+  // Purple's R4 250 annual card fee is known and is counted when a statement shows it
+  const purple = SUITES.find(s => s.id === 'Purple');
+  assert.strictEqual(purple.annualFee, 4250);
+  assert.strictEqual(BANK_PRODUCTS.find(p => p.suite === 'Purple').annualFee, 4250);
+  assert.ok(RULES.some(r => r.key === 'fee.other' && r.desc && r.desc.test('ANNUAL CARD FEE')), 'an annual card fee line is a bank charge');
+  // dynamic interest is per kind of product, not per tier
+  for (const id of ['Gold', 'Platinum', 'Black']) assert.deepStrictEqual(SUITES.find(s => s.id === id).unconfirmed, [], id);
+  const boost = (suite, kind, fees, st) => rate({ suite, bankKind: kind, bankFees: fees }, 'savingsBoostPct', { money: st });
+  assert.strictEqual(boost('Gold', 'suite', null, 'Diamond'), 1.5);
+  assert.strictEqual(boost('Gold', 'transaction', 'payt', 'Diamond'), 0.5);
+  assert.strictEqual(boost('Black', 'transaction', 'payt', 'Gold'), 0.75);
+  assert.strictEqual(boost('Black', 'transaction', 'bundled', 'Diamond'), 1.5, 'a bundled Transaction Account gets the Suite steps');
+  assert.strictEqual(boost('Black', 'savings', null, 'Diamond'), 0, 'the Ðiscovery Account is not in the table');
+  assert.strictEqual(rate({ suite: 'Gold', bankKind: 'card' }, 'ccSavingsBoostPct', { money: 'Bronze' }), 0.15);
+}

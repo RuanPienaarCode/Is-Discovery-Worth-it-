@@ -49,11 +49,12 @@ assert.ok(/R 3 000 to Vitality Travel/.test(R(fl.flights.why)));
 assert.strictEqual(suggestBenefits(win({}), null, { travel: { discount: 900, baseFare: 4000 } }).flights.suggested, 'full', 'receipts say you fly');
 assert.ok(/no Vitality Travel/.test(empty.flights.why));
 
-// HealthyFood: Checkers, Woolworths or Pick n Pay
+// HealthyFood: Checkers or Woolworths (Pick n Pay is not a HealthyFood partner)
 const food = suggestBenefits(win({ 'shop.woolworths': fig({ [months[0]]: 1000 }), 'all.shop.pnp': fig({ [months[1]]: 500 }) }), null, {});
 assert.strictEqual(food.healthyFood.suggested, 'full');
-assert.strictEqual(R(food.healthyFood.why), 'You spent R 1 500 at Woolworths and Pick n Pay in the last 12 months.');
-assert.ok(/Checkers, Woolworths or Pick n Pay/.test(empty.healthyFood.why));
+assert.strictEqual(R(food.healthyFood.why), 'You spent R 1 000 at Woolworths in the last 12 months.');
+assert.ok(/Checkers or Woolworths/.test(empty.healthyFood.why));
+assert.strictEqual(suggestBenefits(win({ 'all.shop.pnp': fig({ [months[1]]: 500 }) }), null, {}).healthyFood.suggested, 'none', 'Pick n Pay alone earns no HealthyFood');
 
 // HealthyCare: Clicks or Dis-Chem
 const care = suggestBenefits(win({ 'shop.dischem': fig({ [months[2]]: 640 }) }), null, {});
@@ -161,7 +162,7 @@ assert.ok(R(B('gym').offer).includes(`${RATES.gymDiscountPct.value}% off`) && R(
 assert.ok(R(B('fuel').offer).includes(`${topAll('fuel')}% more`), B('fuel').offer);
 assert.ok(R(B('fuel').offer).includes(`${Math.max(...Object.values(RATES.fuelDrivePct.byStatus))}% back`) && /half that on Essential/.test(B('fuel').offer));
 assert.ok(R(B('fuel').offer).includes('R 1 500 of fuel') && R(B('fuel').offer).includes('R 3 000 when Discovery also insures your home'), B('fuel').offer);
-assert.ok(R(B('healthyFood').offer).includes('R 5 000 a month') && R(B('healthyFood').offer).includes('50% more'), B('healthyFood').offer);
+assert.ok(R(B('healthyFood').offer).includes('R 5 000 for a family') && R(B('healthyFood').offer).includes('50% more'), B('healthyFood').offer);
 assert.ok(R(B('healthyFood').offer).includes('10% back') && R(B('healthyFood').offer).includes('25% once you have done your Vitality Age'), 'the health checks, not a status');
 assert.ok(R(B('healthyCare').offer).includes('10% back') && R(B('healthyCare').offer).includes('25% once'), B('healthyCare').offer);
 assert.ok(R(B('flights').offer).includes(`${RATES.travelHealthPct.value}% off`) && R(B('flights').offer).includes(`${topAll('flightsLocal')}% more on local flights`), B('flights').offer);
@@ -208,12 +209,17 @@ const txNo = av({ bankKind: 'transaction' }, ALL, V(false, true, true));
 ['miles.card', 'miles.partners', 'interest.boost', 'miles.uplift', 'gameboard', 'miles.healthyFood', 'fuel.money', 'travel.bank'].forEach(k => assert.ok(!txNo.lines.has(k), k));
 assert.ok(/Vitality Money/.test(txNo.benefits.interest.reason));
 assert.ok(txNo.lines.has('fuel.drive') && txNo.lines.has('gym'), 'Drive and Health go on');
-// savings only: no Miles, and Vitality Money cannot come with it
+// the Ðiscovery Account (savings only) comes with Vitality Money and a
+// virtual card (its fees guide), but earns no base Miles and no lifestyle extras
 const sav = av({ bankKind: 'savings' }, ALL, V(true, true, true));
-['miles.card', 'miles.partners', 'gameboard', 'interest.boost', 'miles.uplift'].forEach(k => assert.ok(!sav.lines.has(k), k));
-assert.strictEqual(sav.benefits.miles.available, false);
-assert.ok(/savings account/.test(sav.benefits.miles.reason), sav.benefits.miles.reason);
-assert.ok(/savings account/.test(sav.benefits.interest.reason), sav.benefits.interest.reason);
+assert.ok(!sav.lines.has('miles.card'), 'no base Miles');
+['miles.partners', 'gameboard', 'interest.boost', 'miles.uplift', 'travel.bank', 'travel.health'].forEach(k => assert.ok(sav.lines.has(k), k));
+['miles.healthyFood', 'miles.healthyCare', 'fuel.money', 'appleWatch'].forEach(k => assert.ok(!sav.lines.has(k), k));
+assert.ok(/Ðiscovery Account earns no Miles on card payments/.test(sav.benefits.miles.note), sav.benefits.miles.note);
+// Vitality Health's flight discount is booked through Vitality Travel, which needs a Discovery Bank account
+const noBankTravel = av({ bankKind: 'suite' }, { bank: false, health: true, insure: true }, V(false, true, true));
+assert.ok(!noBankTravel.lines.has('travel.health'));
+assert.ok(/free Ðiscovery Account is enough/.test(noBankTravel.benefits.flights.reason), noBankTravel.benefits.flights.reason);
 // a Credit Card Account on its own: everything from the bank except the Suite's watch
 const cc = av({ bankKind: 'card' }, ALL, V(true, true, true));
 assert.ok(cc.lines.has('miles.healthyFood') && cc.lines.has('interest.cashback'));
@@ -234,12 +240,13 @@ assert.ok(noD.benefits.fuel.available && /Vitality Drive/.test(noD.benefits.fuel
 const noBank = av({ bankKind: 'suite' }, { ...ALL, bank: false }, V(true, true, true));
 ['miles', 'interest', 'milesPlus', 'appleWatch'].forEach(id => assert.strictEqual(noBank.benefits[id].available, false, id));
 assert.ok(/do not bank with Discovery/.test(noBank.benefits.miles.reason));
-assert.ok(noBank.benefits.gym.available && noBank.benefits.flights.available, 'Vitality Health still counts');
+assert.ok(noBank.benefits.gym.available, 'Vitality Health still counts');
+assert.strictEqual(noBank.benefits.flights.available, false, 'Vitality Travel needs a Discovery Bank account, even the free one');
 
 // benefitsFor with the setup hides what is not available; the one-argument call is unchanged
 const healthOnly = { bank: false, health: true, gap: false, insure: false, life: false };
 assert.deepStrictEqual(benefitsFor(healthOnly, { bankKind: null }, V(false, false, false)).map(b => b.id), [], 'Discovery Health without Vitality Health: nothing');
-assert.deepStrictEqual(benefitsFor(healthOnly, { bankKind: null }, V(false, true, false)).map(b => b.id), ['healthyFood', 'healthyCare', 'gameboard', 'gym', 'flights']);
+assert.deepStrictEqual(benefitsFor(healthOnly, { bankKind: null }, V(false, true, false)).map(b => b.id), ['healthyFood', 'healthyCare', 'gameboard', 'gym'], 'no flights: Vitality Travel needs a Discovery Bank account');
 assert.deepStrictEqual(benefitsFor({ bank: true }, { bankKind: 'savings' }, V(false, false, false)).map(b => b.id), []);
 assert.ok(!benefitsFor(ALL, { bankKind: 'card' }, V(true, true, true)).some(b => b.id === 'appleWatch'));
 assert.strictEqual(benefitsFor(ALL).length, BENEFITS.length, 'products only, as before');
@@ -305,7 +312,7 @@ assert.strictEqual(offerText('nope', {}), '');
 {
   // B7: a measured boost proves Vitality Money, even with only a savings account in the budget
   const sav = availableFor({ bankKind: 'savings' }, { bank: true }, { money: true });
-  assert.ok(!sav.lines.has('interest.boost'), 'savings alone: no Vitality Money');
+  assert.ok(sav.lines.has('interest.boost'), 'the Ðiscovery Account comes with Vitality Money');
   const proven = availableFor({ bankKind: 'savings' }, { bank: true }, { money: true }, { moneyProven: true });
   assert.ok(proven.lines.has('interest.boost') && proven.benefits.interest.available, 'the boost itself proves it');
   assert.ok(!proven.lines.has('miles.card'), 'still no card to earn Miles on');

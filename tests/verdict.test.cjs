@@ -123,9 +123,9 @@ assert.strictEqual(buildVerdicts(null, { life: life(250, [row(2000, { quoted: tr
 
 // ── an unconfirmed rival says so ──────────────────────────────────────
 {
-  const capitec = buildVerdicts({ net: 0, chosen: { id: 'capitec', name: 'Capitec Global One', gainIfSwitch: 2000 } }, {});
-  assert.ok(/Capitec Global One's figures are not confirmed/.test(capitec.bank.why), capitec.bank.why);
-  const guess = buildVerdicts({ net: 0, chosen: { id: 'fnbPremier', name: 'FNB Fusion Premier', gainIfSwitch: -5000 } }, {});
+  const absa = buildVerdicts({ net: 0, chosen: { id: 'absaPremium', name: 'Absa Premium', gainIfSwitch: 2000 } }, {});
+  assert.ok(/Absa Premium's figures are not confirmed/.test(absa.bank.why), absa.bank.why);
+  const guess = buildVerdicts({ net: 0, chosen: { id: 'fnbPremier', name: 'FNB Fusion Premier', gainIfSwitch: -5000, guess: true } }, {});
   assert.ok(/not confirmed/.test(guess.bank.why), 'a guessed rewards rate is not confirmed either');
   /* any rival whose figures rates.js marks confirmed (the list changes) */
   const { ALTERNATIVES, altConfirmed } = require('../src/rates');

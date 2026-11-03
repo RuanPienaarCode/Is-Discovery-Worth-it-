@@ -53,10 +53,13 @@ const rank = id => GROUPS.findIndex(g => g.id === id);
 for (let i = 1; i < t.available.length; i++) assert.ok(rank(t.available[i - 1].b.group) <= rank(t.available[i].b.group), 'grouped in GROUPS order');
 assert.ok(t.full > 0 && t.counted > 0 && t.counted <= t.full, 'the made-up household gets something');
 
-// a savings account on its own unlocks no bank benefits
+// the Ðiscovery Account on its own: Vitality Money, but no base Miles and no lifestyle extras
 const sav = Object.assign(base(), { bankKind: 'savings' });
-const tSav = benefitTotals(buildStatement(m, sav));
-assert.ok(tSav.unavailable.some(r => r.b.id === 'miles'), 'Miles need a card');
+const stSav = buildStatement(m, sav);
+const tSav = benefitTotals(stSav);
+assert.ok(/earns no Miles on card payments/.test(stSav.benefits.miles.note), 'base Miles need a card');
+assert.strictEqual(stSav.lines.find(l => l.key === 'miles.card').annual, 0);
+assert.ok(tSav.unavailable.some(r => r.b.id === 'appleWatch'), 'the watch needs a Suite');
 assert.ok(tSav.unavailable.every(r => r.x.reason), 'every unavailable benefit says why');
 
 // setLevel: an explicit answer is stored even when it equals the suggestion,

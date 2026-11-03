@@ -154,7 +154,9 @@ console.log('products OK');
   near(r.totals.cash, P('health').cashBack + P('insure').cashBack);
   assert.ok(r.totals.paid < totals.paid, 'fewer products, a smaller bill');
   // dated reminders for a product you do not have stay out
-  assert.ok(r.dates.every(d => d.product === 'insure'), 'only Insure dates remain');
+  assert.ok(r.dates.every(d => d.product === 'insure' || d.product === 'health'), 'only Health and Insure dates remain');
+  assert.ok(r.dates.some(d => d.product === 'health' && d.date === '2027-01-01' && /8,2%/.test(d.text)), 'the 2027 Discovery Health prices');
+  assert.ok(!r.dates.some(d => d.product === 'gap'));
   assert.ok(!r.dates.some(d => d.product === 'bank'));
   // a product you did not choose is still built (the comparisons look it up)
   near(r.all.find(p => p.id === 'gap').paid, 300 * 12);

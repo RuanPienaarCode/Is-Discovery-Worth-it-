@@ -29,7 +29,13 @@ const { STATUSES } = require('./constants');
      HC      HealthyCare benefit guide, Aug 2026
      DRIVE   How the Vitality Drive programme works, 2026
      MILES   discovery.co.za/bank/info-and-tips-discovery-bank-rewards
-     DYN     Dynamic interest rates (as at 25 Sep 2026, Black Suite)
+     DYN     Save more and pay less with Dynamic Interest Rates (rates as at
+             25 Sep 2026) — discovery.co.za/assets/discoverycoza/bank/
+             marketing-material/features-one-pagers/save-more-and-pay-less-
+             with-dynamic-interest-rates.pdf: one row per kind of product
+             (Suite, Credit Card Account, bundled Transaction Account, and
+             the pay-as-you-transact Transaction Account by tier), the same
+             for Gold, Platinum and Black
      HFG     HealthyFood benefit guide, Vitality Health and Vitality Money —
              discovery.co.za/wcm/discoverycoza/assets/vitality/bank/
              healthyfood-vitality-and-bank.pdf
@@ -67,7 +73,7 @@ const SOURCE_NAMES = {
   DRIVE: 'How the Vitality Drive programme works (2026)',
   MILES: 'Discovery Bank rewards: info and tips',
   CCFEES: 'Discovery Bank Credit Card Account fees guides (from 1 Sep 2026)',
-  DYN: 'Dynamic interest rates, Black Suite (as at 25 Sep 2026)',
+  DYN: 'Dynamic Interest Rates, rates as at 25 Sep 2026',
   HFG: 'HealthyFood benefit guide, Vitality Health and Vitality Money (read 3 Nov 2026)',
   HCG: 'HealthyCare benefit guide, Vitality Health (read 3 Nov 2026; it covers changes from 1 Dec 2026)',
   GYM: 'Virgin Active benefit guide and Vitality Premium brochure 2026 (read 3 Nov 2026)',
@@ -243,19 +249,22 @@ const DIAMOND = {
    Black Suite figure because this Suite's own was not found. */
 const MILES_HIGH = { Blue: 65, Bronze: 50, Silver: 40, Gold: 30, Diamond: 15 };
 const MILES_LOW = { Blue: 100, Bronze: 65, Silver: 50, Gold: 40, Diamond: 20 };
-const SAVINGS_UNCONFIRMED = 'The extra interest on savings is only published for the Black Suite (DYN), so that figure is used here. Type your own on the Inputs tab if yours differs.';
+/* The dynamic interest table (DYN) has one row for every Suite and one for
+   every Credit Card Account; Purple is not named in it, but its own page
+   gives the same 1,5% top boost. */
+const SAVINGS_UNCONFIRMED = 'The dynamic interest table lists "Discovery Bank Suite" without naming Purple, so the Suite figures are used. Type your own on the Inputs tab if yours differs.';
 const SUITES = [
   { id: 'Gold', label: 'Gold Suite', fee: 250, feeParts: { account: 115, vitalityMoney: 66, credit: 69 },
     baseMiles: MILES_LOW, milesThreshold: 10000,
     creditCard: { label: 'Gold Credit Card Account', fee: 125, feeParts: { account: 32.5, vitalityMoney: 37.5, credit: 55 }, baseMiles: MILES_LOW, note: 'The Gold Credit Card Account gets no HealthyCare from the bank; the Gold Suite does.' },
     rates: { milesRandPerMile: { byStatus: MILES_LOW }, ccMilesRandPerMile: { byStatus: MILES_LOW }, milesThreshold: { value: 10000 }, ccFee: { value: 125 } },
-    unconfirmed: ['savingsBoostPct', 'ccSavingsBoostPct'], unconfirmedWhy: SAVINGS_UNCONFIRMED,
+    unconfirmed: [],
     source: 'Gold Suite fees guide and Gold Credit Card Account fees guide (from 1 Sep 2026); Discovery Bank rewards guide, Gold Collection (effective 1 Nov 2026)' },
   { id: 'Platinum', label: 'Platinum Suite', fee: 340, feeParts: { account: 190, vitalityMoney: 81, credit: 69 },
     baseMiles: MILES_HIGH, milesThreshold: 15000,
     creditCard: { label: 'Platinum Credit Card Account', fee: 180, feeParts: { account: 70, vitalityMoney: 55, credit: 55 }, baseMiles: MILES_LOW },
     rates: { milesRandPerMile: { byStatus: MILES_HIGH }, ccMilesRandPerMile: { byStatus: MILES_LOW }, milesThreshold: { value: 15000 }, ccFee: { value: 180 } },
-    unconfirmed: ['savingsBoostPct', 'ccSavingsBoostPct'], unconfirmedWhy: SAVINGS_UNCONFIRMED,
+    unconfirmed: [],
     source: 'Platinum Suite fees guide and Platinum Credit Card Account fees guide (from 1 Sep 2026); Discovery Bank rewards guide, Platinum Collection (effective 1 Nov 2026)' },
   { id: 'Black', label: 'Black Suite', fee: 605, feeParts: { account: 435, vitalityMoney: 101, credit: 69 },
     baseMiles: MILES_HIGH, milesThreshold: 25000,
@@ -263,7 +272,11 @@ const SUITES = [
     rates: {},
     unconfirmed: [],
     source: 'Black Suite fees guide and Black Credit Card Account fees guide (from 1 Sep 2026); Discovery Bank rewards guide, Black Collection (effective 1 Nov 2026)' },
-  { id: 'Purple', label: 'Purple Suite', fee: 730, feeParts: { account: 540, vitalityMoney: 121, credit: 69 },
+  /* annualFee: Purple's R4 250 annual card fee, charged once a year on top
+     of the monthly fee and refunded only with an average daily positive
+     balance of R1 million or more (Purple fees guide, 1 Sep 2026). fee stays
+     the monthly total: the statements say what was charged. */
+  { id: 'Purple', label: 'Purple Suite', fee: 730, feeParts: { account: 540, vitalityMoney: 121, credit: 69 }, annualFee: 4250, annualFeeWaiver: 'an average daily positive balance of at least R1 million',
     baseMiles: MILES_HIGH, milesThreshold: 30000,
     creditCard: null,
     rates: { milesRandPerMile: { byStatus: MILES_HIGH }, milesThreshold: { value: 30000 }, ccFee: { value: null }, ccMilesRandPerMile: { value: null } },
@@ -314,13 +327,23 @@ const BANK_PRODUCTS = [
   product('Black', 'card', 'payt', 'Black Credit Card Account', 140, 80, 55, MILES_LOW, 25000, { flightsLocal: 'ccFlightsLocal' }, FG('Black Credit Card Account', 'Black')),
   product('Black', 'transaction', 'bundled', 'Black Transaction Account (bundled fees)', 300, 75, 0, MILES_LOW, 25000, NO_LIFESTYLE, FG('Black Transaction Account bundled', 'Black')),
   product('Black', 'transaction', 'payt', 'Black Transaction Account (pay-as-you-transact)', 80, 55, 0, null, null, Object.assign({ flightsLocal: null }, NO_LIFESTYLE), FG('Black Transaction Account pay-as-you-transact', 'Black')),
-  product('Purple', 'suite', 'bundled', 'Purple Suite', 540, 121, 69, MILES_HIGH, 30000, null, 'Discovery Bank Purple fees guide (from 1 Sep 2026); rewards guide, Purple Suite (effective 1 Nov 2026)'),
-  /* Savings only: the free Ðiscovery Account. It is in no tier's rewards
-     guide, so its base Miles and reward tables are not confirmed: they read
-     nothing until you type a figure. */
+  product('Purple', 'suite', 'bundled', 'Purple Suite', 540, 121, 69, MILES_HIGH, 30000, null, 'Discovery Bank Purple fees guide (from 1 Sep 2026); rewards guide, Purple Suite (effective 1 Nov 2026)',
+    { annualFee: 4250, annualFeeWaiver: 'an average daily positive balance of at least R1 million' }),
+  /* Savings only: the free Ðiscovery Account. It comes with Vitality Money
+     and a virtual debit card (its fees guide), but earns no base Miles and
+     no lifestyle extras; its Miles+ earn is read from your Miles statement,
+     not estimated. */
   product(null, 'savings', 'payt', 'Ðiscovery Account (savings only)', 0, 0, 0, null, null, Object.assign({ flightsLocal: null }, NO_LIFESTYLE), 'Ðiscovery Account fees guide (from 1 Sep 2026)',
-    { unconfirmed: true, unconfirmedWhy: 'The rewards guides do not list the Ðiscovery Account, so no Miles or rewards are counted for it.' }),
+    { unconfirmed: true, unconfirmedWhy: 'The rewards guides do not list the Ðiscovery Account, so no Miles are estimated for it; what your statements show is still counted.' }),
 ];
+/* Dynamic interest on a pay-as-you-transact Transaction Account (DYN): its
+   own, smaller steps, by tier. The Ðiscovery Account is not in the table
+   ("up to 0,6%" in all, its own page), so no boost is assumed for it. */
+const PAYT_BOOST = { Gold: { Blue: 0, Bronze: 0.075, Silver: 0.15, Gold: 0.375, Diamond: 0.5 }, Platinum: { Blue: 0, Bronze: 0.15, Silver: 0.3, Gold: 0.75, Diamond: 1 }, Black: { Blue: 0, Bronze: 0.15, Silver: 0.3, Gold: 0.75, Diamond: 1 } };
+for (const p of BANK_PRODUCTS) {
+  if (p.kind === 'transaction' && p.fees === 'payt' && PAYT_BOOST[p.suite]) p.rates = Object.assign({}, p.rates, { savingsBoostPct: { byStatus: PAYT_BOOST[p.suite] } });
+  if (p.kind === 'savings') p.rates = Object.assign({}, p.rates, { savingsBoostPct: { value: 0 } });
+}
 const BANK_KINDS = ['suite', 'card', 'transaction', 'savings'];
 
 /* settings (+ ctx) → the BANK_PRODUCTS row: the tier from settings.suite,
@@ -339,9 +362,10 @@ function bankProductOf(settings, ctx) {
 
 const RATES = {
   mileValue: { label: 'What one Discovery Mile is worth', unit: 'R', value: 0.1, source: 'MILES: partners take 10 Miles as R1.', year: 2026 },
-  /* Spending Miles: Miles+ partners take a discount off the price when you
-     pay with Miles, bigger on Ð-Day (the 15th of each month). Electricity,
-     data and airtime take Miles at face value. */
+  /* Spending Miles: Discovery Miles partners take a discount off the price
+     when you pay with Miles, bigger on Ð-Day (the 15th of each month).
+     Prepaid electricity, data and airtime in the app get the everyday
+     discount, not the Ð-Day one. */
   /* Per active Vitality programme (Money, Health, Drive): model.js
      multiplies by how many the person has, so 15% and 30% are the most. */
   milesDdayPct: { label: 'Discount when you spend Miles on Ð-Day (the 15th), per active Vitality programme', unit: '%', value: 10, perProgramme: true, source: 'DMILES: double the everyday discount on the 15th of each month, so 10% for each Vitality programme you have (Vitality Money, Health and Drive), up to 30%. It is for online and in-store purchases at Discovery Miles partners; prepaid airtime, data and electricity bought in the app get only the everyday discount.', year: 2026 },
@@ -356,14 +380,16 @@ const RATES = {
 
   healthyFoodShare: { label: 'How much of your Checkers / Woolworths spend is HealthyFood', unit: '%', value: 25, source: 'Your own guess. Only HealthyFood items count; the Vitality app shows your real total.', year: null, guess: true },
   healthyFoodMoneyPct: { label: 'Bank\'s extra HealthyFood percentage', unit: '%', band: 'healthyFood', source: 'GUIDE: grows with your monthly card spend and your Vitality Money status. At Diamond it goes up to 15% on the Gold Suite, 25% on Platinum and Black, and 50% on Purple.', year: 2026 },
-  healthyFoodMoneyCap: { label: 'HealthyFood spend the bank\'s extra applies to', unit: 'R/month', value: 2500, source: 'HF: R2 500 a month with one Discovery credit card holder, R5 000 when both spouses have one.', year: 2026 },
+  healthyFoodMoneyCap: { label: 'HealthyFood spend the bank\'s extra applies to', unit: 'R/month', value: 2500, source: 'HFG: R2 500 a month with one Discovery credit card holder, R5 000 when both spouses have one (type 5000 if you do).', year: 2026 },
   healthyFoodHealthPct: { label: 'HealthyFood back from Vitality Health (main shop)', unit: '%', value: 10,
     cases: [{ when: 'assessed', value: 25, label: 'Done your Vitality Age and a Vitality Health Check in the last 12 months' }],
     source: 'HFG: 10% once you switch HealthyFood on, 25% once each adult has done both the Vitality Age assessment and a Vitality Health Check in the last 12 months. Your Vitality Health status does not change it. We count 10% until you say you have done both; type 25 if you have.', year: 2026 },
   healthyFoodSecondaryPct: { label: 'HealthyFood back at the other shop', unit: '%', value: 0,
     cases: [{ when: 'assessed', value: 10, label: 'Done your Vitality Age and a Vitality Health Check in the last 12 months' }],
     source: 'HFG: 10% at your other HealthyFood shop, but only once you have done both health checks; nothing before that. Vitality Active plans have no second shop. We count nothing until you say you have done both; type 10 if you have.', year: 2026 },
-  healthyFoodHealthCap: { label: 'HealthyFood spend Vitality Health pays on (whole family)', unit: 'R/month', value: 5000, source: 'HF: up to R5 000 a month for the family.', year: 2026 },
+  healthyFoodHealthCap: { label: 'HealthyFood spend Vitality Health pays on (whole family)', unit: 'R/month', value: 2500,
+    cases: [{ when: 'family', value: 5000, label: 'Vitality Health for a family (more than one person in your household)' }],
+    source: 'HFG: up to R5 000 a month for a family, R2 500 for a main member on their own. Your household on the Inputs tab picks which.', year: 2026 },
   healthyMinSpend: { label: 'Least HealthyFood or HealthyCare spend a month before any reward', unit: 'R/month', value: 200, source: 'From September 2026 a month with less than this earns nothing. Discovery counts it per person, per shop, and in store and online separately; here it is checked per shop. Source: Vitality benefit updates, 2026.', year: 2026 },
 
   healthyCareShare: { label: 'How much of your Clicks / Dis-Chem spend is HealthyCare', unit: '%', value: 30, source: 'Your own guess. Schedule 1 and 2 medicines no longer count.', year: null, guess: true },
@@ -374,8 +400,10 @@ const RATES = {
       { when: 'oneAssessment', value: 15, label: 'Done one of the two health checks in the last 12 months' },
     ],
     source: 'HCG: 10% at Clicks and Dis-Chem once you switch HealthyCare on, 15% at your main shop after one of the two health checks, 25% after both (Vitality Age and a Vitality Health Check in the last 12 months). Your Vitality Health status does not change it. We count 10% until you say otherwise; type 15 or 25 if that is yours.', year: 2026 },
-  healthyCareCap: { label: 'HealthyCare spend Vitality Health pays on (whole family)', unit: 'R/month', value: 4000, source: 'HC: up to R4 000 a month for the family.', year: 2026 },
-  healthyCareMoneyCap: { label: 'HealthyCare spend the bank\'s extra applies to', unit: 'R/month', value: 2000, source: 'HC: up to R2 000 a month with one account holder.', year: 2026 },
+  healthyCareCap: { label: 'HealthyCare spend Vitality Health pays on (whole family)', unit: 'R/month', value: 2000,
+    cases: [{ when: 'family', value: 4000, label: 'Vitality Health for a family (more than one person in your household)' }],
+    source: 'HCG: up to R4 000 a month for a family, R2 000 for a main member on their own. Your household on the Inputs tab picks which.', year: 2026 },
+  healthyCareMoneyCap: { label: 'HealthyCare spend the bank\'s extra applies to', unit: 'R/month', value: 2000, source: 'HCG: up to R2 000 a month with one account holder, R4 000 when you and your spouse both have a qualifying Discovery Bank credit card (type 4000 if you do).', year: 2026 },
 
   fuelDrivePct: { label: 'Vitality Drive fuel back', unit: '%', on: 'drive', byStatus: { Blue: 0, Bronze: 5, Silver: 15, Gold: 30, Diamond: 50 },
     cases: [
@@ -409,38 +437,53 @@ const RATES = {
   paytFee: { label: 'Average fee per payment on the cheaper account', unit: 'R', value: 3.25, source: 'CCFEES: debit orders cost R3,75 and online payments R2,75; card purchases and moving money between your own accounts are free. The average is a guess.', year: 2026, guess: true },
   ccMilesRandPerMile: { label: 'Card spend for one Mile on the Credit Card Account, virtual card', unit: 'R per Mile', on: 'money', byStatus: { Blue: 100, Bronze: 65, Silver: 50, Gold: 40, Diamond: 20 }, source: 'GUIDE: the Credit Card Account column of your collection.', year: 2026 },
   ccTravelMoneyPct: { label: 'Bank\'s extra flight discount on the Credit Card Account (local flights)', unit: '%', band: 'ccFlightsLocal', avg: true, source: 'GUIDE: grows with your average card spend and your Vitality Money status, up to 15% on Gold, 25% on Platinum and 35% on Black.', year: 2026 },
-  savingsBoostPct: { label: 'Extra interest on savings, Suite', unit: '%', on: 'money', byStatus: { Blue: 0, Bronze: 0.25, Silver: 0.5, Gold: 1, Diamond: 1.5 }, source: 'DYN: savings earn 4,75%, up to 6,25% on the Black Suite. The other Suites do not publish theirs, so the Black figure is used; type yours if it differs.', year: 2026 },
-  ccSavingsBoostPct: { label: 'Extra interest on savings, Credit Card Account', unit: '%', on: 'money', byStatus: { Blue: 0, Bronze: 0.15, Silver: 0.3, Gold: 0.75, Diamond: 1 }, source: 'DYN: up to 5,75% on the Black Credit Card Account (the same steps apply to money left in the card). The other collections do not publish theirs, so the Black figure is used.', year: 2026 },
+  savingsBoostPct: { label: 'Extra interest on savings, Suite', unit: '%', on: 'money', byStatus: { Blue: 0, Bronze: 0.25, Silver: 0.5, Gold: 1, Diamond: 1.5 }, source: 'DYN: savings earn 4,75%, up to 6,25% with a Suite or a bundled-fee Transaction Account, whatever the tier. A pay-as-you-transact Transaction Account gets less, and the Ðiscovery Account is not in the table.', year: 2026 },
+  ccSavingsBoostPct: { label: 'Extra interest on savings, Credit Card Account', unit: '%', on: 'money', byStatus: { Blue: 0, Bronze: 0.15, Silver: 0.3, Gold: 0.75, Diamond: 1 }, source: 'DYN: up to 5,75% with a Credit Card Account, whatever the tier (the same steps apply to money left in the card).', year: 2026 },
   travelMoneyPct: { label: 'Bank\'s extra flight discount (local flights)', unit: '%', band: 'flightsLocal', avg: true, source: 'GUIDE: grows with your average card spend over 12 months and your Vitality Money status, up to 25% on the Gold Suite, 35% on Platinum and 50% on Black and Purple, on three return or six one-way flights a year.', year: 2026 },
 };
 
 /* Banks to compare with: the everyday account plus a credit card there.
-   backPct is rewards on ALL card spend; partner deals (Checkers points,
-   fuel per litre) are named in the note, not counted. */
+   backPct is rewards on card spend that is not excluded (flatExcludes);
+   bankEarn, where a bank pays a fixed rand amount by monthly spend band
+   instead, replaces it. Partner deals are counted at named shops; fuel per
+   litre is named in the note, not counted. Reward programmes with levels or
+   tiers are counted at a middle tier (said in each note), since we cannot
+   know yours: type your own rate beside the bank on the Bank tab. Sources
+   checked 3 Nov 2026 (docs/market-data-sources.html). Per-transaction fees
+   (debit orders, payments) are left out for every rival. */
 const GROCERY = ['shop.checkers', 'shop.woolworths', 'shop.pnp'];
 const FUEL = ['fuel.bp', 'fuel.shell', 'fuel.other'];
-/* partners: cash back at named shops, capped per month, and (Absa) at most
-   `shareOfSpend` of the month's card spend per category. A partner rate of
-   null is unpublished: it earns nothing here, and the page shows the rate
-   that would match Discovery instead. */
+/* partners: cash back at named shops, capped per month, and at most
+   `shareOfSpend` of the month's card spend (only while card spend is under
+   `shareBelow`, when that is set). A partner rate of null is unpublished
+   or depends on a level we cannot know: it earns nothing here, and the page
+   shows the rate that would match Discovery instead. flatExcludes: shops
+   whose spend earns no flat reward; flatExcludesPartners: the spend a
+   partner deal already rewarded earns no flat reward. */
 const ALTERNATIVES = [
-  { id: 'gotyme', name: 'GoTyme (TymeBank)', fee: 0, backPct: 0, capMonthly: 0, likeForLike: false, kinds: ['transaction', 'savings'],
-    note: 'No monthly fee and no rewards, but also no credit card, so it is not a like-for-like swap.', source: 'gotyme.co.za: "Open a bank account for free" (no fee schedule published), fetched 21 Oct 2026' },
+  { id: 'gotyme', name: 'GoTyme Bank', fee: 0, backPct: 0, capMonthly: 0, likeForLike: false, kinds: ['transaction', 'savings'],
+    note: 'No monthly fee and no rewards, but also no credit card, so it is not a like-for-like swap.', source: 'gotyme.co.za current account page (fee table, no rewards programme), fetched 3 Nov 2026' },
   { id: 'capitec', name: 'Capitec Global One', fee: 57.5, backPct: 1, capMonthly: 0, kinds: ['suite', 'card'],
-    note: 'R7,50 for the account and R50 for the credit card. Live Better pays 1% back on credit card spend, with no levels. We could not read Capitec\'s own website, so check before you decide.', source: 'The Citizen 6 Feb 2026 (fees); Currency News, Mar 2026 (1% Live Better cash back on credit card spend; Capitec\'s own page not readable)', unconfirmed: true },
-  { id: 'fnbAspire', name: 'FNB Fusion Aspire', rewardKind: 'points', fee: 125, backPct: 0.5, capMonthly: 0, guess: true, kinds: ['suite', 'card'],
-    note: 'eBucks rewards are mostly at Pick n Pay, Clicks and Engen, where you spend little. FNB does not publish a general rewards rate, so the 0,5% here is a guess.', source: 'FNB Aspire pricing guide 2026/27 (fee); rewards rate is a guess' },
-  { id: 'fnbPremier', name: 'FNB Fusion Premier', rewardKind: 'points', fee: 260, backPct: 1, capMonthly: 0, guess: true, kinds: ['suite', 'card'],
-    note: 'Up to 30% back in eBucks at Pick n Pay online (20% in store) and up to R8 a litre at Engen, but only on up to 20% of your card spend. FNB does not publish a general rewards rate, so the 1% here is a guess.', source: 'FNB Premier pricing guide 2026/27 (fee); rewards rate is a guess' },
-  { id: 'sbPrestige', name: 'Standard Bank Prestige', rewardKind: 'points', app: 'UCount', fee: 285, backPct: 1, capMonthly: 0, kinds: ['suite', 'card'], unconfirmed: true,
-    partners: [{ label: 'UCount at Checkers and Shoprite', keys: ['shop.checkers'], pct: null, capMonthly: 3000 }],
-    note: 'R260 (with a credit card) and R25 for UCount. Up to 1% back on card spend, plus up to 40% in UCount points at Checkers. That rate and the R3 000 limit come from 2025 articles and are not confirmed.', source: 'Standard Bank Prestige pricing guide 2026; UCount Checkers terms unconfirmed' },
-  { id: 'absaPremium', name: 'Absa Premium', app: 'Absa banking', fee: 265, backPct: 0.5, capMonthly: 0, guess: true, kinds: ['suite', 'card'],
+    note: 'R7,50 for the account and R50 for the credit card. Live Better pays 1% back on credit card spend, with no levels and no published limit; you join Live Better for free. Debit orders (R3 each) and payments are extra and not counted here.', source: 'Capitec personal banking fees 2026 (from 1 Mar 2026); capitecbank.co.za Live Better page (archived copy of 25 Aug 2026, the live page blocks downloads)' },
+  { id: 'fnbAspire', name: 'FNB Fusion Aspire', rewardKind: 'points', fee: 125, backPct: 0, capMonthly: 0, kinds: ['suite', 'card'],
+    partners: [{ label: 'eBucks at Pick n Pay (rate set by your eBucks level)', keys: ['shop.pnp'], pct: null, capMonthly: 3000 }],
+    note: 'eBucks pays nothing on general card spend: only at Pick n Pay, Clicks and Engen, at a rate set by your eBucks level, up to R750 of eBucks a month. A R69 credit facility fee is charged in months you use the credit.', source: 'FNB Aspire pricing guide 1 Jul 2026 – 30 Jun 2027; eBucks earn rules 2026/27' },
+  { id: 'fnbPremier', name: 'FNB Fusion Premier', rewardKind: 'points', fee: 260, backPct: 0, capMonthly: 0, kinds: ['suite', 'card'],
+    partners: [{ label: 'eBucks at Pick n Pay (rate set by your eBucks level)', keys: ['shop.pnp'], pct: null, capMonthly: 0 }],
+    note: 'eBucks pays nothing on general card spend: up to 30% back at Pick n Pay online (20% in store) and up to R8 a litre at Engen at the top level, with the virtual card, on up to 20% of your card spend. A R69 credit facility fee is charged in months you use the credit.', source: 'FNB Premier pricing guide 1 Jul 2026 – 30 Jun 2027; eBucks earn rules Premier 2026/27' },
+  { id: 'sbPrestige', name: 'Standard Bank Prestige', rewardKind: 'points', app: 'UCount', fee: 285, backPct: 0.5, capMonthly: 0, kinds: ['suite', 'card'],
+    flatExcludes: ['shop.checkers', 'shop.woolworths'],
+    partners: [{ label: 'UCount at Checkers (Tier 3, in store)', keys: ['shop.checkers'], pct: 6, capMonthly: 3000, shareOfSpend: 20 }],
+    note: 'R260 (with a credit card) and R25 for UCount. UCount card rewards are 0,25% to 1% of credit card spend by tier, counted here at Tier 3 (0,5%); none on spend at grocers such as Checkers and Woolworths. With Grocery as your chosen category, Checkers pays 3% to 30% in store (4% to 40% on Sixty60), counted at Tier 3 (6%), on up to R3 000 a month and no more than 20% of your card spend.', source: 'Standard Bank Prestige pricing guide 2026 (from 1 Jan 2026); UCount Rewards Programme Rules, effective March 2026' },
+  { id: 'absaPremium', name: 'Absa Premium', app: 'Absa banking', fee: 265, backPct: 0, capMonthly: 0, kinds: ['suite', 'card'], unconfirmed: true,
+    bankEarn: { bands: [0, 5000, 10000, 15000, 20000, 25000], rand: [0, 25, 40, 90, 100, 120] },
+    flatExcludesPartners: true,
     partners: [
-      { label: 'Grocery partners (Checkers, Woolworths, Pick n Pay)', keys: GROCERY, pct: null, capMonthly: 3000, shareOfSpend: 20 },
-      { label: 'Fuel at Shell or Sasol (if you moved from bp)', keys: FUEL, pct: null, capMonthly: 3000, shareOfSpend: 20 },
+      { label: 'Grocery partners (Checkers, Woolworths, Pick n Pay), Tier 3', keys: GROCERY, pct: 1.25, capMonthly: 3000, shareOfSpend: 20, shareBelow: 15000 },
+      { label: 'Fuel at Shell or Sasol (if you moved from bp), Tier 3', keys: FUEL, pct: 1.25, capMonthly: 3000, shareOfSpend: 20, shareBelow: 15000 },
     ],
-    note: 'The Premium package with a credit card. Absa Rewards pays "up to 30%" back at grocery partners and at Shell or Sasol, on up to R3 000 a month each and no more than 20% of your card spend. Your own rate is only shown in the Absa app. The 0,5% on other spending is a guess.', source: 'absa.co.za premium banking; Absa Rewards terms 2026 (caps); tier rates unpublished' },
+    note: 'The Premium package with a credit card. Absa Rewards pays a fixed amount a month by card spend and tier ("Bank Earn"), counted here at Tier 3: nothing under R5 000, up to R120 from R25 000. Grocery partners and Shell or Sasol pay 0,2% to 30% by tier, counted at Tier 3 (1,25%), on up to R3 000 a month each, and no more than 20% of card spend while it is under R15 000. Your tier is in the Absa app. The Bank Earn table is the one Absa published in 2024 and still links to.', source: 'absa.co.za premium banking (fee, fetched 3 Nov 2026); Absa Rewards terms (from 10 Sep 2026); Absa partner pages (tier rates, fetched 3 Nov 2026); Absa Bank Earn table (2024 rewards changes)',
+    unconfirmedWhy: 'Absa\'s Bank Earn table is from its 2024 rewards changes, the latest it links to; no 2026 table was found.' },
 ];
 
 /* Whether a rival bank's figures can be leaned on: not `unconfirmed`, not
@@ -544,7 +587,11 @@ function statusIssues(settings) {
    meets none, so the lower published figure counts. */
 function metOf(settings) {
   const c = (settings && settings.conditions) || {};
+  const mem = (settings && settings.members) || {};
   return {
+    /* more than one person in the household: Vitality Health's family
+       caps (one person, or unanswered: the single-member ones) */
+    family: (Number(mem.adults) || 1) > 1 || Number(mem.children) > 0,
     assessed: c.checks === 'both',
     oneAssessment: c.checks === 'one',
     gym36: c.gym36 === true,

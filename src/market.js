@@ -39,18 +39,32 @@
    published; `changes` = the first day the prices are known to change
    (a new year's contributions), which makes the data stale. */
 const PERIODS = {
-  discoveryHealth: { label: 'Discovery Health contributions', from: '2026-04-01', to: '2027-03-31', changes: '2027-04-01' },
+  /* 2026 ran from 1 April (January to March 2026 kept the 2025 prices, a
+     once-off delay); 2027 starts on 1 January again. `next` names the
+     period whose prices are already in the tables, so the change on
+     `changes` does not make the data stale. */
+  discoveryHealth: { label: 'Discovery Health contributions', from: '2026-04-01', to: '2026-12-31', changes: '2027-01-01', next: 'discoveryHealth2027' },
+  discoveryHealth2027: { label: 'Discovery Health 2027 contributions', from: '2027-01-01', to: '2027-12-31', changes: '2028-01-01', pending: 'Published 1 Oct 2026, still to be approved by the Council for Medical Schemes.' },
   schemes: { label: 'Other medical aids\' contributions', from: '2026-01-01', to: '2026-12-31', changes: '2027-01-01' },
+  /* 2027 prices for the plans that publish them (y2027 in compare.js); a
+     plan without one goes stale on 1 January 2027 */
+  schemes2027: { label: 'Other medical aids\' 2027 contributions', from: '2027-01-01', to: '2027-12-31', changes: '2028-01-01', pending: 'Published Sep–Oct 2026, most still to be approved by the Council for Medical Schemes.' },
   gap: { label: 'Gap cover premiums', from: '2026-01-01', to: '2026-12-31', changes: '2027-01-01' },
+  /* 2027 prices for the rows that publish them (y2027 in compare.js); a row
+     without one goes stale on 1 January 2027 */
+  gap2027: { label: 'Gap cover 2027 premiums', from: '2027-01-01', to: '2027-12-31', changes: '2028-01-01' },
+  discoveryGap: { label: 'Discovery Gap Cover premiums', from: '2026-01-01', to: '2026-12-31', changes: '2027-01-01', next: 'discoveryGap2027' },
+  discoveryGap2027: { label: 'Discovery Gap Cover 2027 premiums', from: '2027-01-01', to: '2027-12-31', changes: '2028-01-01' },
   bankFees: { label: 'Discovery Bank fees', from: '2026-09-01', to: null, changes: null },
   rewards: { label: 'Discovery Bank rewards', from: '2026-11-01', to: null, changes: null },
 };
 
 const MARKET = {
   asOf: '2026-11-03',
-  /* the day before the other medical aids' 2027 prices start */
+  /* the day before 2027 prices start: some plans and gap covers had not
+     published theirs by asOf, so those rows go out of date then */
   reviewBy: '2026-12-31',
-  note: 'Discovery Bank rewards as at 1 November 2026, bank fees from 1 September 2026, and 2026 prices for medical aid, gap cover and insurance. Medical aids change their prices every year, most in January and Discovery Health in April.',
+  note: 'Discovery Bank rewards as at 1 November 2026, bank fees from 1 September 2026, and 2026 prices for medical aid, gap cover and insurance, with the 2027 prices already published (Discovery Health and most other medical aids, some gap cover) taking over on 1 January 2027. Medical aids change their prices every January. Every figure and its source is listed in docs/market-data-sources.html.',
   periods: PERIODS,
 };
 
@@ -89,7 +103,10 @@ function marketAge(now, market) {
   let staleFrom = m.reviewBy ? dayAfter(m.reviewBy) : null, staleWhy = 'It is time to check the published prices again.';
   /* a price change on the same day says more than "time to check" */
   let byReview = !!staleFrom;
-  for (const p of Object.values(m.periods || {})) {
+  const periods = m.periods || {};
+  for (const p of Object.values(periods)) {
+    /* the next period's prices are in the tables already */
+    if (p && p.next && periods[p.next]) continue;
     if (p && p.changes && (!staleFrom || p.changes < staleFrom || (byReview && p.changes === staleFrom))) {
       staleFrom = p.changes;
       byReview = false;
@@ -102,10 +119,14 @@ function marketAge(now, market) {
 /* Whether a table's prices are good for a month or a day ('YYYY-MM' or
    'YYYY-MM-DD'): inside the period PERIODS[table] gives. */
 function priceValidFor(table, when, market) {
-  const p = ((market || MARKET).periods || {})[table];
-  if (!p || typeof when !== 'string' || !/^\d{4}-\d{2}/.test(when)) return false;
+  const periods = (market || MARKET).periods || {};
+  if (typeof when !== 'string' || !/^\d{4}-\d{2}/.test(when)) return false;
   const ym = when.slice(0, 7);
-  return ym >= p.from.slice(0, 7) && (!p.to || ym <= p.to.slice(0, 7));
+  /* a period and the ones that follow it (`next`) */
+  for (let p = periods[table], hops = 0; p && hops < 5; p = periods[p.next], hops++) {
+    if (ym >= p.from.slice(0, 7) && (!p.to || ym <= p.to.slice(0, 7))) return true;
+  }
+  return false;
 }
 
 /* asOf plus `months` months, as 'YYYY-MM-DD' (the day clamps to the

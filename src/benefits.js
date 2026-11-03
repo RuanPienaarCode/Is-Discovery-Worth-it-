@@ -57,13 +57,13 @@ const BENEFITS = [
     group: 'everyday', needs: WITH_BANK,
     offer: `One Discovery Mile for as little as every ${R(BEST_MILES)} you pay with the virtual card, at Diamond status. That runs up to a monthly limit of ${R(Math.min(...THRESHOLDS))} to ${R(Math.max(...THRESHOLDS))}, depending on your account, then one Mile for every ${R(val('milesAboveThreshold'))}. At partners, ${Math.round(1 / val('mileValue'))} Miles pay for ${R(1)} of shopping.`,
     measuredBy: 'From your Discovery Bank card spend, or your Miles statement when you add one.' },
-  { id: 'healthyFood', products: ['bank', 'health'], label: 'HealthyFood rewards', question: 'Do you buy groceries at Checkers, Woolworths or Pick n Pay?', lineKeys: ['miles.healthyFood', 'healthyFood.health'],
+  { id: 'healthyFood', products: ['bank', 'health'], label: 'HealthyFood rewards', question: 'Do you buy groceries at Checkers or Woolworths?', lineKeys: ['miles.healthyFood', 'healthyFood.health'],
     group: 'everyday', needs: `Vitality Health, and ${WITH_BANK} for the extra`,
-    offer: `Vitality Health gives ${pct(val('healthyFoodHealthPct'))} back on HealthyFood at your main shop, and ${pct(caseVal('healthyFoodHealthPct', 'assessed'))} once you have done your Vitality Age (an online health-age test) and a Vitality Health Check (a screening at a clinic or pharmacy). That is on up to ${R(val('healthyFoodHealthCap'))} a month for the family. Discovery Bank adds up to ${pct(top('healthyFood'))} more on up to ${R(val('healthyFoodMoneyCap'))} a month, depending on your account, your status and your card spend.`,
-    measuredBy: 'From what you spend at Checkers, Woolworths and Pick n Pay, or your Miles statement.' },
+    offer: `Vitality Health gives ${pct(val('healthyFoodHealthPct'))} back on HealthyFood at your main shop, and ${pct(caseVal('healthyFoodHealthPct', 'assessed'))} once you have done your Vitality Age (an online health-age test) and a Vitality Health Check (a screening at a clinic or pharmacy). That is on up to ${R(val('healthyFoodHealthCap'))} a month for one person, or ${R(caseVal('healthyFoodHealthCap', 'family'))} for a family. Discovery Bank adds up to ${pct(top('healthyFood'))} more on up to ${R(val('healthyFoodMoneyCap'))} a month, depending on your account, your status and your card spend.`,
+    measuredBy: 'From what you spend at Checkers and Woolworths, the HealthyFood partners, or your Miles statement.' },
   { id: 'healthyCare', products: ['bank', 'health'], label: 'HealthyCare rewards', question: 'Do you shop at Clicks or Dis-Chem?', lineKeys: ['miles.healthyCare', 'healthyCare.health'],
     group: 'health', needs: `Vitality Health, and ${WITH_BANK} for the extra`,
-    offer: `Vitality Health gives ${pct(val('healthyCareHealthPct'))} back on HealthyCare at your main shop, and ${pct(caseVal('healthyCareHealthPct', 'assessed'))} once you have done your Vitality Age (an online health-age test) and a Vitality Health Check (a screening at a clinic or pharmacy). That is on up to ${R(val('healthyCareCap'))} a month for the family. Discovery Bank adds up to ${pct(top('healthyCare'))} more on up to ${R(val('healthyCareMoneyCap'))} a month, depending on your account, your status and your card spend.`,
+    offer: `Vitality Health gives ${pct(val('healthyCareHealthPct'))} back on HealthyCare at your main shop, and ${pct(caseVal('healthyCareHealthPct', 'assessed'))} once you have done your Vitality Age (an online health-age test) and a Vitality Health Check (a screening at a clinic or pharmacy). That is on up to ${R(val('healthyCareCap'))} a month for one person, or ${R(caseVal('healthyCareCap', 'family'))} for a family. Discovery Bank adds up to ${pct(top('healthyCare'))} more on up to ${R(val('healthyCareMoneyCap'))} a month, depending on your account, your status and your card spend.`,
     measuredBy: 'From what you spend at Clicks and Dis-Chem, or your Miles statement.' },
   { id: 'fuel', products: ['bank', 'insure'], label: 'Fuel rewards', question: 'Do you fill up at bp or Shell?', lineKeys: ['fuel.money', 'fuel.drive'],
     group: 'car', needs: `Discovery Insure with Vitality Drive, and ${WITH_BANK} for the extra`,
@@ -96,58 +96,68 @@ const BENEFITS = [
 ];
 
 /* ── What unlocks each line ────────────────────────────────────────────
-   Checked against Discovery's own pages (discovery.co.za/bank/info-and-tips-
-   discovery-bank-rewards, the Apple Watch FAQ and the Vitality Active
-   Rewards help pages, read 3 Nov 2026):
-     - Vitality Money comes with a Transaction Account, a Credit Card Account
-       or a Suite, never with a savings account on its own, and it must be
-       switched on to earn Miles on card payments.
-     - The bank's extra HealthyFood (and the other lifestyle rewards) is paid
-       on Discovery Bank CREDIT card spend: "pay with your Discovery Bank
-       credit card"; the reward tables list Credit Card Accounts and Suites.
-       rates.js BANK_PRODUCTS (from each collection's rewards guide) gives a
-       Transaction Account no HealthyFood, HealthyCare or fuel table, so
-       those need the credit card here. It does give a bundled-fee
-       Transaction Account the flight table (pay-as-you-transact none), so
-       flights need any Discovery card and rate() reads 0 where there is
-       no table.
+   Checked against Discovery's own documents, read 3 Nov 2026: each
+   collection's rewards guide (effective 1 Nov 2026), the Ðiscovery Account
+   fees guide (1 Sep 2026), the Discovery Miles benefit guide, the Vitality
+   Travel local flights terms, the Vitality Drive terms, the Apple Watch
+   benefit guide and discovery.co.za/bank/info-and-tips-discovery-bank-rewards.
+   The full table is docs/market-data-sources.html.
+     - Vitality Money comes with every Discovery Bank product, the free
+       Ðiscovery Account included (its fees guide: "Vitality Money premium
+       Free"), and it must be switched on to earn Miles on card payments.
+       The Ðiscovery Account has a virtual debit card but earns no base
+       Miles (rates.js BANK_PRODUCTS).
+     - The bank's extra HealthyFood, HealthyCare and fuel are paid on
+       Discovery Bank CREDIT card spend: the reward tables are for the Suite
+       or the Credit Card Account, and a Transaction Account "won't earn any
+       fuel rewards from Vitality Money". They do NOT need Vitality Health:
+       the guides have a column "If you only have Vitality Money, and don't
+       have Vitality Health".
+     - Local flights: a Suite, Credit Card Account or bundled-fee Transaction
+       Account gets its flight table; without Vitality Health every product
+       gets at least 10% off (a flat 10% on a pay-as-you-transact account or
+       the Ðiscovery Account), model.js FLIGHT_FLOOR. Vitality Health's own
+       flight discount is booked and paid through Vitality Travel, which
+       needs a Discovery Bank account (the free Ðiscovery Account is enough).
      - Dynamic interest boosts transaction and credit card balances with
        Vitality Money. Cashback on money left in the card needs the card.
      - The gameboard is in the Discovery Bank app for the main holder of any
-       product with Vitality Money; Vitality Health is not needed for it.
-       Spending Miles at Discovery Miles partners at a discount needs
-       Discovery Bank with Vitality Money (Discovery Miles benefit guide,
-       1 Nov 2026). Miles+ is the network where you EARN Miles, not this.
-     - The Apple Watch needs Vitality Health and a qualifying Discovery Bank
-       credit card in a Suite.
-     - Vitality Drive fuel rewards need Discovery Insure with Vitality Drive.
-   UNCONFIRMED: whether the bank's extra HealthyFood, HealthyCare and flight
-   rewards also need Vitality Health; the page calls them "boosted" when you
-   have both, so here they need Vitality Money only. */
+       product with Vitality Money, the Ðiscovery Account included;
+       Vitality Health is not needed for it. Spending Miles at Discovery
+       Miles partners at a discount needs Discovery Bank with Vitality Money
+       (any product). Vitality Health alone earns Miles, but they can only
+       be spent on Vitality Active Rewards. Miles+ is the network where you
+       EARN Miles, not this.
+     - The Apple Watch needs Vitality Health and a Suite with Vitality Money
+       (a Credit Card Account on its own does not qualify).
+     - Vitality Drive fuel rewards need Discovery Insure with Vitality Drive,
+       and from 1 Jan 2027 a Discovery Bank account (rates.js
+       fuelWithoutBankPct). */
 const NEEDS = {
   bank: { test: x => x.products.bank, why: 'You do not bank with Discovery.' },
-  anyCard: { test: x => x.kind !== 'savings', why: 'A savings account on its own earns no Miles. It needs a Discovery Bank card.' },
+  anyCard: { test: x => x.kind !== 'savings', why: 'The Ðiscovery Account earns no Miles on card payments. It needs a Transaction Account, a Credit Card Account or a Suite.' },
   card: { test: x => x.kind === 'suite' || x.kind === 'card', why: 'It needs a Discovery Bank credit card, in a Suite or a Credit Card Account.' },
   suite: { test: x => x.kind === 'suite', why: 'It needs the all-in-one Discovery Bank package (account and credit card).' },
   money: { test: x => x.money, why: 'It needs Vitality Money, which you do not have.' },
   health: { test: x => x.vitality.health, why: 'It needs Vitality Health, which you do not have.' },
+  travelAccount: { test: x => x.products.bank, why: 'Vitality Travel flights are booked and paid through a Discovery Bank account. The free Ðiscovery Account is enough.' },
   insure: { test: x => x.products.insure, why: 'It needs Discovery Insure.' },
   drive: { test: x => x.vitality.drive, why: 'It needs Vitality Drive, which you do not have.' },
 };
 const LINE_NEEDS = {
   'miles.card': ['bank', 'anyCard', 'money'],
-  'miles.partners': ['bank', 'anyCard', 'money'],
+  'miles.partners': ['bank', 'money'],
   'miles.healthyFood': ['bank', 'card', 'money'],
   'miles.healthyCare': ['bank', 'card', 'money'],
   'fuel.money': ['bank', 'card', 'money'],
-  'travel.bank': ['bank', 'anyCard', 'money'],
+  'travel.bank': ['bank', 'money'],
   'interest.boost': ['bank', 'money'],
   'interest.cashback': ['bank', 'card', 'money'],
   'miles.uplift': ['bank', 'money'],
-  gameboard: ['bank', 'anyCard', 'money'],
+  gameboard: ['bank', 'money'],
   'healthyFood.health': ['health'],
   'healthyCare.health': ['health'],
-  'travel.health': ['health'],
+  'travel.health': ['health', 'travelAccount'],
   activeRewards: ['health'],
   'activeRewards.basic': ['health'],
   gym: ['health'],
@@ -179,14 +189,13 @@ function availableFor(settings, products, vitality, evidence) {
     kind,
     products: { bank: p.bank === true, insure: p.insure === true },
     vitality: { health: v.health === true, drive: v.drive === true },
-    /* Vitality Money never comes with a savings account on its own, unless
-       the statements prove it is there */
-    money: v.money === true && (kind !== 'savings' || proven),
+    /* Vitality Money comes with every Discovery Bank product, the free
+       Ðiscovery Account included */
+    money: v.money === true,
   };
   const blocked = key => {
     for (const n of LINE_NEEDS[key] || []) {
       if (!NEEDS[n].test(x)) {
-        if (n === 'money' && v.money === true && kind === 'savings') return 'Vitality Money comes with a Discovery Bank card or transaction account, not a savings account on its own.';
         return NEEDS[n].why;
       }
     }
@@ -275,9 +284,9 @@ function offerText(benefit, settings) {
       return `One Discovery Mile for every ${R(per)} you pay with the virtual card ${at}, on up to ${R(rt('milesThreshold'))} a month, then one for every ${R(rt('milesAboveThreshold'))}. At partners, ${Math.round(1 / rt('mileValue'))} Miles pay for ${R(1)} of shopping.`;
     }
     case 'healthyFood':
-      return `${checks('healthyFoodHealthPct', `back on HealthyFood at your main shop, on up to ${R(rt('healthyFoodHealthCap'))} a month for the family`)} ${bankAdds('healthyFoodMoneyPct', 'healthyFoodMoneyCap')}`;
+      return `${checks('healthyFoodHealthPct', `back on HealthyFood at your main shop, on up to ${R(rt('healthyFoodHealthCap'))} a month for your household`)} ${bankAdds('healthyFoodMoneyPct', 'healthyFoodMoneyCap')}`;
     case 'healthyCare':
-      return `${checks('healthyCareHealthPct', `back on HealthyCare at your main shop, on up to ${R(rt('healthyCareCap'))} a month for the family`)} ${bankAdds('healthyCareMoneyPct', 'healthyCareMoneyCap')}`;
+      return `${checks('healthyCareHealthPct', `back on HealthyCare at your main shop, on up to ${R(rt('healthyCareCap'))} a month for your household`)} ${bankAdds('healthyCareMoneyPct', 'healthyCareMoneyCap')}`;
     case 'fuel': {
       const drive = rt('fuelDrivePct');
       const cap = rt('fuelCap');
@@ -398,8 +407,10 @@ function suggestBenefits(m, milesSummary, settings, ctx) {
     else if (fromStmt >= 0.5) put(id, 'full', `Your Miles statement shows ${fmtMiles(fromStmt)} of ${kind} rewards ${when}, worth ${money(worth)}.`);
     else put(id, 'none', noneText);
   };
-  shops('healthyFood', [['shop.checkers', 'Checkers'], ['shop.woolworths', 'Woolworths'], ['shop.pnp', 'Pick n Pay']], 'HealthyFood',
-    ['money.healthyFood', 'health.healthyFood'], `We found no shopping at Checkers, Woolworths or Pick n Pay ${when}.`);
+  /* HealthyFood partners are Checkers and Woolworths only (HealthyFood
+     benefit guide, read 3 Nov 2026) */
+  shops('healthyFood', [['shop.checkers', 'Checkers'], ['shop.woolworths', 'Woolworths']], 'HealthyFood',
+    ['money.healthyFood', 'health.healthyFood'], `We found no shopping at Checkers or Woolworths ${when}.`);
   shops('healthyCare', [['shop.clicks', 'Clicks'], ['shop.dischem', 'Dis-Chem']], 'HealthyCare',
     ['money.healthyCare', 'health.healthyCare'], `We found no shopping at Clicks or Dis-Chem ${when}.`);
 

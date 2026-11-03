@@ -19,7 +19,8 @@ const DATES = [
   { date: '2026-11-01', product: 'insure', text: 'Vitality Drive fuel rewards start being paid as Discovery Miles, and you need to pay with the Discovery Bank virtual card to get them.' },
   { date: '2026-12-31', product: 'insure', text: 'Last day for the main driver to open a Discovery Bank account, or the Vitality Drive fuel rewards stop.' },
   { date: '2027-01-01', product: 'insure', text: 'The Vitality Drive cards stop working. Pay for fuel with the Discovery Bank virtual card instead.' },
-  { date: '2027-01-01', product: 'bank', text: 'Discovery\'s new rates usually start now. The figures here use the 2026 rates, so check them again.' },
+  { date: '2027-01-01', product: 'health', text: 'Discovery Health\'s 2027 contributions start: 8,2% more on average, still to be approved by the Council for Medical Schemes. The figures here switch to them on this day.' },
+  { date: '2027-01-01', product: 'gap', text: 'Gap cover prices change. Discovery Gap Cover\'s options get new names (Gap 500, Gap 250 and Gap 100) and new prices, which the figures here switch to.' },
 ];
 
 /* chosen: the resolveProducts() map ({ bank, health, gap, insure, life }).

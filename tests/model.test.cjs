@@ -195,14 +195,33 @@ const plain = sS.lines.filter(l => l.group === 'bank' && !l.miles && !l.uplift &
 near(sS.cautious.value, bankMiles * 0.1 / 0.15 + plain + S('miles.healthyCare').annual * (S('miles.healthyCare').miles ? 0.1 / 0.15 : 1));
 assert.ok(sS.cautious.net < sS.net);
 
-// partner deals: an unpublished rate earns nothing and the break-even closes the gap exactly
+// partner deals: Absa's are counted at Tier 3, and the spend they rewarded earns no Bank Earn
 const absa = sS.alternatives.find(a => a.id === 'absaPremium');
-assert.ok(absa.partners.length === 2 && absa.partners.every(p => !p.known));
-assert.ok(absa.breakEven > 0);
-const sAt = buildStatement(m, { ...settingsS, rates: { ...ratesNoMile, 'alt.absaPremium.partner0': absa.breakEven, 'alt.absaPremium.partner1': absa.breakEven } }, ms);
-near(sAt.alternatives.find(a => a.id === 'absaPremium').gainIfSwitch, 0, 'at the break-even rate Absa ties');
-// partner spend is capped at R3 000 and 20% of that month's card spend: Sep checkers 16 000 → min(3000, 4000)
-near(absa.partners[0].base, (Math.min(16000 + 2000, 3000, 20000 * 0.2)) * 12);
+assert.ok(absa.partners.length === 2 && absa.partners.every(p => p.known));
+// partner spend is capped at R3 000 (the 20% share only applies under R15 000 of card spend): Sep checkers 16 000 → 3 000
+near(absa.partners[0].base, (Math.min(16000 + 2000, 3000)) * 12);
+// an unpublished rate (pct null) earns nothing, and the break-even closes the gap exactly
+{
+  const { ALTERNATIVES: ALT } = require('../src/rates');
+  const def = ALT.find(a => a.id === 'absaPremium');
+  const saved = def.partners.map(p => p.pct);
+  def.partners.forEach(p => { p.pct = null; });
+  try {
+    const sN = buildStatement(m, settingsS, ms);
+    const a0 = sN.alternatives.find(a => a.id === 'absaPremium');
+    assert.ok(a0.partners.every(p => !p.known) && a0.breakEven > 0);
+    const sAt = buildStatement(m, { ...settingsS, rates: { ...ratesNoMile, 'alt.absaPremium.partner0': a0.breakEven, 'alt.absaPremium.partner1': a0.breakEven } }, ms);
+    near(sAt.alternatives.find(a => a.id === 'absaPremium').gainIfSwitch, 0, 'at the break-even rate Absa ties');
+  } finally { def.partners.forEach((p, i) => { p.pct = saved[i]; }); }
+}
+// Bank Earn: a fixed amount by the month's spend band, on spend the partners did not reward
+{
+  const sb = sS.alternatives.find(a => a.id === 'sbPrestige');
+  assert.ok(sb.rewards >= 0);
+  const { ALTERNATIVES: ALT } = require('../src/rates');
+  const t = ALT.find(a => a.id === 'absaPremium').bankEarn;
+  assert.deepStrictEqual([t.bands.length, t.rand[0], t.rand[t.rand.length - 1]], [6, 0, 120], 'Premium Tier 3: nothing under R5 000, R120 from R25 000');
+}
 
 // a flat-rate cap applies per month, not per year
 const sCap = buildStatement(m, { ...settings, rates: { ...rates, 'alt.capitec.backPct': 10, 'alt.capitec.capMonthly': 500 } });
@@ -366,11 +385,18 @@ near(sNoH.vitality.gymSavingFull, s.vitality.gymSaving);
 ['healthyFood.health', 'healthyCare.health', 'travel.health'].forEach(k => {
   assert.strictEqual(NH(k).annual, 0, k);
   assert.strictEqual(NH(k).available, false, k);
-  near(NH(k).full, L(k).annual, k + ' keeps its value');
+  /* the fares paid had no Vitality Health discount, so the full fare (and
+     what Vitality Health would take off it) is smaller */
+  if (k === 'travel.health') assert.ok(NH(k).full > 0 && NH(k).full < L(k).annual, k + ' keeps a value');
+  else near(NH(k).full, L(k).annual, k + ' keeps its value');
 });
+// without Vitality Health the bank gives at least 10% off local flights
+assert.ok(/never less than 10%/.test(sNoH.lines.find(l => l.key === 'travel.bank').detail || ''), 'says the 10% floor');
 assert.strictEqual(sNoH.benefits.gym.available, false);
 assert.ok(/Vitality Health/.test(sNoH.benefits.gym.reason));
-near(sNoH.value, s.value, 'the bank\'s side is unchanged');
+/* the bank's side is unchanged but for its flight discount, which without
+   Vitality Health is worked out on a smaller full fare (and never under 10%) */
+near(sNoH.value, s.value - L('travel.bank').annual + NH('travel.bank').annual, 'the bank\'s side is unchanged but for flights');
 assert.strictEqual(sNoH.vitality.rewards, 0);
 // even a level of full cannot count what the setup cannot earn
 assert.strictEqual(buildStatement(m, { ...settings, vitality: { health: false }, benefits: { gym: 'full' } }).vitality.gymSaving, 0);
@@ -389,10 +415,10 @@ near(sTx.lines.find(l => l.key === 'healthyFood.health').annual, L('healthyFood.
 const sTx2 = buildStatement(m, { ...settings, bankKind: 'transaction', vitality: { money: true } });
 near(sTx2.lines.find(l => l.key === 'miles.card').annual, L('miles.card').annual);
 assert.strictEqual(sTx2.lines.find(l => l.key === 'miles.healthyFood').annual, 0);
-// savings only: no Miles
+// savings only (the Ðiscovery Account): no base Miles, though it has Vitality Money
 const sSav = buildStatement(m, { ...settings, bankKind: 'savings', vitality: { money: true } });
 assert.strictEqual(sSav.lines.find(l => l.key === 'miles.card').annual, 0);
-assert.strictEqual(sSav.benefits.miles.available, false);
+assert.ok(/earns no Miles on card payments/.test(sSav.benefits.miles.note));
 // the Apple Watch needs a Suite
 const sWcard = buildStatement(mW, { ...settings, bankKind: 'card' });
 assert.strictEqual(sWcard.lines.find(l => l.key === 'appleWatch').annual, 0);

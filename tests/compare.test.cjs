@@ -101,23 +101,57 @@ near(quotedOld.rows[0].gainIfSwitch, 600);
 assert.strictEqual(quotedOld.rows[0].ageLimited, false);
 assert.strictEqual(compareGap({ paid: 3600 }, { members: { oldestAge: 44 } }, gaps).pricedForAge, true, '44 is under 45');
 
-// ── price periods: Discovery Health 1 Apr 2026 – 31 Mar 2027, the rest 2026 ─
+// ── price periods: Discovery Health 1 Apr – 31 Dec 2026, then its 2027
+//    prices from 1 Jan 2027 (y2027); the rest 2026 ─────────────────────
 {
   const { planPriceValidFor, HEALTH_OWN: OWN } = require('../src/compare');
   assert.strictEqual(planPriceValidFor('2026-04'), true);
   assert.strictEqual(planPriceValidFor('2026-11-01'), true);
-  assert.strictEqual(planPriceValidFor('2027-03'), true);
-  assert.strictEqual(planPriceValidFor('2027-04'), false, 'the 2027 prices start in April');
+  assert.strictEqual(planPriceValidFor('2027-03'), true, 'the 2027 prices are in the table too');
+  assert.strictEqual(planPriceValidFor('2027-12'), true);
+  assert.strictEqual(planPriceValidFor('2028-01'), false, 'nothing published for 2028');
   assert.strictEqual(planPriceValidFor('2026-03'), false, 'before April 2026 the old prices applied');
   assert.strictEqual(planPriceValidFor(''), false);
   assert.strictEqual(planPriceValidFor(undefined), false);
   for (const p of HEALTH_PLANS.concat(OWN)) {
     const e = p.effective;
     assert.ok(e && e.from && e.to, `${p.id} carries its price period`);
-    if (p.discovery) assert.deepStrictEqual([e.from, e.to], ['2026-04-01', '2027-03-31'], p.id);
+    if (p.discovery) assert.deepStrictEqual([e.from, e.to], ['2026-04-01', '2026-12-31'], p.id);
     else assert.deepStrictEqual([e.from, e.to], ['2026-01-01', '2026-12-31'], p.id);
   }
   for (const p of GAP_PLANS) assert.deepStrictEqual([p.effective.from, p.effective.to], ['2026-01-01', '2026-12-31'], p.id);
+}
+
+// ── 2027 prices: every Discovery plan has them, and they start on 1 Jan 2027 ─
+{
+  const { priceAt, HEALTH_OWN: OWN } = require('../src/compare');
+  const all = HEALTH_PLANS.concat(OWN).filter(p => p.discovery);
+  for (const p of all) {
+    assert.ok(p.y2027 && p.y2027.main > 0 && p.y2027.child > 0, `${p.id} has 2027 prices`);
+    if (p.main) assert.ok(p.y2027.main > p.main, `${p.id}: 2027 costs more than 2026`);
+  }
+  const saver = OWN.find(p => p.id === 'dhClassicSaver');
+  const fam = { adults: 2, children: 1 };
+  assert.strictEqual(healthPremium(saver, fam), 4850 + 3825 + 1943, 'no date: the 2026 prices');
+  assert.strictEqual(healthPremium(saver, fam, '2026-12-31'), 4850 + 3825 + 1943, 'still 2026 on 31 December');
+  assert.strictEqual(healthPremium(saver, fam, '2027-01'), 5235 + 4128 + 2098, '2027 from January');
+  assert.strictEqual(healthPremium(saver, fam, new Date(2027, 5, 1)), 5235 + 4128 + 2098, 'takes a Date');
+  // KeyCare's income bands move in 2027: the row carries its 2027 label
+  const kc = OWN.find(p => p.id === 'dhKeyCarePlus1');
+  assert.ok(/R10 250/.test(priceAt(kc, '2026-11').plan) && /R10 650/.test(priceAt(kc, '2027-01').plan));
+  // Active Core is new in 2027: no price before then
+  const ac = OWN.find(p => p.id === 'dhActiveCore');
+  assert.strictEqual(healthPremium(ac, fam, '2026-11'), null);
+  assert.strictEqual(healthPremium(ac, fam, '2027-02'), 1700 + 1550 + 500);
+  // 2027 cover notes replace only what changed
+  const es = HEALTH_PLANS.find(p => p.id === 'dhEssentialSmart');
+  assert.ok(/R135/.test(priceAt(es, '2027-01').coverNote.doctors) && /R13 150/.test(priceAt(es, '2027-01').coverNote.hospital));
+  assert.strictEqual(priceAt(es, '2027-01').coverNote.babies, es.coverNote.babies);
+  // compareHealth prices Discovery's plans on opts.now
+  const h = { paid: 120000, medicalYear: 120000, vitalityYear: 0, vitValue: 0 };
+  const row = d => compareHealth(h, { members: fam }, [es], { now: d }).rows[0].monthly;
+  assert.strictEqual(row('2026-11-03'), 2161 * 3);
+  assert.strictEqual(row('2027-01-02'), 2332 * 3);
 }
 
 // ── car insurance: quotes, rewards, and Vitality Drive given up ──────
@@ -205,7 +239,8 @@ assert.ok(INSURERS.length >= 6, 'at least six insurers');
   for (const p of discovery) {
     assert.ok(p.id && p.plan && p.source, `Discovery plan ${p.id} named and sourced`);
     for (const members of [{ adults: 1, children: 0 }, { adults: 2, children: 2 }, { adults: 2, children: 5 }]) {
-      const v = healthPremium(p, members);
+      /* a plan that is new in 2027 has only 2027 prices */
+      const v = healthPremium(p, members, p.main === null ? '2027-01' : undefined);
       assert.ok(Number.isFinite(v) && v > 0, `healthPremium prices ${p.id} for ${JSON.stringify(members)}`);
     }
   }
@@ -233,3 +268,31 @@ assert.strictEqual(compareInsure({ paid: 12000, ended: true }, {}), null);
 assert.strictEqual(compareLife({ monthly: 500, ended: true }, {}), null);
 assert.ok(compareGap({ paid: 3000 }, {}), 'not ended: still compared');
 console.log('compare: ok');
+
+// ── market data audit, 3 Nov 2026 (docs/market-data-sources.html) ──────
+{
+  const C = require('../src/compare');
+  // claim-free rewards pay X% of ALL premiums over the claim-free years, so about X% a year
+  const ins = id => C.INSURERS.find(a => a.id === id);
+  for (const id of ['outsurance', 'miway', 'santam']) assert.strictEqual(ins(id).rewardPct, 10, id);
+  assert.strictEqual(C.HOME_INSURERS.find(a => a.id === 'outsurance').rewardPct, 10);
+  assert.strictEqual(C.HOME_INSURERS.find(a => a.id === 'dialdirect').rewardPct || 0, 0, 'a paid add-on is not counted, as on the car side');
+  // gap cover: 2027 prices where published, and Zestlife Optimal only under 42
+  const g = { paid: 6000 };
+  const row = (id, age, now) => C.compareGap(g, { members: { oldestAge: age } }, undefined, { now }).rows.find(r => r.id === id);
+  assert.strictEqual(row('turnberryLaunch', 40, '2026-11-03').monthly, 185);
+  assert.strictEqual(row('turnberryLaunch', 40, '2027-01-05').monthly, 191);
+  assert.strictEqual(row('turnberryLaunch', 40, '2027-01-05').priceYear, 2027);
+  assert.strictEqual(row('dgComprehensive', 40, '2027-01-05').plan, 'Gap 500');
+  assert.strictEqual(row('siragoGapCore', 40, '2027-01-05').priceYear, undefined, 'no 2027 price published: stays on 2026');
+  assert.strictEqual(row('zestOptimal', 41, '2026-11-03').ageLimited, false);
+  assert.strictEqual(row('zestOptimal', 43, '2026-11-03').ageLimited, true, 'sold only when everyone is under 42');
+  assert.strictEqual(row('stratumMeridian400', 43, '2026-11-03').ageLimited, false);
+  for (const id of ['ambledownPhi', 'ambledownSigma']) assert.ok(!C.GAP_PLANS.find(p => p.id === id).unconfirmed, id + ' confirmed on Ambledown\'s own brochure');
+  // Discovery Gap Core moves with the Essential plans in 2027 (Gap 250)
+  const es = C.HEALTH_PLANS.find(p => p.id === 'dhEssentialSmart');
+  assert.deepStrictEqual(C.priceAt(es, '2027-01').gapCore, { single: 346, family: 623 });
+  assert.deepStrictEqual(C.priceAt(es, '2026-12').gapCore, { single: 317, family: 572 });
+  // the life benchmark and the home range are a broker's figures, and say so
+  assert.ok(C.LIFE_BENCHMARK.unconfirmed && C.HOME_RANGE.unconfirmed);
+}

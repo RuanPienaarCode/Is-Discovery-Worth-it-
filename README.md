@@ -63,7 +63,7 @@ Each figure is labelled with where it came from, so you can judge it:
 
 Prices, plans and fees for Discovery and for the other providers are written into the plugin, each set with an "as at" date shown on the Compare page. The plugin does not fetch anything. They are checked and refreshed about every six months, in a new release. When the date gets old, every tab that shows another provider's prices carries a warning that they may be out of date.
 
-How the numbers are refreshed is written up in [docs/updating-market-data.html](docs/updating-market-data.html). Spotted a wrong or old price? Open an issue with the "Wrong or outdated price" form.
+Every figure, its value at the source, the link and whether it was confirmed is listed in [docs/market-data-sources.html](docs/market-data-sources.html) (checked 3 November 2026). Where a provider has already published next year's prices, they are in too and take over on the day they start. How the numbers are refreshed is written up in [docs/updating-market-data.html](docs/updating-market-data.html). Spotted a wrong or old price? Open an issue with the "Wrong or outdated price" form.
 
 ## Install
 

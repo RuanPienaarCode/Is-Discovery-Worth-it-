@@ -34,6 +34,8 @@ const RULES = [
   /* The Vitality Money premium, however the statement words it: "Vitality
      Money premium", "Vitality Money fee", "VM fee". */
   { key: 'fee.vitalityMoney', desc: /vitality money (?:monthly )?(?:premium|fee|subscription)|\bVM (?:monthly )?(?:premium|fee)\b/i, discoveryOnly: true, direction: 'cost' },
+  /* The Purple Suite's R4 250 annual card fee (Purple fees guide, 1 Sep 2026) */
+  { key: 'fee.other', desc: /annual card fee/i, sign: 'out', discoveryOnly: true, direction: 'cost' },
   { key: 'fee.fx', desc: /intl payment fee|international payment fee|forex fee/i, discoveryOnly: true, direction: 'cost' },
   { key: 'interest.boost', desc: /dynamic interest boost/i, discoveryOnly: true, direction: 'income' },
   { key: 'interest.cashback', desc: /dynamic interest cashback/i, discoveryOnly: true, direction: 'income' },

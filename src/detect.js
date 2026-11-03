@@ -330,7 +330,8 @@ function guessHealthPlan(budget, members, plans) {
   const ceiling = adults * EXTRA_CEILING.adult + kids * EXTRA_CEILING.child + EXTRA_CEILING.gap;
   const candidates = [];
   for (const p of plans || discoveryPlans()) {
-    const monthly = healthPremium(p, members);
+    /* priced on the debit's own day: a 2027 debit pays the 2027 price */
+    const monthly = healthPremium(p, members, debit.date);
     if (monthly === null) continue;
     const rest = amount - monthly;
     if (rest < -0.5 || rest > ceiling) continue;

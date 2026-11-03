@@ -69,6 +69,7 @@
         <li><a href="#other">Gap, car, life, home</a></li>
         <li><a href="#stamp">Stamp MARKET</a></li>
         <li><a href="#test">Test and release</a></li>
+        <li><a href="market-data-sources.html">Every figure and its source</a></li>
       </ul>
     </nav>
   </header>
@@ -81,13 +82,14 @@
       <thead><tr><th>Window</th><th>What changes then</th></tr></thead>
       <tbody>
         <tr><td><span class="pill jan">January</span></td><td>Most medical schemes (Bonitas, Momentum, Medshield, Fedhealth, Bestmed) and gap cover insurers change their prices. Discovery Bank fees often change too (the Bank's own note: "new rates usually start now").</td></tr>
-        <tr><td><span class="pill jan">April</span></td><td>Discovery Health's contribution increase (2026 was deferred from January to 1 April).</td></tr>
-        <tr><td><span class="pill jul">September – November</span></td><td>Discovery Bank fees guides (2026: effective 1 September) and the Vitality Money rewards guides (2026: effective 1 November). Schemes announce next year's prices in September and October.</td></tr>
+        <tr><td><span class="pill jan">January</span></td><td>Discovery Health's contribution increase too: 2026's was a once-off delay to 1 April, and 2027's starts on 1 January again.</td></tr>
+        <tr><td><span class="pill jul">September – November</span></td><td>Discovery Bank fees guides (2026: effective 1 September) and the Vitality Money rewards guides (2026: effective 1 November). Schemes and gap cover insurers announce next year's prices in September and October: add them as <code>y2027</code> (see <a href="#health">Medical aid</a>) so the plugin switches on 1 January.</td></tr>
       </tbody>
     </table>
     </div>
     <div class="callout warn"><div class="t">Rule for every figure</div>Use the provider's own document. If you can only find a broker's copy or a news article, keep the figure, add <code>unconfirmed: true</code>, and say why in <code>source</code>. If you cannot find a figure at all, leave the old one (or <code>null</code>) and flag it. Never guess a number into the tables.</div>
-    <p>Every <code>source</code> string names the document and its date, for example <code>'Bonitas Annexure A 2027 (from 1 Jan 2027)'</code>. The tests fail when a comparison row's source has no year in it.</p>
+    <p>Every <code>source</code> string names the document and its date, for example <code>'Bonitas Annexure A 2027 (from 1 Jan 2027)'</code>. The tests fail when a comparison row's source has no year in it. A flagged row also says why in <code>unconfirmedWhy</code>.</p>
+    <p>Then update <a href="market-data-sources.html">market-data-sources.html</a>, the public table of every figure, its value at the source, the link and a verdict. It was built on 3 Nov 2026 by checking each figure in parallel lanes (bank fees and Miles, band tables, Vitality rules, Discovery Health, other schemes, gap/car/life/home, rival banks); repeat that for each refresh.</p>
   </section>
 
   <section id="where">
@@ -136,18 +138,20 @@
     <p>Under <code>discovery.co.za/wcm/discoverycoza/assets/bank/fees-guides/</code>: <code>discovery-bank-&lt;gold|platinum|black&gt;-suite-fees.pdf</code>, <code>discovery-bank-purple-fees.pdf</code>, <code>discovery-bank-&lt;tier&gt;-credit-card-fees.pdf</code>, <code>discovery-bank-&lt;tier&gt;-transaction-bundled-fees.pdf</code>, <code>discovery-bank-&lt;tier&gt;-transaction-payt-fees.pdf</code> and <code>discovery-account-fees-guide.pdf</code>.</p>
     <p>Copy the "Account fee", "Vitality Money premium" and "Single credit facility fee" lines. The account fee is what a statement calls "Monthly account fee", and the onboarding uses it to guess the tier, so keep every product's account fee different (a test checks this).</p>
     <h3>Single rates</h3>
-    <p>HealthyFood and HealthyCare caps, the Vitality Drive fuel percentages, the Apple Watch activation fee and the dynamic interest boosts are in <code>RATES</code>. The savings boost is only published for the Black Suite, so the other Suites list it in <code>unconfirmed</code>; replace that when Discovery publishes theirs.</p>
+    <p>HealthyFood and HealthyCare caps (one person, and the <code>family</code> case), the Vitality Drive fuel percentages, the Apple Watch activation fee and the dynamic interest boosts are in <code>RATES</code>. Dynamic interest comes from the one-pager <code>save-more-and-pay-less-with-dynamic-interest-rates.pdf</code>: one row per kind of product (Suite, Credit Card Account, bundled Transaction Account), the same for every tier, and the pay-as-you-transact Transaction Account by tier (<code>PAYT_BOOST</code>). Purple is not named in it, so Purple lists it in <code>unconfirmed</code>.</p>
+    <p>Fees guides also carry once-a-year fees: Purple's R4 250 annual card fee is <code>annualFee</code> on its Suite and product rows, and the rule that reads it off a statement is in <code>constants.js</code>.</p>
   </section>
 
   <section id="rivals">
     <h2>Rival banks</h2>
-    <p><code>ALTERNATIVES</code> in <code>rates.js</code>. Fees: each bank's pricing guide for the new year (FNB, Standard Bank and Absa publish theirs in January or March). Rewards: only a published rate counts; FNB's and Absa's general rates are not published, so their rows carry <code>guess: true</code>. A partner rate with <code>pct: null</code> means it is not published, and the page then shows what rate would match Discovery.</p>
+    <p><code>ALTERNATIVES</code> in <code>rates.js</code>. Fees: each bank's pricing guide (Capitec from 1 March, FNB from 1 July, Standard Bank and Absa from 1 January). Rewards: only a published rate counts. A programme with tiers or levels is counted at a middle tier (Tier 3), and the note says so. FNB pays no eBucks on general card spend, so its <code>backPct</code> is 0. Absa's Bank Earn is a fixed rand amount by spend band: <code>bankEarn</code>. Spend a rival does not reward goes in <code>flatExcludes</code> (UCount's grocers), and <code>flatExcludesPartners</code> stops a partner's spend earning the flat reward as well. A partner rate with <code>pct: null</code> is unpublished or depends on a level we cannot know; the page then shows what rate would match Discovery. Capitec's site blocks downloads: read its fees PDF, and its Live Better page through an archived copy.</p>
   </section>
 
   <section id="health">
     <h2>Medical aid</h2>
     <ol class="steps">
-      <li><strong>Discovery Health:</strong> the scheme's plan comparison, <code>discovery.co.za/wcm/discoverycoza/assets/faz/medical-aid/&lt;year&gt;/benefit-information/discovery-health-medical-scheme-plan-comparison.pdf</code>. Use the "Total contributions" columns (savings included). Update the three Discovery rows in <code>HEALTH_PLANS</code> and every row in <code>HEALTH_OWN</code>. KeyCare is priced by income, one row per band.</li>
+      <li><strong>Discovery Health:</strong> the scheme's plan comparison, <code>discovery.co.za/wcm/discoverycoza/assets/faz/medical-aid/&lt;year&gt;/benefit-information/discovery-health-medical-scheme-plan-comparison.pdf</code>. Use the "Total contributions" columns (savings included). Update the three Discovery rows in <code>HEALTH_PLANS</code> and every row in <code>HEALTH_OWN</code>. KeyCare is priced by income, one row per band, and the bands move each year, so the next year's label goes in too.</li>
+      <li><strong>Next year's prices, published before they start:</strong> add them to the row as <code>y2027: { main, adult, child }</code> (gap cover: <code>{ monthly }</code>), with a new <code>plan</code> name, <code>coverNote</code> parts or <code>gapCore</code> where those change. <code>priceAt(row, when)</code> in <code>compare.js</code> switches to them from <code>PERIODS.discoveryHealth2027.from</code>, and every caller passes the day it prices on (the debit's day, or today). Give the period a <code>next</code> link (<code>discoveryHealth → discoveryHealth2027</code>) so the change does not make the data stale. A new plan with no current price has <code>main: null</code>. When the year turns, move the <code>y2027</code> figures into the row, delete <code>y2027</code>, and rename the field for the next year.</li>
       <li><strong>Other schemes:</strong> each scheme's own contribution table (Bonitas and Bestmed "Annexure A"). Rows read from a broker's copy keep <code>unconfirmed: true</code>.</li>
       <li>Re-read the cover notes (<code>cover</code> and <code>coverNote</code>) for any plan whose benefits changed. Grades are <code>yes</code>, <code>limited</code>, <code>no</code> or <code>unknown</code>.</li>
       <li>Update <code>ESSENTIAL_GAP</code> (Discovery Gap Core on Essential plans) from the Discovery Gap Cover brochure.</li>
@@ -157,8 +161,8 @@
   <section id="other">
     <h2>Gap, car, life and home</h2>
     <ul>
-      <li><strong>Gap cover</strong> (<code>GAP_PLANS</code>): the monthly premium for a family whose oldest member is under 45, from each insurer's brochure.</li>
-      <li><strong>Car insurance</strong> (<code>INSURERS</code>): only the claim-free reward rule changes; premiums are personal, so users type quotes.</li>
+      <li><strong>Gap cover</strong> (<code>GAP_PLANS</code>): the monthly premium for a family whose oldest member is under 45, from each insurer's brochure. A product sold only to younger families gets <code>pricedUnder</code> (Zestlife Optimal: 42).</li>
+      <li><strong>Car insurance</strong> (<code>INSURERS</code>): only the claim-free reward rule changes; premiums are personal, so users type quotes. Read the reward's base carefully: "10% of the premiums you paid" over three claim-free years is about 10% a year, so <code>rewardPct</code> is 10, not 10 ÷ 3. A paid add-on counts 0.</li>
       <li><strong>Life</strong> (<code>LIFE_OFFERS</code>, <code>LIFE_BENCHMARK</code>): the reward notes and the latest published price range.</li>
       <li><strong>Home contents</strong> (<code>HOME_INSURERS</code>, <code>HOME_RANGE</code>): a published example premium gives <code>per100k</code>; otherwise the row waits for a quote.</li>
     </ul>
@@ -169,10 +173,10 @@
     <p>When everything is checked, open <code>src/market.js</code> and set:</p>
 <pre><code>const MARKET = {
   asOf: '2027-05-03',        // the day you finished checking
-  reviewBy: '2027-11-03',    // exactly six months later
+  reviewBy: '2027-11-03',    // six months later, or the day before the first price change
   note: 'Discovery Bank rewards as at …, bank fees from …, and 2027 prices for …',
 };</code></pre>
-    <p>The test suite checks that <code>reviewBy</code> is exactly six months after <code>asOf</code>. Also update the header comment's table list if you added a table.</p>
+    <p>The test suite checks that <code>reviewBy</code> is no more than six months after <code>asOf</code> and falls before the first known price change (a period's <code>changes</code>, unless its <code>next</code> period is already in). Also update the header comment's table list if you added a table.</p>
   </section>
 
   <section id="test">
@@ -187,7 +191,7 @@
   </section>
 
   <footer>
-    <p>Written 3 Nov 2026 for the first refresh cycle (MARKET asOf 2026-11-03, reviewBy 2027-05-03). Self-contained: no network at runtime.</p>
+    <p>Written 3 Nov 2026; updated the same day after the market data audit (MARKET asOf 2026-11-03, reviewBy 2026-12-31, the day before the 2027 prices). Self-contained: no network at runtime.</p>
   </footer>
 </main>
 </body>

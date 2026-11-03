@@ -147,8 +147,9 @@ function freshen(cmp, opts) {
     });
     return any ? Object.assign({}, x, { rows, stale: rows.some(r => r.stale && !isDiscovery(r)) }) : x;
   };
-  c.health = mark(cmp.health, r => (isDiscovery(r) ? 'discoveryHealth' : 'schemes'));
-  c.gap = mark(cmp.gap, () => 'gap');
+  /* a row priced on its 2027 prices (compare.js priceAt) follows the 2027 table */
+  c.health = mark(cmp.health, r => (isDiscovery(r) ? 'discoveryHealth' : r.priceYear === 2027 ? 'schemes2027' : 'schemes'));
+  c.gap = mark(cmp.gap, r => (isDiscovery(r) ? 'discoveryGap' : r.priceYear === 2027 ? 'gap2027' : 'gap'));
   return c;
 }
 

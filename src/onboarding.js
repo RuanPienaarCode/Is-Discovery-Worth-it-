@@ -486,7 +486,7 @@ function renderOnboarding(parent, ctx) {
       const all = discoveryPlans();
       const first = guess ? [] : candidates.map(id => all.find(p => p.id === id)).filter(Boolean);
       const option = (p, group) => {
-        const price = m.error ? null : healthPremium(p, m);
+        const price = m.error ? null : healthPremium(p, m, new Date());
         const text = price === null ? 'Price not listed' : `${money(price)} a month ${who}`;
         return { value: p.id, label: p.plan, group, hint: first.includes(p) ? `Could be yours. ${text}` : text };
       };
