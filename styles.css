@@ -1378,6 +1378,26 @@
 .dc-onb .dc-onb-more-body { padding: 8px 10px; border-radius: 8px; background: var(--dc-surface-2); }
 .dc-onb .dc-onb-more-body[hidden] { display: none; }
 
+/* ── Touch screens at any width ──────────────────────────────────────────
+   A phone held sideways (an iPhone 11 is 896px wide in landscape) gets the
+   wide layout, but it is still tapped with a finger: the controls keep the
+   44px height the narrow layout gives them. .is-touch is set in
+   bottom-line.js from Obsidian's is-mobile class or a coarse pointer. */
+.dc-page.is-touch button.dc-tab,
+.dc-page.is-touch button.dc-seg-btn,
+.dc-page.is-touch button.dc-more,
+.dc-page.is-touch button.dc-link,
+.dc-page.is-touch button.dc-chip,
+.dc-page.is-touch button.dc-btn,
+.dc-page.is-touch input.dc-inp,
+.dc-page.is-touch select.dc-inp,
+.dc-page.is-touch .dc-ben button.dc-ben-reset,
+.dc-page.is-touch .dc-ben button.dc-ben-more {
+  min-height: 44px;
+}
+.dc-page.is-touch button.dc-seg-btn,
+.dc-page.is-touch .dc-ben button.dc-ben-more { min-width: 44px; }
+
 /* The page's own small pieces (src/bottom-line.js): the Compare price
    banner, Your Discovery setup on the Inputs tab, and the one-question
    radios (How do you spend your Miles?). Tokens from src/styles.css. Every

@@ -1,0 +1,19 @@
+/* ── Touch screens at any width ──────────────────────────────────────────
+   A phone held sideways (an iPhone 11 is 896px wide in landscape) gets the
+   wide layout, but it is still tapped with a finger: the controls keep the
+   44px height the narrow layout gives them. .is-touch is set in
+   bottom-line.js from Obsidian's is-mobile class or a coarse pointer. */
+.dc-page.is-touch button.dc-tab,
+.dc-page.is-touch button.dc-seg-btn,
+.dc-page.is-touch button.dc-more,
+.dc-page.is-touch button.dc-link,
+.dc-page.is-touch button.dc-chip,
+.dc-page.is-touch button.dc-btn,
+.dc-page.is-touch input.dc-inp,
+.dc-page.is-touch select.dc-inp,
+.dc-page.is-touch .dc-ben button.dc-ben-reset,
+.dc-page.is-touch .dc-ben button.dc-ben-more {
+  min-height: 44px;
+}
+.dc-page.is-touch button.dc-seg-btn,
+.dc-page.is-touch .dc-ben button.dc-ben-more { min-width: 44px; }

@@ -188,6 +188,9 @@ function mountBottomLine(root, ctx) {
     set('is-medium', w < 1040);
     set('is-narrow', w < 760);
     set('is-phone', w < 520);
+    /* a phone or tablet held sideways is wide but still a finger: keep
+       its tap targets at 44px whatever the width */
+    set('is-touch', document.body.classList.contains('is-mobile') || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches));
     if (w >= 760) {
       set('dc-menu-ready', false);
       if (menuOpen) setMenu(false, false);
