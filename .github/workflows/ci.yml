@@ -1,0 +1,55 @@
+# The pre-tag gate, run on every pull request and every push to main: the
+# same steps as a local ./build.sh, in the same order, so "CI is red" and
+# "build.sh is red" are always the same sentence. Nothing release-only here —
+# no attestations, no tag check, no publishing. Those belong to release.yml.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# Read-only. Nothing here publishes, so nothing here needs to be able to.
+permissions:
+  contents: read
+
+# A second push supersedes the first: only the current head's answer matters.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # SHA-pinned to the same commits release.yml uses.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      # `npm ci`, not `npm install`: it installs EXACTLY package-lock.json, so
+      # esbuild's version is pinned and the byte comparison below means
+      # something.
+      - name: Install
+        run: npm ci
+
+      # main.js and styles.css are COMMITTED build artifacts. A src/ change
+      # pushed without rebuilding would leave the repo describing one plugin
+      # and shipping another.
+      - name: Rebuild and verify the committed artifacts are current
+        run: |
+          npm run build
+          node --check main.js
+          if ! git diff --exit-code -- main.js styles.css; then
+            echo "main.js / styles.css do not match src/ — run ./build.sh and commit the result." >&2
+            exit 1
+          fi
+
+      # The test suite: the calculation modules, plus the iOS 15 bundle and
+      # CSS guards.
+      - name: Run the tests
+        run: npm test

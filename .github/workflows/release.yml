@@ -1,0 +1,90 @@
+# A tag push (no 'v' prefix) triggers this. Why each part is load-bearing:
+#   - permissions: contents:write creates the release; id-token + attestations mint provenance.
+#   - Rebuild and diff: main.js and styles.css are committed build output and
+#     this workflow publishes the COMMITTED files, so a stale bundle fails here
+#     instead of shipping.
+#   - "Verify tag matches manifest version": Obsidian matches the release tag to
+#     manifest.version EXACTLY. This fails the run before publishing a tag
+#     Obsidian could never find.
+#   - attest-build-provenance: lets anyone run
+#     `gh attestation verify main.js -R RuanPienaarCode/Is-Discovery-Worth-it-`.
+#   - attestations need a PUBLIC repo on a personal account (GitHub offers
+#     them for private repos only on Enterprise Cloud), so cut the first
+#     release after the repo is made public.
+#   - gh release create with the three raw assets: manifest.json + main.js +
+#     styles.css as individual files, never a zip and never the source archive.
+name: Release Obsidian plugin
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+  # Required to mint build-provenance attestations for the release assets.
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # SHA-pinned: this workflow mints provenance with contents:write, so a
+      # moving tag is the one thing in it that could change without review.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      # `npm ci` installs exactly package-lock.json — the same path Obsidian's
+      # scorecard takes when it clones this repo to rebuild the release.
+      - name: Rebuild and verify the committed artifacts are current
+        run: |
+          npm ci
+          npm run build
+          node --check main.js
+          if ! git diff --exit-code -- main.js styles.css; then
+            echo "main.js / styles.css do not match src/ — run ./build.sh and commit the result." >&2
+            exit 1
+          fi
+
+      # A release should never be the first place the tests run.
+      - name: Run the tests
+        run: npm test
+
+      - name: Verify tag matches manifest version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          MANIFEST_VERSION=$(jq -r .version manifest.json)
+          if [ "$TAG" != "$MANIFEST_VERSION" ]; then
+            echo "Tag '$TAG' does not match manifest version '$MANIFEST_VERSION'." >&2
+            echo "Obsidian matches releases to the manifest version exactly — no 'v' prefix." >&2
+            exit 1
+          fi
+          # versions.json maps plugin version -> minAppVersion; a missing entry
+          # silently strands users of older apps on the previous version.
+          if ! jq -e --arg v "$MANIFEST_VERSION" 'has($v)' versions.json >/dev/null; then
+            echo "versions.json has no entry for '$MANIFEST_VERSION'." >&2
+            exit 1
+          fi
+
+      # Lets anyone verify the shipped assets came from this repo and this
+      # workflow: `gh attestation verify main.js -R RuanPienaarCode/Is-Discovery-Worth-it-`
+      - name: Attest release assets
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: |
+            main.js
+            styles.css
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF#refs/tags/}" \
+            --title "${GITHUB_REF#refs/tags/}" \
+            --generate-notes \
+            main.js manifest.json styles.css

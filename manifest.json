@@ -1,0 +1,9 @@
+{
+  "id": "discovery-worth-it",
+  "name": "Is Discovery Worth It?",
+  "version": "0.1.0",
+  "minAppVersion": "1.8.0",
+  "description": "Is Discovery worth it for you? Weighs what each Discovery product costs against the benefits you actually use, from the bank transactions in your Budget plugin notes.",
+  "author": "Ruan Pienaar",
+  "isDesktopOnly": false
+}

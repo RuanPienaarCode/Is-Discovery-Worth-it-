@@ -1,0 +1,12 @@
+node_modules/
+.DS_Store
+_preview/bundle.js
+_preview/discovery-worth-it.css
+# main.js and styles.css are build output but COMMITTED: CI rebuilds from
+# src/ and byte-compares against them.
+
+# preview harness: Obsidian's own app.css is extracted locally for cascade
+# fidelity and is NOT ours to publish (see obsidian-plugin-preview-harness)
+_preview/obsidian-app.css
+# never commit real statement figures
+*.local.*
