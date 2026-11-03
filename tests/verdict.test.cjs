@@ -214,4 +214,12 @@ assert.strictEqual(buildVerdicts(null, { life: life(250, [row(2000, { quoted: tr
   const q = buildVerdicts(null, { gap: { ...aged, rows: [row(3000, { quoted: true })] } }).gap;
   assert.strictEqual(q.word, 'Could cost less elsewhere');
 }
+// an unsplit Discovery Health debit gives no firm saving
+{
+  const { buildVerdicts: bv } = require('../src/verdict');
+  const health = { current: { annual: 120000, monthly: 10000 }, vitalityKnown: false, needs: [], rows: [{ scheme: 'Other', plan: 'Plan', monthly: 5000, annual: 60000, gainIfSwitch: 60000, likeForLike: true }] };
+  const vh = bv({ lines: [], alternatives: [], chosen: null, bill: { priceStale: false } }, { health }, { health: true });
+  assert.strictEqual(vh.health.word, 'Get quotes');
+  assert.strictEqual(vh.health.amount, null);
+}
 console.log('verdict: ok');

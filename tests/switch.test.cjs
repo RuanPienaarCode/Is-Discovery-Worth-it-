@@ -226,6 +226,9 @@ assert.strictEqual(RB[0].rivals.find(r => r.name === 'Capitec').items[0].kind, '
   const gapCmp = rows => ({ gap: { current: { annual: 12000, monthly: 1000 }, rows } });
   const swAge = bs(stG, gapCmp([{ provider: 'Gapco', plan: 'Lite', monthly: 200, ageLimited: true }]), { gap: true });
   assert.ok(!JSON.stringify(swAge).includes('Gapco'), 'age-limited price not used as the gap move');
+  const gapRow = JSON.stringify(swAge).includes('"gap"');
+  assert.ok(gapRow, 'gap cover still shows, taken as the same as now');
+  assert.strictEqual(swAge.stay.cost, swAge.go.cost, 'an assumed gap row costs the same on both sides');
   const swQuote = bs(stG, gapCmp([{ provider: 'Gapco', plan: 'Lite', monthly: 300, ageLimited: false, quoted: true }]), { gap: true });
   assert.ok(JSON.stringify(swQuote).includes('Gapco'), 'a typed quote is used');
 }

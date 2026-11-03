@@ -602,8 +602,8 @@ function mountBottomLine(root, ctx) {
           title: unknown ? 'Not enough data on Discovery Bank' : stay ? 'Discovery Bank looks worth keeping' : close ? `About the same as ${alt.name}` : `${alt.name} could cost you less`,
           line: unknown ? vb.why : stay ? `By these figures, you are better off than with ${alt.name}, after fees.` : close ? `Moving would save under ${money(MATERIAL)} a year.` : `By these figures, you would be better off with ${alt.name}.`,
         });
-        if (unknown) figure(k.fig, Math.abs(alt.gainIfSwitch), { neutral: true, label: perLabel() + ' apart' });
-        else figure(k.fig, stay ? -alt.gainIfSwitch : alt.gainIfSwitch, { plus: true });
+        /* no figure when there is not enough data: a number would contradict it */
+        if (!unknown) figure(k.fig, stay ? -alt.gainIfSwitch : alt.gainIfSwitch, { plus: true });
         const mb = k.more();
         const cautious = st.cautious.net - alt.net;
         el(mb, 'p', null, stay && cautious >= 0

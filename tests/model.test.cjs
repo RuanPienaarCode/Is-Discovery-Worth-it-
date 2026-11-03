@@ -756,4 +756,12 @@ const ACC = {
     }
   }
 }
+// a couple with a Suite each is compared with two rival accounts
+{
+  const one = buildStatement({ ...m, rows: { 'fee.account': [{ account: 'A' }] } }, { rates, status: { money: 'Diamond' } }, null);
+  const two = buildStatement({ ...m, rows: { 'fee.account': [{ account: 'A' }, { account: 'B' }] } }, { rates, status: { money: 'Diamond' } }, null);
+  const a1 = one.alternatives[0], a2 = two.alternatives.find(x => x.id === a1.id);
+  assert.strictEqual(a2.holders, 2);
+  near(a2.fees, a1.fees * 2, 'fees doubled for two holders');
+}
 console.log('model OK');

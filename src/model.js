@@ -616,7 +616,10 @@ function buildStatement(m, settings, milesSummary, opts) {
    is not paid on debit card spend here. */
 function altResult(a, settings, st, m, monthly, n, net, cautiousNet, onDebit) {
   const rt = k => rate(settings, `alt.${a.id}.${k}`, st);
-  const fees = rt('fee') * 12;
+  /* one rival account for each Discovery account that pays its own
+     monthly account fee (a couple with a Suite each needs two) */
+  const holders = Math.max(1, new Set(((m.rows && m.rows['fee.account']) || []).map(r => r.account)).size);
+  const fees = rt('fee') * 12 * holders;
   const publishedPct = rt('backPct');
   const debitPct = a.cardOnly === false ? publishedPct : num(a.debitBackPct) ? Number(a.debitBackPct) : 0;
   const backPct = onDebit ? debitPct : publishedPct;
@@ -650,7 +653,7 @@ function altResult(a, settings, st, m, monthly, n, net, cautiousNet, onDebit) {
   /* rate on the unknown partners' spend that closes the gap */
   const need = target => (partnerBase > 0 ? Math.max(0, ((target - altNet) / partnerBase) * 100) : null);
   return {
-    id: a.id, name: a.name, fees, rewards, backPct, net: altNet, gainIfSwitch: altNet - net,
+    id: a.id, name: a.name, fees, holders, rewards, backPct, net: altNet, gainIfSwitch: altNet - net,
     /* the published card rate, and whether it was left off debit card spend */
     publishedPct, debitOnly: !!onDebit, cardOnlyLeftOut: !!onDebit && publishedPct > 0 && backPct < publishedPct,
     partners: parts, breakEven: need(net), breakEvenCautious: need(cautiousNet),

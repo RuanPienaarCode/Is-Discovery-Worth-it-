@@ -137,6 +137,7 @@ function buildSwitch(st, cmp, products) {
     /* an under-45 price for an older (or unknown-age) family is no saving */
     const best = cheapest(c.gap.rows.filter(r => priced(r) && !isDiscovery(r) && (!r.ageLimited || r.quoted)));
     if (best) add('gap', 'Gap cover', 'cost', c.gap.current.annual, best.monthly * 12, { goName: `${best.provider} ${best.plan}`, goNote: 'Discovery Gap Cover ends with Discovery Health' });
+    else add('gap', 'Gap cover', 'cost', c.gap.current.annual, c.gap.current.annual, { assumed: true, goNote: 'No price fits your family yet (rival prices are for under 45s), so taken as the same as now.' });
   }
   quoted('car', 'Car insurance', c.insure);
   quoted('life', 'Life cover', c.life);

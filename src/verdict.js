@@ -150,6 +150,13 @@ function buildVerdicts(st, cmp, products) {
   if (out.health && exH.keys.length && out.health.word !== (fromMarket('health', withoutRewards(c.health, exH.value, r => !r.discovery), healthName, healthOpts) || {}).word) {
     out.health = notEnough('health', restsOn(st, exH.keys));
   }
+  /* A saving needs today's medical aid price: when the debit could not be
+     split (no plan, or the plan's price changed after these figures) the
+     Vitality part may be counted as saved, so no firm saving is claimed. */
+  const unsplit = c.health && (c.health.vitalityKnown === false || (st && st.bill && st.bill.priceStale));
+  if (out.health && unsplit && out.health.tone !== 'good' && out.health.tone !== 'unknown') {
+    out.health = { id: 'health', tone: 'quote', word: 'Get quotes', amount: null, vs: null, why: 'We could not tell how much of your Discovery Health debit order is the medical aid itself. Pick your plan, or type its amount, on the Inputs tab.' };
+  }
   /* say what the best one could not confirm */
   const hb = bestPriced(c.health);
   if (out.health && hb && hb.unsure && hb.unsure.length && out.health.tone !== 'good' && out.health.tone !== 'unknown') {
