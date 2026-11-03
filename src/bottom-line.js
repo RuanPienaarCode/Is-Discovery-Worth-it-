@@ -633,7 +633,8 @@ function mountBottomLine(root, ctx) {
   /* a short list of notes as one dashed line (the first), the rest behind a
      button that says what it opens */
   function noteStrip(parent, notes, cls, tone, key, label) {
-    const list = (notes || []).map(noteText).filter(Boolean);
+    /* one note (a sentence) or several (a list) */
+    const list = [].concat(notes || []).map(noteText).filter(Boolean);
     if (!list.length) return;
     const h = hint(parent, list[0], tone);
     h.classList.add(cls);

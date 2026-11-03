@@ -24,6 +24,7 @@
                    landscape by the window's shape)
      ?old=1        a clock past the market data's review date (the stale
                    banner on Compare)
+     ?partial=1    the statements stop on the 20th of the last month
      ?check=1      walk every visible tab at the current width and report
                    sideways scroll, labels over amounts, tap targets under
                    44px, flow text that an SVG clips or overlaps, cards that
@@ -156,6 +157,16 @@ if (ONBOARD) {
 
 const BIG = 'Money/Other/old-export.csv';
 if (q.get('bigcsv')) files[BIG] = 'a,b\n1,2\n';
+/* ?partial=1: the statements stop on the 20th of the last month, as a real
+   import part-way through a month does — the page then leaves that month
+   out and says so (the windowNote that once crashed the Overview). */
+if (q.get('partial')) {
+  const last = Object.keys(files).map(k => (/(\d{4}-\d\d)\.md$/.exec(k) || [])[1]).filter(Boolean).sort().pop();
+  for (const k of Object.keys(files)) {
+    if (!k.endsWith(last + '.md')) continue;
+    files[k] = files[k].split('\n').filter(l => { const m = /^\| (\d{4}-\d\d-(\d\d)) /.exec(l); return !m || Number(m[2]) <= 20; }).join('\n');
+  }
+}
 const vault = makeMemoryVault(q.get('empty') ? { 'Notes/Hello.md': '# hi\n' } : files);
 const plugin = {
   settings,
