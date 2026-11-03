@@ -764,4 +764,16 @@ const ACC = {
   assert.strictEqual(a2.holders, 2);
   near(a2.fees, a1.fees * 2, 'fees doubled for two holders');
 }
+// Drive rewards paid into the Insure Funder Account: fuel estimated (doubled), statement Insure Miles added, not instead
+{
+  const mF = { ...m, figures: { ...m.figures, 'disc.fuel.bp': fig({ '2026-08': 1500, '2026-09': 1500 }) } };
+  const msF = { months: ['2026-08', '2026-09'], figures: { insure: 100 }, spentMiles: 0, spentRand: 0, swipes: {} };
+  const base = { rates: { ...rates, driveFunderAccount: 1, fuelDrivePct: 5, fuelCap: 1500 }, status: { money: 'Diamond', drive: 'Bronze' } };
+  const opts = { products: { bank: true, insure: true }, vitality: { money: true, health: true, drive: true } };
+  const fF = buildStatement(mF, base, msF, opts).lines.find(l => l.key === 'fuel.drive');
+  assert.strictEqual(fF.source, 'estimated');
+  assert.ok(fF.full > 1000, 'fuel estimate kept, not replaced by a few statement Miles: ' + fF.full);
+  const noFunder = buildStatement(mF, { ...base, rates: { ...base.rates, driveFunderAccount: 0 } }, msF, opts).lines.find(l => l.key === 'fuel.drive');
+  assert.strictEqual(noFunder.source, 'statement', 'Drive paid in Miles: the statement is the figure');
+}
 console.log('model OK');

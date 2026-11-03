@@ -400,12 +400,18 @@ function buildStatement(m, settings, milesSummary, opts) {
      added, each made a year over the months its own source covers. */
   const driveMiles = sv ? atValue('insure', mileValue) : 0;
   const driveCashYear = driveCash > 0 && !funder ? yrOf(['insure.driveCash'], driveCash) : 0;
+  /* Paid into the Insure Funder Account, the fuel rewards never reach the
+     Miles statement: estimate them (doubled), and the statement's Insure
+     Miles are Drive's other rewards (PerfectDrive and the like), added. */
   const fd = num(actual.fuelDriveCash) ? { annual: yrW(Number(actual.fuelDriveCash)), source: 'entered', cash: funder ? 0 : yrW(Number(actual.fuelDriveCash)) }
+    : funder ? { annual: yrOf(driveFuelKeys, fuelDrive) * 2 + driveMiles, source: 'estimated', cash: 0 }
     : driveMiles > 0 ? { annual: driveMiles + driveCashYear, source: 'statement', cash: driveCashYear }
       : driveCashYear > 0 ? { annual: driveCashYear, source: 'measured', cash: driveCashYear }
         : { annual: yrOf(driveFuelKeys, fuelDrive) * (funder ? 2 : 1), source: 'estimated', cash: 0 };
-  const driveWhere = fd.source === 'statement'
-    ? `Your Miles statement shows ${fmtR(driveMiles)} a year of Miles from Discovery Insure${driveCashYear > 0 ? `, and your bank statements ${fmtR(driveCashYear)} a year of INSURECASH` : ''}.`
+  const driveWhere = fd.source === 'statement' || (funder && driveMiles > 0 && !num(actual.fuelDriveCash))
+    ? (funder
+      ? `The fuel part is paid into your Insure Funder Account and doubled, so it is estimated; your Miles statement adds ${fmtR(driveMiles)} a year of other Discovery Insure Miles.`
+      : `Your Miles statement shows ${fmtR(driveMiles)} a year of Miles from Discovery Insure${driveCashYear > 0 ? `, and your bank statements ${fmtR(driveCashYear)} a year of INSURECASH` : ''}.`)
     : funder
     ? 'It is paid into your Insure Funder Account, where it is doubled. You can use that money for excesses, tyres, services and licences; taking it out as cash costs R2 of the account for every R1. Type what was paid in (from the Insure app) for the real figure.'
     : driveCash > 0 ? 'These are the INSURECASH payments on your statements.'

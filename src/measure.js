@@ -38,6 +38,9 @@ function trailingWindow(now, count) {
 /* A split parent the Budget plugin marked Excluded: its parts carry the same
    money (budget-vault tx-role.js supersededBySplit — BOTH columns, so a split
    undone by hand by unticking Excluded counts again). */
+/* An Excluded row that is money moving rather than a purchase. */
+const EXCLUDED_MOVE = /transfer|\btrf\b|payment|settle|savings|to account|from account|internal|own account|withdrawal|deposit/i;
+
 function supersededBySplit(row) {
   return !!row && !!row.excluded && String(row.split || '').trim().toLowerCase() === 'parent';
 }
@@ -186,10 +189,13 @@ function measure(rows, accounts, categories, opts) {
       continue;
     }
     /* Not spend at all: a transfer-like category type, a category you
-       listed, or a row the Budget plugin marks Excluded (left out of income
-       and spend). A refund is money back on a purchase only when it says so;
-       it lowers every spend figure the purchase raised. */
-    const notSpendRow = NOT_SPEND_TYPES.includes(type) || notSpend.has(row.category) || !!row.excluded;
+       listed, or an Excluded row that reads like a transfer or payment. The
+       Budget plugin's Excluded means "left out of budget totals, but the money
+       still moved", so an Excluded swipe at a shop (one funded from savings,
+       say) is still a card purchase that earns; moves between your own
+       accounts are caught by `own`. A refund is money back on a purchase only
+       when it says so; it lowers every spend figure the purchase raised. */
+    const notSpendRow = NOT_SPEND_TYPES.includes(type) || notSpend.has(row.category) || (!!row.excluded && EXCLUDED_MOVE.test(row.description));
     const refund = row.amount > 0 && REFUND.test(row.description);
     const counts = row.amount < 0 || refund;
     /* Partner spend on ANY account, as all.<tag>: Vitality Health pays

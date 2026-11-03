@@ -205,8 +205,10 @@ const W = { from: '2026-09', to: '2026-09' };
   assert.strictEqual(total(mX, 'shop.checkers'), 3000);
   assert.strictEqual(total(mX, 'shop.woolworths'), 600, 'a parent with Excluded unticked is a real row again');
   assert.strictEqual(total(mX, 'all.shop.woolworths'), 600);
-  assert.strictEqual(total(mX, 'spend.debit'), 0, 'an Excluded row is not a swipe');
-  assert.strictEqual(total(mX, 'all.shop.clicks'), 0, 'nor partner spend');
+  /* Excluded = "left out of budget totals, but the money still moved"
+     (budget-vault tx-role.js): an Excluded shop swipe still earns */
+  assert.strictEqual(total(mX, 'spend.debit'), 400, 'an Excluded shop swipe is still a swipe');
+  assert.strictEqual(total(mX, 'all.shop.clicks'), 250, 'and still partner spend');
   assert.strictEqual(mX.excludedFromSpend['Rows marked Excluded'], 5000);
 }
 // debit orders out of a transaction account are not card swipes (red team #7)
