@@ -30,5 +30,22 @@ const source = {
   const plain = { paths: source.paths, read: source.read };
   await loadBudget(plain);
   assert.strictEqual(reads['Exports/other.csv'], 2);
+  // with head(): a CSV that is not a Miles statement is never read whole; a file over 5 MB is not read at all (red team: iPhone memory)
+  const big = { ...files, 'Exports/huge.csv': '"Value Date","Type","Description","Additional information","Miles"\n' };
+  const heads = {}, fullReads = {};
+  const lean = {
+    paths: () => Object.keys(big),
+    read: async p => { fullReads[p] = (fullReads[p] || 0) + 1; return big[p]; },
+    head: async (p, n) => { heads[p] = n; return big[p].slice(0, n); },
+    stat: p => ({ mtime: 7, size: p === 'Exports/huge.csv' ? 6 * 1024 * 1024 : big[p].length }),
+  };
+  const c = await loadBudget(lean);
+  assert.strictEqual(heads['Exports/other.csv'], 1024, 'only the first kilobyte is looked at');
+  assert.strictEqual(fullReads['Exports/other.csv'], undefined, 'and the rest never read');
+  assert.strictEqual(fullReads['Downloads/DiscoveryBankMiles_x.csv'], 1, 'a Miles statement is read whole');
+  assert.strictEqual(heads['Exports/huge.csv'], undefined, 'a 6 MB file is not opened');
+  assert.deepStrictEqual(c.csvSkipped, [{ path: 'Exports/huge.csv', size: 6 * 1024 * 1024 }]);
+  assert.ok(/too big/.test(c.csvNotes[0]) && !/-/.test(c.csvNotes[0].replace(/[\w./]+\.csv/, '')), c.csvNotes[0]);
+  assert.strictEqual(c.miles.rows.length, 1);
   console.log('load OK');
 })().catch(e => { console.error(e); process.exit(1); });

@@ -12,6 +12,8 @@
                   the Insure premium, so it stops with it
    Gap cover is premium against premium. */
 
+const { PERIODS, priceValidFor } = require('./market');
+
 /* Medical aid plans nearest Discovery's network plans, 2026 monthly
    contributions per main member / adult / child (savings portion
    included). discovery: Discovery's own plan, so Vitality Health stays.
@@ -189,6 +191,24 @@ const HOME_INSURERS = [
    for R300 000" put it at about R50–R135. */
 const HOME_RANGE = { low: 50, high: 135, source: 'King Price blog (27 May 2026); InsureEasy Brokers via Daily Investor (15 Mar 2025)' };
 
+/* The period each table's prices are good for (market.js PERIODS):
+   Discovery Health's from 1 Apr 2026 to 31 Mar 2027, the other schemes' and
+   gap cover's for 2026. */
+for (const p of HEALTH_PLANS.concat(HEALTH_OWN)) p.effective = p.discovery ? PERIODS.discoveryHealth : PERIODS.schemes;
+for (const p of GAP_PLANS) p.effective = PERIODS.gap;
+
+/* Whether Discovery Health's published plan prices (the table above) are
+   the ones charged in a month ('YYYY-MM' or 'YYYY-MM-DD'). A debit outside
+   that period was priced on another year's table, so it must not be split
+   with these prices. */
+function planPriceValidFor(ym) {
+  return priceValidFor('discoveryHealth', ym);
+}
+
+/* The published gap cover prices are for a family whose oldest member is
+   under this age. */
+const GAP_PRICED_UNDER = 45;
+
 const num = v => v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v));
 
 /* What a family needs a medical aid to cover, graded per plan (yes,
@@ -294,15 +314,27 @@ function compareHealth(health, settings, plans = HEALTH_PLANS) {
   return { current, vitalityNet, vitalityKnown, members, needs, own: own ? { ...own, cover: coverOf(own, settings) } : null, rows: byGain(rows) };
 }
 
-/* gap: the Gap product — paid per year. */
+/* gap: the Gap product — paid per year. The published prices are for an
+   oldest member under 45 (GAP_PRICED_UNDER); most gap cover costs more after
+   that. Unless settings.members.oldestAge says the family is younger, a
+   published price is shown but claims no saving (gainIfSwitch null,
+   ageLimited true): only a quote you typed is compared. */
 function compareGap(gap, settings, plans = GAP_PLANS) {
   if (!gap || !(gap.paid > 0)) return null;
+  const age = Number(((settings && settings.members) || {}).oldestAge);
+  const oldestAge = Number.isFinite(age) && age > 0 ? age : null;
+  const pricedForAge = oldestAge !== null && oldestAge < GAP_PRICED_UNDER;
   const rows = plans.map(p => {
     const typed = quoteOf(settings, 'gap.' + p.id);
     const monthly = typed !== null ? typed : num(p.monthly) ? p.monthly : null;
-    return { ...p, monthly, annual: monthly !== null ? monthly * 12 : null, quoted: typed !== null, gainIfSwitch: monthly !== null ? gap.paid - monthly * 12 : null };
+    const ageLimited = typed === null && monthly !== null && !pricedForAge;
+    return { ...p, monthly, annual: monthly !== null ? monthly * 12 : null, quoted: typed !== null, ageLimited, gainIfSwitch: monthly !== null && !ageLimited ? gap.paid - monthly * 12 : null };
   });
-  return { current: { annual: gap.paid, monthly: gap.paid / 12 }, rows: byGain(rows) };
+  return {
+    current: { annual: gap.paid, monthly: gap.paid / 12 }, oldestAge, pricedForAge,
+    ageNote: pricedForAge ? null : 'Rival prices shown are for under 45s.',
+    rows: byGain(rows),
+  };
 }
 
 /* insure: the Insure product — paid per year, the latest monthly debit
@@ -386,4 +418,4 @@ function compareHome(settings, insurers = HOME_INSURERS) {
   return { current: { monthly: current, annual: current * 12 }, contents, range: contents !== null ? { low: (HOME_RANGE.low * contents) / 100000, high: (HOME_RANGE.high * contents) / 100000, source: HOME_RANGE.source } : null, rows: sorted };
 }
 
-module.exports = { NEEDS, GRADES, coverOf, HEALTH_PLANS, HEALTH_OWN, GAP_PLANS, INSURERS, LIFE_OFFERS, LIFE_BENCHMARK, HOME_INSURERS, HOME_RANGE, healthPremium, compareHealth, compareGap, compareInsure, compareLife, compareHome };
+module.exports = { NEEDS, GRADES, coverOf, planPriceValidFor, GAP_PRICED_UNDER, HEALTH_PLANS, HEALTH_OWN, GAP_PLANS, INSURERS, LIFE_OFFERS, LIFE_BENCHMARK, HOME_INSURERS, HOME_RANGE, healthPremium, compareHealth, compareGap, compareInsure, compareLife, compareHome };

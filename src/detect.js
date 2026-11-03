@@ -7,7 +7,7 @@
    institution Discovery), so the two can never disagree about what a
    "DISC PREM" line is. */
 
-const { RULES } = require('./constants');
+const { RULES, SHOP_TAGS, DEFAULT_SETTINGS } = require('./constants');
 const { money, dayLabel } = require('./format');
 const { healthPremium, HEALTH_PLANS, HEALTH_OWN } = require('./compare');
 const rates = require('./rates');
@@ -38,6 +38,13 @@ function ruleOf(row, acct) {
     return r;
   }
   return null;
+}
+
+/* The shop tag a description carries (constants.SHOP_TAGS), or null. Same
+   test as measure.js. */
+function tagOf(description) {
+  const d = String(description || '');
+  return SHOP_TAGS.find(t => t.desc.test(d) && !(t.not && t.not.test(d))) || null;
 }
 
 const evidenceOf = row => ({ date: row.date, description: row.description, amount: row.amount, account: row.account });
@@ -208,11 +215,23 @@ function discoveryPlans() {
   return HEALTH_PLANS.concat(HEALTH_OWN).filter(p => p.discovery);
 }
 
+/* What else can ride on the Discovery Health debit besides the medical aid:
+   Vitality Health and gap cover. A generous ceiling a month — no family's
+   Vitality and Discovery Gap Cover together comes near it — so the plan the
+   debit really pays is never ruled out. Rough, on purpose: it only decides
+   which plans COULD fit, never what Vitality costs. */
+const EXTRA_CEILING = { adult: 600, child: 200, gap: 800 };
+
 /* The latest Discovery Health debit against the price of each Discovery
-   plan for these members: the dearest plan at or under the debit (the rest
-   of the debit is Vitality and gap cover). null when there is no debit, or
-   when the debit is under every plan's price (nothing fits).
-   → { id, name, monthly, debit, date, why } | null */
+   plan for these members. A plan COULD be the one when its price sits at or
+   under the debit and the rest (Vitality and gap cover) is no more than
+   EXTRA_CEILING allows. Discovery's plans sit close together, so one debit
+   usually fits several: a plan is only picked when exactly one fits.
+   → null when there is no debit;
+     { id, name, monthly, debit, date, why, candidates } when one plan fits;
+     { id: null, name: null, monthly: null, debit, date, why, candidates }
+     when none or several do (candidates: [{ id, name, monthly, rest }],
+     closest first — pick from these, do not guess). */
 function guessHealthPlan(budget, members, plans) {
   const accounts = (budget && budget.accounts) || {};
   let debit = null;
@@ -225,26 +244,47 @@ function guessHealthPlan(budget, members, plans) {
   }
   if (!debit) return null;
   const amount = -debit.amount;
-  let best = null;
-  for (const p of plans || discoveryPlans()) {
-    const monthly = healthPremium(p, members);
-    if (monthly === null || monthly > amount) continue;
-    if (!best || monthly > best.monthly) best = { plan: p, monthly };
-  }
-  if (!best) return null;
   const m = members || {};
   const adults = Math.max(1, Math.floor(Number(m.adults) || 1));
   const kids = Math.max(0, Math.floor(Number(m.children) || 0));
+  const ceiling = adults * EXTRA_CEILING.adult + kids * EXTRA_CEILING.child + EXTRA_CEILING.gap;
+  const candidates = [];
+  for (const p of plans || discoveryPlans()) {
+    const monthly = healthPremium(p, members);
+    if (monthly === null) continue;
+    const rest = amount - monthly;
+    if (rest < -0.5 || rest > ceiling) continue;
+    candidates.push({ id: p.id, name: p.plan, monthly, rest: Math.max(0, rest) });
+  }
+  candidates.sort((x, y) => x.rest - y.rest);
   const who = plural(adults, 'adult', 'adults') + (kids ? ` and ${plural(kids, 'child', 'children')}` : '');
-  const rest = amount - best.monthly;
-  return {
-    id: best.plan.id,
-    name: best.plan.plan,
-    monthly: best.monthly,
-    debit: amount,
-    date: debit.date,
-    why: `Your last Discovery Health debit order was ${money(amount)} on ${dayLabel(debit.date)}. The dearest Discovery plan at or under that for ${who} is ${best.plan.plan} at ${money(best.monthly)} a month${rest >= 0.5 ? `, so about ${money(rest)} of it is Vitality or gap cover` : ''}.`,
-  };
+  const head = `Your last Discovery Health debit order was ${money(amount)} on ${dayLabel(debit.date)}.`;
+  const base = { debit: amount, date: debit.date, candidates };
+  if (candidates.length === 1) {
+    const c = candidates[0];
+    return {
+      id: c.id, name: c.name, monthly: c.monthly, ...base,
+      why: `${head} For ${who}, only ${c.name} fits it, at ${money(c.monthly)} a month${c.rest >= 0.5 ? `, so about ${money(c.rest)} of it is Vitality or gap cover` : ''}.`,
+    };
+  }
+  const shown = candidates.slice(0, 3).map(c => c.name);
+  const why = candidates.length
+    ? `${head} For ${who}, ${candidates.length} Discovery plans could fit it once Vitality and gap cover are added (such as ${nameList(shown)}), so pick yours.`
+    : `${head} For ${who}, no Discovery plan's price fits it, so pick yours.`;
+  return { id: null, name: null, monthly: null, ...base, why };
 }
 
-module.exports = { PRODUCT_NAMES: NAMES, detectProducts, resolveProducts, detectBanking, resolveVitality, guessHealthPlan };
+/* The card tier to work with. The person's own answer (settings.suite, once
+   settings.suiteAnswered is true, or a tier other than the default) wins;
+   until they answer — onboarding skipped, say — the tier the fees show
+   (detectBanking().tier) is used, and only then the default. → a SUITES id */
+function resolveSuite(settings, banking) {
+  const s = settings || {};
+  const def = DEFAULT_SETTINGS.suite;
+  const answered = s.suiteAnswered === true || (typeof s.suite === 'string' && s.suite !== '' && s.suite !== def);
+  if (answered && s.suite) return s.suite;
+  if (banking && banking.tier) return banking.tier;
+  return s.suite || def;
+}
+
+module.exports = { PRODUCT_NAMES: NAMES, detectProducts, resolveProducts, detectBanking, resolveVitality, guessHealthPlan, resolveSuite, ruleOf, tagOf, EXTRA_CEILING };

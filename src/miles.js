@@ -58,8 +58,10 @@ const LIFE = /life plan|discovery life/i;
 const GAMEBOARD = /gameboard/i;
 
 /* Row → what it is. `group` says who pays it:
-     bank   — only with Discovery Bank (Vitality Money, base Miles, Insure)
+     bank   — only with Discovery Bank (Vitality Money, base Miles)
      health — Vitality Health, kept whichever bank you use
+     drive  — Discovery Insure's Vitality Drive fuel rewards, paid as Miles
+              from 1 Nov 2026: Insure's, never the bank's partner Miles
      none   — Miles moving, not earned (spent, received, nothing) */
 function classifyMiles(row) {
   /* "Vitality Money Reverse" undoes a Vitality Money reward: it belongs
@@ -82,7 +84,7 @@ function classifyMiles(row) {
     if (CARE.test(d)) return { key: 'health.healthyCare', group: 'health' };
     return { key: 'health.other', group: 'health' };
   }
-  if (/insure/.test(t)) return { key: 'insure', group: 'bank' };
+  if (/insure|vitality drive/.test(t)) return { key: 'insure', group: 'drive' };
   if (GAMEBOARD.test(d)) return { key: 'gameboard', group: 'bank' };
   /* Discovery Life rewards belong with Life, not Vitality Health */
   if (LIFE.test(d)) return { key: 'life', group: 'life' };
@@ -106,9 +108,11 @@ function swipeOf(row) {
 }
 
 /* rows → { months, figures: { key: Miles }, perMonth: { key: { ym: Miles } },
-            spentMiles, spentRand, rows } for the window from..to (YYYY-MM). */
+            counts: { key: rows }, spentMiles, spentRand, rows } for the window
+   from..to (YYYY-MM). counts says how many statement rows each figure rests
+   on, so a figure built from one reward is not read as a habit. */
 function summariseMiles(rows, from, to) {
-  const figures = {}, perMonth = {}, swipes = {}, months = new Set();
+  const figures = {}, perMonth = {}, counts = {}, swipes = {}, months = new Set();
   let spentMiles = 0, spentRand = 0, n = 0;
   let first = null, last = null;
   for (const row of rows) {
@@ -131,10 +135,11 @@ function summariseMiles(rows, from, to) {
     }
     if (c.group === 'none') continue;
     figures[c.key] = (figures[c.key] || 0) + row.miles;
+    counts[c.key] = (counts[c.key] || 0) + 1;
     const pm = perMonth[c.key] || (perMonth[c.key] = {});
     pm[ym] = (pm[ym] || 0) + row.miles;
   }
-  return { figures, perMonth, swipes, months: [...months].sort(), spentMiles, spentRand, rows: n, first, last };
+  return { figures, perMonth, counts, swipes, months: [...months].sort(), spentMiles, spentRand, rows: n, first, last };
 }
 
 /* Several downloads may overlap. A row counted k times in one file and j in

@@ -383,6 +383,9 @@
 .dc-kpi-verdict.is-good::after { background: var(--dc-pos); }
 .dc-kpi-verdict.is-check::after, .dc-kpi-verdict.is-quote::after { background: var(--dc-amber); }
 .dc-kpi-verdict.is-over::after, .dc-kpi-verdict.is-none::after { background: var(--dc-neg); }
+/* not enough data to judge: neutral, no colour on the figure */
+.dc-kpi.is-unknown::after { background: var(--dc-line-2); }
+.dc-kpi.is-unknown .dc-kpi-value { color: var(--dc-text); }
 
 .dc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 14px; align-items: start; }
 
@@ -402,6 +405,7 @@
 .dc-pill.is-good { background: rgba(52, 211, 153, 0.14); color: var(--dc-pos); }
 .dc-pill.is-check, .dc-pill.is-quote { background: rgba(var(--dc-amber-rgb), 0.15); color: var(--dc-amber); }
 .dc-pill.is-over, .dc-pill.is-none { background: rgba(248, 113, 113, 0.16); color: var(--dc-neg); }
+.dc-pill.is-unknown { background: rgba(138, 147, 163, 0.16); color: var(--dc-text-2); }
 .theme-light .dc-page .dc-pill.is-good { background: rgba(4, 120, 87, 0.1); }
 .theme-light .dc-page .dc-pill.is-over, .theme-light .dc-page .dc-pill.is-none { background: rgba(185, 28, 28, 0.08); }
 

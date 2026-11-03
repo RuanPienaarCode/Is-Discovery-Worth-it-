@@ -24,8 +24,9 @@
    card and for premiums (measure.js sourceMonths). */
 
 const { total, monthsBetween, sourceMonths } = require('./measure');
-const { healthPremium, HEALTH_PLANS, HEALTH_OWN } = require('./compare');
-const { rate, ALTERNATIVES, FACE_VALUE, suiteOf, bankProductOf } = require('./rates');
+const compare = require('./compare');
+const { healthPremium, HEALTH_PLANS, HEALTH_OWN } = compare;
+const { rate, ALTERNATIVES, FACE_VALUE, suiteOf, bankProductOf, chooseAlternative } = require('./rates');
 const { monthLabel, dayLabel } = require('./format');
 const { BENEFITS, WEIGHT, suggestBenefits, levelOf, availableFor, anyKey } = require('./benefits');
 
@@ -160,6 +161,11 @@ function buildStatement(m, settings, milesSummary, opts) {
      would count against months they were never about. Totals typed before
      the window was stamped on them carry no period and are still used. */
   const windowId = `${m.from}..${m.to}`;
+  /* A typed total is for the whole window, so it is made a year over the
+     window's months, as receipts are, never over the months that happen to
+     hold Discovery transactions. */
+  const windowMonths = (m.months && m.months.length) || 1;
+  const yrW = v => (v * 12) / windowMonths;
   const typedMiles = settings.actualMiles || {};
   const actualStale = typedMiles.period && typedMiles.period !== windowId ? typedMiles.period : null;
   const actual = actualStale ? {} : typedMiles;
@@ -257,7 +263,7 @@ function buildStatement(m, settings, milesSummary, opts) {
   }
 
   const milesLine = num(actual.card)
-    ? { annual: yr(Number(actual.card) * mileValue), source: 'entered' }
+    ? { annual: yrW(Number(actual.card) * mileValue), source: 'entered' }
     : sv ? { annual: fromStmt('base'), source: 'statement' }
       : { annual: yr(miles * mileValue), source: 'estimated' };
   line('bank', 'miles.card', 'Miles for using your card', milesLine.annual, milesLine.source,
@@ -277,7 +283,7 @@ function buildStatement(m, settings, milesSummary, opts) {
     if (!num(actual[key])) return { bank: yr(moneyEst), stays: yrOf(healthKeys, healthEst), source: 'estimated', miles: false };
     const tot = Number(actual[key]);
     const f = moneyEst + healthEst > 0 ? moneyEst / (moneyEst + healthEst) : 0.5;
-    return { bank: yr(tot * f * mileValue), stays: yr(tot * (1 - f) * FACE_VALUE), source: 'entered', miles: true };
+    return { bank: yrW(tot * f * mileValue), stays: yrW(tot * (1 - f) * FACE_VALUE), source: 'entered', miles: true };
   };
   const hf = split('healthyFood', hfMoney, hfHealth, [foodPrimaryAny, foodSecondaryAny]);
   const partner = k => (k === 'shop.checkers' ? 'Checkers' : 'Woolworths');
@@ -290,26 +296,28 @@ function buildStatement(m, settings, milesSummary, opts) {
     `We take ${r('healthyCareShare')}% of what you spend at ${carePrimary === 'shop.clicks' ? 'Clicks' : 'Dis-Chem'} as HealthyCare. On up to ${fmtR(r('healthyCareMoneyCap'))} of it a month the bank adds a percentage that grows with that month's card spend${upTo('healthyCareMoneyPct')}. A month with less than ${fmtR(minSpend)} of HealthyCare gets nothing.`,
     ['healthyCareShare', 'healthyCareMoneyPct', 'healthyCareMoneyCap', 'healthyMinSpend'], { miles: hc.miles });
 
-  const fm = num(actual.fuel) ? { annual: yr(Number(actual.fuel) * mileValue), source: 'entered' }
+  const fm = num(actual.fuel) ? { annual: yrW(Number(actual.fuel) * mileValue), source: 'entered' }
     : sv ? { annual: fromStmt('money.fuel'), source: 'statement' }
       : { annual: yr(fuelMoney), source: 'estimated' };
   line('bank', 'fuel.money', 'Extra fuel Miles from the bank', fm.annual, fm.source,
     `A percentage of what you spend at bp and Shell, paid in Miles. The percentage grows with that month's card spend${upTo('fuelMoneyPct')}. It needs Vitality Money, so you lose it if you leave the bank.`,
     ['fuelMoneyPct'], { miles: fm.source !== 'estimated' });
 
+  /* Discovery Insure's Miles (Vitality Drive) are Drive's: they are the
+     fuel.drive line below, never partner Miles too. */
+  let basic = 0, board = 0;
   if (sv) {
-    line('bank', 'miles.partners', 'Miles from partner shops and Insure', fromStmt('money.partners') + fromStmt('insure'), 'statement',
-      'Extra Miles at Discovery\'s partner shops (Superbalist, Exclusive Books, parking and others) and Miles from Discovery Insure.', [], { miles: true });
-    const basic = r('activeRewardsWithoutBank') * 12;
-    const board = fromStmt('gameboard');
-    line('bank', 'gameboard', 'Gameboard rewards', Math.max(0, board - basic), 'statement',
-      `${fmtR(board)} a year of Miles from the gameboard in the Discovery Bank app. The gameboard needs the bank. Without it, Vitality Health still gives you basic rewards for your weekly exercise goals, which you guessed at ${fmtR(basic)} a year, so only the rest is counted here.`,
+    line('bank', 'miles.partners', 'Miles from partner shops', fromStmt('money.partners'), 'statement',
+      'Extra Miles at Discovery\'s partner shops (Superbalist, Exclusive Books, parking and others).', [], { miles: true });
+    /* The basic exercise rewards Vitality Health would pay without the bank
+       are your guess, but never more than the gameboard actually paid: the
+       two are the same Miles, split between bank and Vitality Health. */
+    const guess = r('activeRewardsWithoutBank') * 12;
+    board = Math.max(0, fromStmt('gameboard'));
+    basic = Math.min(guess, board);
+    line('bank', 'gameboard', 'Gameboard rewards', board - basic, 'statement',
+      `${fmtR(board)} a year of Miles from the gameboard in the Discovery Bank app. The gameboard needs the bank. Without it, Vitality Health still gives you basic rewards for your weekly exercise goals, which you guessed at ${fmtR(guess)} a year${basic < guess ? `. The gameboard paid less than that, so all of it counts as those basic rewards` : ', so only the rest is counted here'}.`,
       ['activeRewardsWithoutBank'], { miles: true });
-    if (mileValue > FACE_VALUE) {
-      const healthMiles = ['health.healthyFood', 'health.healthyCare', 'activeRewards', 'health.other'].reduce((s, k) => s + sv.miles(k), 0);
-      line('bank', 'miles.uplift', 'Vitality Health Miles are worth more with the bank', (healthMiles * (mileValue - FACE_VALUE) * 12) / sv.covered, 'statement',
-        `Vitality Health pays you Miles for HealthyFood and exercise whether or not you bank with Discovery. But the discounts that made your Miles worth ${fmtCents(mileValue)} each (at Discovery Miles partners and on Ð-Day) need Discovery Bank with Vitality Money. Without it, a Mile is worth ${fmtCents(FACE_VALUE)}.`, [], { uplift: true });
-    }
   }
   /* The Apple Watch needs a Discovery Bank Suite with a credit card: its
      value is the instalments you did not pay. */
@@ -352,7 +360,7 @@ function buildStatement(m, settings, milesSummary, opts) {
     const healthOnly = Math.min(Number(tr.discount), Number(tr.baseFare) * healthPct / 100);
     /* Receipt totals cover the window as a whole: scale to a year by the
        window's length, not by months of data. */
-    const scale = 12 / m.months.length;
+    const scale = 12 / windowMonths;
     travelBank = Math.max(0, Number(tr.discount) - healthOnly) * scale;
     travelStays = healthOnly * scale;
     travelSource = 'entered';
@@ -387,16 +395,24 @@ function buildStatement(m, settings, milesSummary, opts) {
   const funder = r('driveFunderAccount') >= 1;
   const driveCash = total(m, 'insure.driveCash');
   const seen = m.lastSeen && m.lastSeen['insure.driveCash'];
-  const fd = num(actual.fuelDriveCash) ? { annual: yr(Number(actual.fuelDriveCash)), source: 'entered' }
-    : driveCash > 0 && !funder ? { annual: yrOf(['insure.driveCash'], driveCash), source: 'measured' }
-      : { annual: yrOf(driveFuelKeys, fuelDrive) * (funder ? 2 : 1), source: 'estimated' };
-  const driveWhere = funder
+  /* Drive rewards paid as Miles (from 1 Nov 2026) are on the Miles
+     statement as Discovery Insure's; any INSURECASH paid before then is
+     added, each made a year over the months its own source covers. */
+  const driveMiles = sv ? atValue('insure', mileValue) : 0;
+  const driveCashYear = driveCash > 0 && !funder ? yrOf(['insure.driveCash'], driveCash) : 0;
+  const fd = num(actual.fuelDriveCash) ? { annual: yrW(Number(actual.fuelDriveCash)), source: 'entered', cash: funder ? 0 : yrW(Number(actual.fuelDriveCash)) }
+    : driveMiles > 0 ? { annual: driveMiles + driveCashYear, source: 'statement', cash: driveCashYear }
+      : driveCashYear > 0 ? { annual: driveCashYear, source: 'measured', cash: driveCashYear }
+        : { annual: yrOf(driveFuelKeys, fuelDrive) * (funder ? 2 : 1), source: 'estimated', cash: 0 };
+  const driveWhere = fd.source === 'statement'
+    ? `Your Miles statement shows ${fmtR(driveMiles)} a year of Miles from Discovery Insure${driveCashYear > 0 ? `, and your bank statements ${fmtR(driveCashYear)} a year of INSURECASH` : ''}.`
+    : funder
     ? 'It is paid into your Insure Funder Account, where it is doubled. You can use that money for excesses, tyres, services and licences; taking it out as cash costs R2 of the account for every R1. Type what was paid in (from the Insure app) for the real figure.'
     : driveCash > 0 ? 'These are the INSURECASH payments on your statements.'
       : seen ? `No Drive cash on your statements since ${dayLabel(seen)}. If it now goes into the Insure Funder Account, set "Drive rewards paid into the Insure Funder Account" to Yes.` : '';
   line('stays', 'fuel.drive', 'Vitality Drive fuel rewards', fd.annual, fd.source,
     `${r('fuelDrivePct')}% back${funder ? ', doubled,' : ''} on up to ${fmtR(r('fuelCap'))} a month of fuel per driver at bp and Shell, paid with a Discovery Bank card (${fmtR(yrOf(driveFuelKeys, fuelCounted))} a year of your fuel counts). ${driveWhere ? driveWhere + ' ' : ''}Discovery Insure pays this to anyone with any Discovery Bank account, even the free one, so keep that free account if you move your banking.`,
-    ['driveFunderAccount', 'fuelDrivePct', 'fuelCap', 'fuelDrivers'], { funder });
+    ['driveFunderAccount', 'fuelDrivePct', 'fuelCap', 'fuelDrivers'], { funder, cash: fd.cash });
   /* Gym: the current monthly price, so a month before the discount started
      does not inflate the saving. */
   const gymKey = anyKey(m, 'gym');
@@ -408,7 +424,7 @@ function buildStatement(m, settings, milesSummary, opts) {
   line('stays', 'travel.health', 'Flight discount from Vitality Health', travelStays, travelSource, 'The part of the flight discount you keep without the bank.', ['travelHealthPct']);
   if (sv) {
     line('stays', 'activeRewards', 'Other Vitality Health rewards', atValue('activeRewards', FACE_VALUE) + atValue('health.other', FACE_VALUE), 'statement', 'Rewards for sleep, health goals and other Vitality Health activities.');
-    line('stays', 'activeRewards.basic', 'Basic exercise rewards without the bank', r('activeRewardsWithoutBank') * 12, 'estimated', 'What Vitality Health would still give you for your weekly exercise goals without the gameboard (your guess).', ['activeRewardsWithoutBank']);
+    line('stays', 'activeRewards.basic', 'Basic exercise rewards without the bank', basic, 'estimated', `What Vitality Health would still give you for your weekly exercise goals without the gameboard (your guess${basic < r('activeRewardsWithoutBank') * 12 ? ', capped at what the gameboard paid' : ''}).`, ['activeRewardsWithoutBank']);
   }
   if (!watchMonthly) line('stays', 'benefit.appleWatch', 'Apple Watch charges', yr(total(m, 'benefit.appleWatch')), 'measured', 'You pay nothing in a month you meet your exercise goals. Type the watch\'s full monthly payment to count it as a bank benefit; it needs the Discovery Bank Suite with a credit card.', ['appleWatchMonthly']);
 
@@ -454,8 +470,16 @@ function buildStatement(m, settings, milesSummary, opts) {
      it adds on top of face value is the bank's. It is worked out on the
      Vitality Health Miles as COUNTED above — none from a line this setup
      cannot earn or one set to "Not for me" — and then weighted itself. */
-  if (!sv && mileSource === 'use' && mileValue > FACE_VALUE) {
-    const healthMiles = ['healthyFood.health', 'healthyCare.health'].reduce((s, k) => s + ((lines.find(l => l.key === k) || {}).annual || 0), 0);
+  /* With a Miles statement the same holds for the Miles it shows Vitality
+     Health paid (HealthyFood, HealthyCare, exercise and other rewards): they
+     are counted as weighted and available above, at face value. */
+  const healthCounted = keys => keys.reduce((s, k) => s + ((lines.find(l => l.key === k) || {}).annual || 0), 0);
+  if (sv && mileValue > FACE_VALUE) {
+    line('bank', 'miles.uplift', 'Vitality Health Miles are worth more with the bank', healthCounted(['healthyFood.health', 'healthyCare.health', 'activeRewards']) * (mileValue / FACE_VALUE - 1), 'statement',
+      `Vitality Health pays you Miles for HealthyFood and exercise whether or not you bank with Discovery. But the discounts that made your Miles worth ${fmtCents(mileValue)} each (at Discovery Miles partners and on Ð-Day) need Discovery Bank with Vitality Money. Without it, a Mile is worth ${fmtCents(FACE_VALUE)}.`, [], { uplift: true });
+    weigh(lines[lines.length - 1]);
+  } else if (!sv && mileSource === 'use' && mileValue > FACE_VALUE) {
+    const healthMiles = healthCounted(['healthyFood.health', 'healthyCare.health']);
     line('bank', 'miles.uplift', 'Vitality Health Miles are worth more with the bank', healthMiles * (mileValue / FACE_VALUE - 1), 'estimated',
       `You said you spend your Miles ${MILES_USE_WORDS[settings.milesUse]}. With ${COUNT_WORDS[programmes]} Vitality programme${programmes === 1 ? '' : 's'} you get ${fmtPct(usePct)} off there, so each Mile buys about ${fmtCents(mileValue)} instead of ${fmtCents(FACE_VALUE)}. That discount needs Discovery Bank with Vitality Money, so it counts for the bank on Vitality Health's Miles too.`, ['milesDdayPct', 'milesPartnerPct'], { uplift: true });
     weigh(lines[lines.length - 1]);
@@ -476,13 +500,14 @@ function buildStatement(m, settings, milesSummary, opts) {
   const cautiousNet = cautiousValue - cost;
 
   const monthly = spendMonths.map(ym => ({ ym, spend: cardIn(ym) }));
-  const alternatives = ALTERNATIVES.map(a => altResult(a, settings, st, m, monthly, n, net, cautiousNet));
+  const alternatives = ALTERNATIVES.map(a => altResult(a, settings, st, m, monthly, n, net, cautiousNet, debitOnly));
   const best = alternatives.slice().sort((x, y) => y.net - x.net)[0] || null;
-  const chosen = alternatives.find(a => a.id === settings.compareWith) || best;
+  /* the bank you chose, else the best CONFIRMED like-for-like one */
+  const chosen = chooseAlternative(alternatives, settings.compareWith) || best;
 
   const downgrade = downgradeResult({ settings, st, lines, r, R, m, yr, monthly, avgSpend, net, watchMonthly });
 
-  const bill = discoveryBill(m, keys => yrOf(keys, keys.reduce((s, k) => s + total(m, k), 0)), settings.bill || {}, settings);
+  const billOf = discoveryBill(m, keys => yrOf(keys, keys.reduce((s, k) => s + total(m, k), 0)), settings.bill || {}, settings);
   const gd = Math.min(95, r('gymDiscountPct')) / 100;
   const gymSavingFull = gd > 0 ? (gymLatest * 12 / (1 - gd)) * gd : 0;
   const gymOpen = avail.lines.has('gym');
@@ -490,12 +515,70 @@ function buildStatement(m, settings, milesSummary, opts) {
   benefits.gym.full = gymOpen ? gymSavingFull : 0;
   benefits.gym.counted = gymWeight === 0 ? 0 : gymSavingFull * gymWeight;
   const vitality = {
-    premium: bill.vitalityMonthly !== null ? bill.vitalityMonthly * 12 : null,
+    premium: billOf.vitalityMonthly !== null ? billOf.vitalityMonthly * 12 : null,
     gymSaving: benefits.gym.counted,
     gymSavingFull,
     rewards: sumKeysOf(lines, ['healthyFood.health', 'healthyCare.health', 'travel.health', 'activeRewards', 'activeRewards.basic']),
   };
   vitality.value = vitality.gymSaving + vitality.rewards;
+
+  /* How far to trust the figures (st.confidence, contract Addition 4): how
+     many months of Discovery Bank statements there are, and which lines
+     rest on one or two events made into a year from a short window. */
+  const stmtKeysOf = { 'miles.card': ['base'], 'miles.healthyFood': ['money.healthyFood'], 'miles.healthyCare': ['money.healthyCare'], 'fuel.money': ['money.fuel'],
+    'miles.partners': ['money.partners'], gameboard: ['gameboard'], 'miles.uplift': ['health.healthyFood', 'health.healthyCare', 'activeRewards', 'health.other'],
+    'healthyFood.health': ['health.healthyFood'], 'healthyCare.health': ['health.healthyCare'], activeRewards: ['activeRewards', 'health.other'], 'fuel.drive': ['insure'] };
+  const allTravelKey = anyKey(m, 'travel.vitality');
+  const figKeysOf = { 'fee.account': ['fee.account'], 'fee.facility': ['fee.facility'], 'fee.vitalityMoney': ['fee.vitalityMoney'], 'fee.other': ['fee.other'],
+    'miles.card': [spendKey], 'miles.healthyFood': [foodPrimary], 'miles.healthyCare': [carePrimary], 'fuel.money': ['fuel.bp', 'fuel.shell'],
+    'miles.uplift': [foodPrimaryAny, foodSecondaryAny, carePrimaryAny], appleWatch: ['benefit.appleWatch'], 'benefit.appleWatch': ['benefit.appleWatch'],
+    'interest.boost': ['interest.boost'], 'interest.cashback': ['interest.cashback'], 'travel.bank': ['travel.vitality'], 'travel.health': [allTravelKey],
+    'fuel.drive': fd.source === 'estimated' ? driveFuelKeys : ['insure.driveCash'], gym: [gymKey],
+    'healthyFood.health': [foodPrimaryAny, foodSecondaryAny], 'healthyCare.health': [carePrimaryAny],
+    'fee.penalty': ['fee.penalty'], 'fee.fx': ['fee.fx'], 'interest.charged': ['interest.charged'], 'interest.earned': ['interest.earned'] };
+  const stmtCounts = (milesSummary && milesSummary.counts) || {};
+  /* Monthly charges and payments (fees, interest, premiums, the gym, the
+     watch) are a rate, not events: one in one month is that month's. Only
+     a short import (confidence.thin) makes them doubtful. */
+  const RECURRING = new Set(['fee.account', 'fee.facility', 'fee.vitalityMoney', 'interest.boost', 'interest.cashback', 'interest.earned', 'interest.charged', 'appleWatch', 'benefit.appleWatch', 'gym']);
+  const figCount = keys => [...new Set(keys)].reduce((t, k) => t + ((m.figures[k] && m.figures[k].count) || 0), 0);
+  for (const l of lines) {
+    if (l.source === 'entered') continue;
+    const fromStatement = l.source === 'statement' && sv;
+    const sk = fromStatement ? stmtKeysOf[l.key] || [] : [];
+    const fk = !fromStatement || l.key === 'fuel.drive' ? figKeysOf[l.key] || [] : [];
+    if (!sk.length && !fk.length) continue;
+    const stmtEvents = sk.reduce((t, k) => t + (stmtCounts[k] || 0), 0);
+    const events = stmtEvents + figCount(fk);
+    const months = Math.min(sk.length ? sv.covered : Infinity, fk.length && figCount(fk) ? sourceMonths(m, fk, n) : Infinity);
+    l.events = events;
+    l.basisMonths = Number.isFinite(months) ? months : null;
+    l.extrapolated = !RECURRING.has(l.key) && events > 0 && events <= 2 && Number.isFinite(months) && months < 6;
+    l.eventWord = stmtEvents > 0 ? 'reward' : 'payment';
+  }
+  const bill = discoveryBillWithBasis(m, n, billOf);
+  const discMonths = (m.dataMonths || []).length;
+  const notes = [];
+  const MONTH_WORDS = ['no months', 'one month', 'two months', 'three months', 'four months', 'five months'];
+  const monthWords = k => MONTH_WORDS[k] || `${k} months`;
+  if (setup.products.bank) {
+    if (!discMonths) notes.push('We found no Discovery Bank statements in your budget, so the bank\'s figures are guesses.');
+    else if (discMonths < 6) notes.push(`We only have ${monthWords(discMonths)} of Discovery Bank statements. Import at least six months for a fair answer.`);
+  }
+  const extrapolated = [];
+  for (const l of lines) {
+    if (!l.extrapolated || !(Math.abs(l.annual) >= 0.5)) continue;
+    extrapolated.push(l.key);
+    notes.push(`${l.label} comes from ${l.events === 1 ? `one ${l.eventWord}` : `two ${l.eventWord}s`} in ${monthWords(l.basisMonths)}, made into a year, so it is a rough guess.`);
+  }
+  for (const it of bill.items) {
+    if (!it.extrapolated || !(Math.abs(it.annual) >= 0.5)) continue;
+    extrapolated.push(it.key);
+    notes.push(`${it.label} comes from ${it.events === 1 ? 'one payment' : 'two payments'} in ${monthWords(it.basisMonths)}, made into a year, so it is a rough guess.`);
+  }
+  const productMonths = { bank: discMonths };
+  for (const [id, key] of [['health', 'product.medical'], ['gap', 'product.gap'], ['insure', 'product.insure'], ['life', 'product.life']]) productMonths[id] = m.figures[key] ? sourceMonths(m, [key], n) : 0;
+  const confidence = { months: discMonths, thin: discMonths < 6, extrapolated, notes, productMonths };
 
   return {
     window: { from: m.from, to: m.to, months: m.months.length, dataMonths: n, rows: m.rowsSeen },
@@ -517,17 +600,26 @@ function buildStatement(m, settings, milesSummary, opts) {
     alternatives, best, chosen, downgrade,
     verdict: chosen ? (chosen.gainIfSwitch > 0 ? 'switch' : 'stay') : null,
     bill,
+    /* { months, thin, extrapolated: [line or bill item keys], notes: [plain
+       sentences], productMonths: { bank, health, gap, insure, life } } */
+    confidence,
   };
 }
 
 /* Another bank over the same months: its fees, a flat rate on card spend
    (capped per month), and its partner deals at shops you already use. A
    partner deal with no published rate earns nothing here; `breakEven` is
-   the partner rate at which that bank would match Discovery. */
-function altResult(a, settings, st, m, monthly, n, net, cautiousNet) {
+   the partner rate at which that bank would match Discovery.
+   onDebit: the spend is a transaction account's debit card (no Discovery
+   credit card). A rival's flat cashback is taken as a credit card's unless
+   its row says otherwise (cardOnly: false, or its own debitBackPct), so it
+   is not paid on debit card spend here. */
+function altResult(a, settings, st, m, monthly, n, net, cautiousNet, onDebit) {
   const rt = k => rate(settings, `alt.${a.id}.${k}`, st);
   const fees = rt('fee') * 12;
-  const backPct = rt('backPct');
+  const publishedPct = rt('backPct');
+  const debitPct = a.cardOnly === false ? publishedPct : num(a.debitBackPct) ? Number(a.debitBackPct) : 0;
+  const backPct = onDebit ? debitPct : publishedPct;
   const capM = rt('capMonthly');
   const scale = 12 / (monthly.length || 1);
   let flat = 0, partnerBase = 0, partnerRewards = 0;
@@ -559,6 +651,8 @@ function altResult(a, settings, st, m, monthly, n, net, cautiousNet) {
   const need = target => (partnerBase > 0 ? Math.max(0, ((target - altNet) / partnerBase) * 100) : null);
   return {
     id: a.id, name: a.name, fees, rewards, backPct, net: altNet, gainIfSwitch: altNet - net,
+    /* the published card rate, and whether it was left off debit card spend */
+    publishedPct, debitOnly: !!onDebit, cardOnlyLeftOut: !!onDebit && publishedPct > 0 && backPct < publishedPct,
     partners: parts, breakEven: need(net), breakEvenCautious: need(cautiousNet),
     note: a.note, source: a.source, guess: !!a.guess, app: a.app || a.name, rewardKind: a.rewardKind || 'cash',
   };
@@ -641,7 +735,7 @@ function discoveryBill(m, annual, known, settings) {
   const items = [];
   const push = (key, label, value, seen, note) => items.push({ key, label, annual: value, seen, note });
   const debit = m.figures['product.medical'];
-  let vitalityMonthly = null, medicalMonthly = null, medicalSource = null;
+  let vitalityMonthly = null, medicalMonthly = null, medicalSource = null, priceStale = false;
   if (debit) {
     const latestYm = Object.keys(debit.perMonth).sort().pop();
     const latest = debit.perMonth[latestYm];
@@ -653,6 +747,12 @@ function discoveryBill(m, annual, known, settings) {
     let note;
     if (med === null) {
       note = `${head}. Type your medical aid and gap cover amounts on the Inputs tab to see what it pays for.`;
+    } else if (typed === null && !planPriceValid(latestYm)) {
+      /* The published price is for the plan table's own period: a debit
+         from after it was charged at a price we do not have, so splitting it
+         would call the medical aid's increase Vitality. */
+      note = `${head}. Your plan's price changed after these figures. Type your medical aid amount on the Inputs tab.`;
+      priceStale = true;
     } else if (med + gap > latest + 0.5) {
       note = typed !== null
         ? `${head}. The amounts you typed (${fmtR(med)} medical aid${gap ? ` and ${fmtR(gap)} gap cover` : ''}) come to more than this debit, so it cannot be split. Check them on the Inputs tab.`
@@ -674,7 +774,32 @@ function discoveryBill(m, annual, known, settings) {
   add('product.medicalBack', 'Claims paid back by Discovery Health', 1);
   add('product.gapClaim', 'Gap cover claims paid', 1);
   add('product.insureClaim', 'Discovery Insure claims paid', 1);
-  return { items, net: items.reduce((s, i) => s + i.annual, 0), vitalityMonthly, medicalMonthly, medicalSource };
+  return { items, net: items.reduce((s, i) => s + i.annual, 0), vitalityMonthly, medicalMonthly, medicalSource, priceStale };
+}
+
+/* The bill with how many payments each item rests on and over how many
+   months it was made a year (events, basisMonths, extrapolated), like the
+   statement's lines. */
+function discoveryBillWithBasis(m, n, bill) {
+  for (const it of bill.items) {
+    const f = m.figures[it.key];
+    if (!f) continue;
+    it.events = f.count;
+    it.basisMonths = sourceMonths(m, [it.key], n);
+    /* premiums are monthly; claims are events */
+    it.extrapolated = /Back$|Claim$/.test(it.key) && f.count > 0 && f.count <= 2 && it.basisMonths < 6;
+  }
+  return bill;
+}
+
+/* Whether the Discovery Health plan table's prices hold for month `ym`
+   (compare.js planPriceValidFor, contract Addition 4). Until that exists the
+   2026 tables are taken as good to the end of 2026. */
+function planPriceValid(ym) {
+  if (typeof compare.planPriceValidFor === 'function') {
+    try { return compare.planPriceValidFor(ym) !== false; } catch (e) { return true; }
+  }
+  return ym <= '2026-12';
 }
 
 /* Your Discovery Health plan's published monthly price for your family,

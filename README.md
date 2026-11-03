@@ -8,6 +8,8 @@ It counts a benefit only at the value it has for you. A gym discount is worth no
 
 No account, no network, no telemetry and no AI. Everything is worked out on your device from your own notes.
 
+The plugin is free. It gives no advice: it shows what the numbers say, and the decision is yours.
+
 ## What you need
 
 - **The Budget plugin** (id `budget-app`) with your bank statements imported. This plugin reads its notes: `Transactions/<account>/<YYYY-MM>.md`, with `Accounts/` and `Categories/` beside them. Without them it finds no budget and says so.
@@ -20,7 +22,7 @@ On first open it asks a few questions, one at a time. You can go back at any ste
 
 1. **Which Discovery products do you have?** Bank, medical aid, gap cover, car and home insurance, life cover. The list is pre-ticked from what your statements show, with a line saying why. Untick or tick to correct it. Products you do not have get no tab and are left out of the totals and the comparison.
 2. **Your status** in each Vitality programme you have, and your bank Suite.
-3. **Your household,** adults and children, and your medical aid plan (guessed from your monthly debit, and yours to change).
+3. **Your household,** adults and children, and your medical aid plan. The plan is picked for you only when one plan clearly fits your monthly debit; if not, it says so and puts the plans that fit first. If you have gap cover it also asks how old the oldest person on it is, because other providers charge more from 45.
 4. **Which benefits do you actually use?** One row per benefit, with a suggestion taken from your statements and the reason for it. For each, choose:
    - **I use it:** counts in full.
    - **Sometimes:** counts for half.
@@ -30,7 +32,7 @@ Costs are never reduced. You pay them whether or not you use the benefit. Only t
 
 ## The tabs
 
-- **Overview.** A verdict for each product you have and the whole Discovery bill against what comes back, with dates to watch.
+- **Overview.** A short not-affiliated notice, then a verdict for each product you have and the whole Discovery bill against what comes back, with dates to watch.
 - **Compare.** Stay with Discovery, or move everything away. Each cost and each benefit side by side, with a total for both. Anything nobody has priced is taken as the same on both sides, and the page says so.
 - **Flows.** An animated diagram of where your money goes and what comes back. Tap a product to follow it.
 - **Bank.** What your Suite costs, what you would lose by leaving, and the same card spend at other South African banks.
@@ -49,12 +51,12 @@ Each figure is labelled with where it came from, so you can judge it:
 - **From your statements:** read from your Budget notes.
 - **From your Miles statement:** read from the CSV.
 - **You entered:** typed by you.
-- **Estimate:** worked out from a published rate, which names its source and date and can be changed beside the line it affects.
+- **Estimate:** worked out from a rate, which can be changed beside the line it affects. Most rates are published, and name their source and date. Some rates, such as a few rival banks' rewards, are **not published**: those are the plugin's own guesses, and the page marks them so. Type your own figure when you know it.
 
 ## Privacy
 
 - It reads your Budget notes and the CSV files in your vault. Each CSV is opened once to see whether it is a Discovery Miles statement, and again only when the file changes.
-- It writes **only its own settings file**, `.obsidian/plugins/discovery-worth-it/data.json`. That holds your answers, not your transactions.
+- It writes **only its own settings file**, `.obsidian/plugins/discovery-worth-it/data.json`. That holds your answers, not your transactions: your health plan, family size, Vitality statuses, health-check answers, benefits you use, and any quotes you type. If your vault is synced or kept in git, `data.json` travels with it. Leave that file out of any vault you share or publish.
 - **Nothing leaves your vault.** There are no network requests, no account, no telemetry and no AI.
 
 ## Market data and how fresh it is
@@ -84,7 +86,8 @@ gh attestation verify main.js -R RuanPienaarCode/Is-Discovery-Worth-it-
 - Some reward rates are not published. Where that is so, the page says it is an estimate.
 - Medical aids and insurers differ in ways a table cannot show: hospital networks, waiting periods, what happens to your cover history if you move. Check these before you move anything.
 - Discovery changes its rewards and prices every year. Read the "as at" dates.
-- **This is a calculator, not financial advice.** It does not know your whole situation, and nothing in it is a recommendation to buy, keep or cancel any product. Speak to a licensed financial adviser before you decide.
+- **This is a calculator, not financial advice.** It does not know your whole situation, and nothing in it is a recommendation to buy, keep or cancel any product. It is free, and the figures are estimates. Check with Discovery or a licensed financial adviser before you change a product.
+- With only a few months of statements, the page says the figures are thin and shows "Not enough data" instead of a verdict.
 
 ## Not affiliated
 

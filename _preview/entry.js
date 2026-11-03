@@ -12,6 +12,12 @@
                    are elsewhere, with Virgin Active and Woolworths on
                    another bank's card
      ?setup=gold   a Gold Suite on Gold statuses, no Insure
+     ?setup=thin   only the last 2 months of Discovery payments (the thin-data
+                   note, and "Not enough data" verdicts)
+     ?setup=older  gap cover, the oldest person on it 62 (rival prices are for
+                   under 45s)
+     ?bigcsv=1     a 6 MB CSV in the vault (skipped, with a plain note on the
+                   Overview and Inputs)
      ?welcome=0    skip the welcome screen (also skipped by ?tab= and ?check=)
      ?mobile=1     an iPhone: Obsidian's is-mobile + is-phone classes, and the
                    notch and home-bar insets an iPhone 11 reports (portrait or
@@ -20,8 +26,11 @@
                    banner on Compare)
      ?check=1      walk every visible tab at the current width and report
                    sideways scroll, labels over amounts, tap targets under
-                   44px, flow text that an SVG clips or overlaps, and cards
-                   that show more than one line before More (in #dc-check) */
+                   44px, flow text that an SVG clips or overlaps, cards that
+                   show more than one line before More, the Overview's
+                   not-affiliated strip (and the thin-data note on
+                   ?setup=thin) and, on Compare with ?old=1, the stale
+                   warning as the visible line (in #dc-check) */
 import { makeMemoryVault } from './memory-vault.js';
 const { mountBottomLine } = require('../src/bottom-line');
 const { loadBudget } = require('../src/load');
@@ -67,7 +76,11 @@ const files = {
 /* the thirteen months up to the clock's month */
 const START = new Date(NOW.getFullYear(), NOW.getMonth() - 13, 1);
 const GOLD = SETUP === 'gold';
-for (let i = 0; i < 13; i++) {
+const THIN = SETUP === 'thin';
+const OLDER = SETUP === 'older';
+/* ?setup=thin keeps only the last two months */
+const FIRST = THIN ? 11 : 0;
+for (let i = FIRST; i < 13; i++) {
   const d = new Date(START.getFullYear(), START.getMonth() + i, 1);
   const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const day = n => `${ym}-${String(n).padStart(2, '0')}`;
@@ -108,7 +121,7 @@ for (let i = 0; i < 13; i++) {
 
 /* A synthetic Miles statement (?nomiles=1 leaves it out; none for another bank). */
 const csv = ['"Value Date","Type","Description","Additional information","Miles"'];
-for (let i = 0; i < 13; i++) {
+for (let i = FIRST; i < 13; i++) {
   const d = new Date(START.getFullYear(), START.getMonth() + i, 28);
   const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-28`;
   csv.push(`${day},"Vitality Money","Checkers in-store","",${2400 + i * 40}.00`);
@@ -138,16 +151,18 @@ if (ONBOARD) {
 } else if (GOLD) {
   settings = { ...base, ...ui0, onboarded: true, products: { bank: true, health: true, gap: false, insure: false, life: false }, bankKind: 'suite', suite: 'Gold', status: { money: 'Gold', health: 'Gold', drive: 'Blue' }, vitality: { money: true, health: true, drive: false }, members: { adults: 2, children: 1 }, health: { plan: 'dhClassicSmart' }, bill: { medical: 4600 } };
 } else {
-  settings = { ...base, ...ui0, onboarded: true, products: { bank: true, health: true, gap: true, insure: true, life: true }, bankKind: 'suite', suite: 'Black', status: { money: 'Diamond', health: 'Gold', drive: 'Silver' }, vitality: { money: true, health: true, drive: true }, benefits: { gameboard: 'half', flights: 'none' }, actualMiles: q.get('miles') ? { card: 2600, fuel: 900 } : {}, bill: { medical: 5000, gap: 250 }, members: { adults: 2, children: 1 }, quotes: { 'insure.outsurance': 1050 }, life: { monthly: 650, cover: 750000, total: 1300, age: 41 }, home: { monthly: 0, contents: 300000 } };
+  settings = { ...base, ...ui0, onboarded: true, products: { bank: true, health: true, gap: true, insure: true, life: true }, bankKind: 'suite', suite: 'Black', status: { money: 'Diamond', health: 'Gold', drive: 'Silver' }, vitality: { money: true, health: true, drive: true }, benefits: { gameboard: 'half', flights: 'none' }, actualMiles: q.get('miles') ? { card: 2600, fuel: 900 } : {}, bill: { medical: 5000, gap: 250 }, members: { adults: 2, children: 1, ...(OLDER ? { oldestAge: 62 } : {}) }, quotes: { 'insure.outsurance': 1050 }, life: { monthly: 650, cover: 750000, total: 1300, age: 41 }, home: { monthly: 0, contents: 300000 } };
 }
 
+const BIG = 'Money/Other/old-export.csv';
+if (q.get('bigcsv')) files[BIG] = 'a,b\n1,2\n';
 const vault = makeMemoryVault(q.get('empty') ? { 'Notes/Hello.md': '# hi\n' } : files);
 const plugin = {
   settings,
   async saveSettings() { console.log('[saveSettings]', JSON.stringify(plugin.settings)); },
   async readBudget() {
     const paths = vault.getFiles().map(f => f.path).filter(p => /\.(md|csv)$/.test(p));
-    return loadBudget({ paths: () => paths, read: async p => vault.files.get(p) }, plugin.settings.budgetFolder);
+    return loadBudget({ paths: () => paths, read: async p => vault.files.get(p), stat: p => ({ mtime: 1, size: p === BIG ? 6 * 1048576 : (vault.files.get(p) || '').length }) }, plugin.settings.budgetFolder);
   },
 };
 const root = document.getElementById('page');
@@ -189,7 +204,16 @@ ui.refresh().then(async () => {
     /* a card shows a heading, one line and its figure until More: count
        visible paragraphs in a card outside a More region */
     const wordy = [...document.querySelectorAll('.dc-card')].filter(c => [...c.querySelectorAll('p')].filter(p => !p.closest('.dc-more-body, .dc-ben-more-body, [hidden]') && p.offsetHeight > 0 && !p.classList.contains('dc-grp') && !p.classList.contains('dc-subhead')).length > 1 && !c.querySelector('.dc-fgrid') && !c.classList.contains('dc-figs')).length;
-    const found2 = found + (wordy ? (found ? ', ' : '') + wordy + ' cards with more than one line' : '');
+    /* the not-affiliated strip is on the Overview; on a thin set-up so is the
+       note about few months; with ?old=1 the Compare warning is a visible line */
+    const extra = [];
+    if (t === 'overview' && !document.querySelector('.dc-notice')) extra.push('no not-affiliated strip');
+    if (t === 'overview' && THIN && !document.querySelector('.dc-confidence')) extra.push('thin data but no note about it');
+    if (t === 'compare' && q.get('old')) {
+      const ml = document.querySelector('.dc-market-line');
+      if (!ml || !ml.offsetHeight || !/out of date/.test(ml.textContent)) extra.push('stale warning is not the visible line');
+    }
+    const found2 = [found, wordy ? wordy + ' cards with more than one line' : '', ...extra].filter(Boolean).join(', ');
     lines.push(`${t}: ${found2 || 'ok'} (${heads.length} lines, ${document.querySelectorAll('.dc-page button, .dc-page input, .dc-page select').length} controls)`);
   }
   const pre = document.createElement('pre');

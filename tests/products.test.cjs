@@ -173,3 +173,24 @@ console.log('products OK');
   assert.strictEqual(buildProducts(st, m, null, settings, new Date(2026, 9, 21)).products.length, 5);
   assert.strictEqual(buildProducts(st, m, null, settings, new Date(2026, 9, 21), { health: false }).products.length, 4);
 }
+
+// "Back in cash" is the cash that arrived, whatever the benefit is worth to you (audit s10; before, halved at "Sometimes" and nothing at "Not for me")
+{
+  const mC = { ...m, figures: { ...m.figures, 'interest.boost': fig({ '2026-08': 100, '2026-09': 100 }), 'insure.driveCash': fig({ '2026-08': 300, '2026-09': 300 }) } };
+  for (const lvl of ['full', 'half', 'none']) {
+    const sC = { ...settings, benefits: { interest: lvl, fuel: lvl }, products: { bank: true, health: true, gap: true, insure: true, life: true }, vitality: { money: true, health: true, drive: true } };
+    const stC = buildStatement(mC, sC);
+    const pr = buildProducts(stC, mC, null, sC, new Date(2026, 9, 21));
+    const Pc = id => pr.all.find(p => p.id === id);
+    near(Pc('bank').cashBack, 200 * 6, `bank cash at ${lvl}`);
+    near(Pc('insure').cashBack, 600 * 6, `INSURECASH at ${lvl}`);
+    near(stC.lines.find(l => l.key === 'interest.boost').annual, 1200 * (lvl === 'full' ? 1 : lvl === 'half' ? 0.5 : 0), 'the worth-to-you value is still weighted');
+  }
+}
+// Insure's Miles rows go with Insure, not the bank
+{
+  const ms = { perMonth: { insure: { '2026-09': 4500 }, base: { '2026-09': 100 } } };
+  assert.deepStrictEqual(milesRows(ms, 'insure').map(r => r.key), ['miles.insure']);
+  assert.deepStrictEqual(milesRows(ms, 'bank').map(r => r.key), ['miles.base']);
+}
+console.log('products fix wave OK');

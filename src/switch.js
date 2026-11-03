@@ -60,7 +60,10 @@ function backItems(st) {
     ...Object.keys(VIT_KIND).map(k => L.find(l => l.key === k)).filter(l => l && Math.abs(l.annual) >= 0.5).map(l => item(l, VIT_KIND[l.key])),
   ];
   const d = L.find(l => l.key === 'fuel.drive');
-  const drive = d && d.annual >= 0.5 ? [item(d, d.funder ? 'funder' : 'cash')] : [];
+  /* Drive rewards paid as Miles (from 1 Nov 2026) are points; INSURECASH
+     is cash; money paid into the Insure Funder Account is for car costs. */
+  const driveKind = d && (d.funder ? 'funder' : d.source === 'statement' && !(d.cash >= 0.5) ? 'points' : 'cash');
+  const drive = d && d.annual >= 0.5 ? [item(d, driveKind)] : [];
   return { bank, vitality, drive };
 }
 
@@ -73,7 +76,12 @@ function byKind(items) {
 }
 
 /* another bank's rewards, as one item of its own kind */
-const altItems = a => (a.rewards >= 0.5 ? [{ key: 'alt.' + a.id, label: a.backPct ? `${pct(a.backPct)} back on card spend` : 'Rewards', annual: a.rewards, kind: a.rewardKind || 'cash', estimated: !!a.guess }] : []);
+const altItems = a => (a.rewards >= 0.5 ? [{ key: 'alt.' + a.id, label: a.backPct ? `${pct(a.backPct)} back on ${a.debitOnly ? 'debit card' : 'card'} spend` : 'Rewards', annual: a.rewards, kind: a.rewardKind || 'cash', estimated: !!a.guess }] : []);
+/* what another bank's flat rate pays on, in words: a credit card's rate is
+   not paid on debit card spend (model.js altResult) */
+const altRateWords = a => (a.cardOnlyLeftOut
+  ? `${pct(a.publishedPct)} back on credit card spend only, so nothing on your debit card spend`
+  : a.backPct ? `${pct(a.backPct)} back on ${a.debitOnly ? 'debit card' : 'card'} spend${a.guess ? ' (a guess)' : ''}` : 'No rewards');
 
 /* the comparisons for the products kept; home is not a Discovery product,
    so it always stays */
@@ -126,7 +134,8 @@ function buildSwitch(st, cmp, products) {
   const vit = has(products, 'health') ? st.vitality || {} : {};
   if (vit.premium !== null && vit.premium > 0) add('vitality', 'Vitality Health fee', 'cost', vit.premium, 0, { goNote: 'Ends when you leave Discovery Health' });
   if (c.gap) {
-    const best = cheapest(c.gap.rows.filter(r => priced(r) && !isDiscovery(r)));
+    /* an under-45 price for an older (or unknown-age) family is no saving */
+    const best = cheapest(c.gap.rows.filter(r => priced(r) && !isDiscovery(r) && (!r.ageLimited || r.quoted)));
     if (best) add('gap', 'Gap cover', 'cost', c.gap.current.annual, best.monthly * 12, { goName: `${best.provider} ${best.plan}`, goNote: 'Discovery Gap Cover ends with Discovery Health' });
   }
   quoted('car', 'Car insurance', c.insure);
@@ -183,7 +192,7 @@ function buildRivals(st, cmp, products) {
 
   if (has(products, 'bank')) section('bank', 'Banks', { name: 'Discovery Bank', pay: st.cost, back: st.value, backNote: 'Miles, discounts, the Apple Watch and interest', items: BI.bank },
     (st.alternatives || []).map(a => rival(a.name, a.fees, a.rewards,
-      [a.backPct ? `${pct(a.backPct)} back on card spend${a.guess ? ' (a guess)' : ''}` : 'No rewards', ...(a.partners || []).map(p => (p.known ? `${pct(p.pct)} back: ${p.label}` : 'shop deals (rate not published)')).filter((x, i, xs) => xs.indexOf(x) === i)].join(' + '), { items: altItems(a) })));
+      [altRateWords(a), ...(a.partners || []).map(p => (p.known ? `${pct(p.pct)} back: ${p.label}` : 'shop deals (rate not published)')).filter((x, i, xs) => xs.indexOf(x) === i)].join(' + '), { items: altItems(a) })));
 
   if (c.health) section('medical', 'Medical aids',
     { name: c.health.own ? `Discovery ${c.health.own.plan}` : 'Discovery Health', pay: c.health.current.annual + (vit.premium || 0), back: vit.value || 0, backNote: 'Vitality rewards: gym, HealthyFood, flights', items: BI.vitality },

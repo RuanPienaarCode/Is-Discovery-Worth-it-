@@ -108,6 +108,28 @@ assert.strictEqual(empty.gameboard.suggested, 'half');
 assert.ok(/counts at half/.test(empty.gameboard.why));
 assert.strictEqual(suggestBenefits(win({}), ms({ months: ['2024-01'], figures: { gameboard: 2000 } }), {}).gameboard.suggested, 'half', 'out-of-window statement');
 
+// Vitality Drive paid in Miles (the statement's own 'drive' group) shows you buy fuel that earns
+const drv = suggestBenefits(win({}), ms({ figures: { drive: 4000 } }), {});
+assert.strictEqual(drv.fuel.suggested, 'full');
+assert.ok(/from Vitality Drive/.test(drv.fuel.why), drv.fuel.why);
+
+// you said you use it but the budget shows nothing: no "we found no payments"
+{
+  const said = suggestBenefits(win({}), null, { benefits: { gym: 'full', fuel: 'half', healthyFood: 'none' } });
+  assert.strictEqual(said.gym.suggested, 'none', 'the suggestion itself is still the budget\'s');
+  assert.strictEqual(said.gym.why, 'You said you use it, so it counts.');
+  assert.ok(/no payments/i.test(said.gym.seen), 'the budget\'s sentence is kept apart');
+  assert.strictEqual(said.fuel.why, 'You said you use it sometimes, so it counts at half.');
+  for (const id of ['gym', 'fuel']) assert.ok(!/found no|no payments/i.test(said[id].why), said[id].why);
+  assert.ok(/found no shopping/.test(said.healthyFood.why), '"Not for me" keeps the budget\'s sentence');
+}
+// the bank-prefix rules reach the suggestions: a PLANETFITNESS payment is a gym
+{
+  const { measure } = require('../src/measure');
+  const m = measure([{ date: '2026-09-12', description: 'Card Purchase: PLANETFITNESS 0001', category: 'Gym', amount: -450, account: 'Other', split: '' }], { Other: { institution: 'Sometown Savings Bank', type: 'checking' } }, {}, { from: '2026-01', to: '2026-10' });
+  assert.strictEqual(suggestBenefits(m, null, {}).gym.suggested, 'full');
+}
+
 // the statement's HealthyFood Miles show you shop there even when the budget does not
 assert.strictEqual(suggestBenefits(win({}), ms({ figures: { 'health.healthyFood': 3000 } }), {}).healthyFood.suggested, 'full');
 

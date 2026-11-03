@@ -73,14 +73,52 @@ assert.strictEqual(compareHealth(health, { members: {}, health: { cover: { y: { 
 
 // ── gap cover ─────────────────────────────────────────────────────────
 const gaps = [{ id: 'g1', provider: 'Gap One', plan: 'Basic', monthly: 200, source: 'test' }, { id: 'g2', provider: 'Gap Two', plan: 'Plus', monthly: 400, source: 'test' }, { id: 'g3', provider: 'Gap Three', plan: 'Family', monthly: null, source: 'test' }];
-const g = compareGap({ paid: 3600 }, {}, gaps);
+// the published prices are for an oldest member under 45
+const young = { members: { adults: 2, children: 0, oldestAge: 38 } };
+const g = compareGap({ paid: 3600 }, young, gaps);
 near(g.current.annual, 3600);
 near(g.current.monthly, 300);
+assert.strictEqual(g.pricedForAge, true);
+assert.strictEqual(g.ageNote, null);
 near(g.rows.find(r => r.id === 'g1').gainIfSwitch, 1200);
 near(g.rows.find(r => r.id === 'g2').gainIfSwitch, -1200);
 assert.deepStrictEqual(g.rows.map(r => r.id), ['g1', 'g2', 'g3']);
-near(compareGap({ paid: 3600 }, { quotes: { 'gap.g3': 150 } }, gaps).rows[0].gainIfSwitch, 1800, 'a typed quote prices g3');
+near(compareGap({ paid: 3600 }, { ...young, quotes: { 'gap.g3': 150 } }, gaps).rows[0].gainIfSwitch, 1800, 'a typed quote prices g3');
 assert.strictEqual(compareGap({ paid: 0 }, {}, gaps), null);
+// age not given, or 45 and over: the prices still show, but claim no saving
+for (const members of [{ adults: 2 }, { adults: 2, oldestAge: null }, { adults: 2, oldestAge: 45 }, { adults: 2, oldestAge: 62 }]) {
+  const old = compareGap({ paid: 3600 }, { members }, gaps);
+  assert.strictEqual(old.pricedForAge, false, JSON.stringify(members));
+  assert.strictEqual(old.ageNote, 'Rival prices shown are for under 45s.');
+  const g1 = old.rows.find(r => r.id === 'g1');
+  assert.strictEqual(g1.monthly, 200, 'the published price is still shown');
+  assert.strictEqual(g1.ageLimited, true);
+  assert.strictEqual(g1.gainIfSwitch, null, 'no saving claimed on an under-45 price');
+}
+// a typed quote is for your own ages, so it still counts
+const quotedOld = compareGap({ paid: 3600 }, { members: { oldestAge: 62 }, quotes: { 'gap.g2': 250 } }, gaps);
+near(quotedOld.rows[0].gainIfSwitch, 600);
+assert.strictEqual(quotedOld.rows[0].ageLimited, false);
+assert.strictEqual(compareGap({ paid: 3600 }, { members: { oldestAge: 44 } }, gaps).pricedForAge, true, '44 is under 45');
+
+// ── price periods: Discovery Health 1 Apr 2026 – 31 Mar 2027, the rest 2026 ─
+{
+  const { planPriceValidFor, HEALTH_OWN: OWN } = require('../src/compare');
+  assert.strictEqual(planPriceValidFor('2026-04'), true);
+  assert.strictEqual(planPriceValidFor('2026-11-01'), true);
+  assert.strictEqual(planPriceValidFor('2027-03'), true);
+  assert.strictEqual(planPriceValidFor('2027-04'), false, 'the 2027 prices start in April');
+  assert.strictEqual(planPriceValidFor('2026-03'), false, 'before April 2026 the old prices applied');
+  assert.strictEqual(planPriceValidFor(''), false);
+  assert.strictEqual(planPriceValidFor(undefined), false);
+  for (const p of HEALTH_PLANS.concat(OWN)) {
+    const e = p.effective;
+    assert.ok(e && e.from && e.to, `${p.id} carries its price period`);
+    if (p.discovery) assert.deepStrictEqual([e.from, e.to], ['2026-04-01', '2027-03-31'], p.id);
+    else assert.deepStrictEqual([e.from, e.to], ['2026-01-01', '2026-12-31'], p.id);
+  }
+  for (const p of GAP_PLANS) assert.deepStrictEqual([p.effective.from, p.effective.to], ['2026-01-01', '2026-12-31'], p.id);
+}
 
 // ── car insurance: quotes, rewards, and Vitality Drive given up ──────
 const insurers = [{ id: 'i1', name: 'Insurer One', rewardPct: 0, source: 'test' }, { id: 'i2', name: 'Insurer Two', rewardPct: 10, rewardNote: '10% back', source: 'test' }];

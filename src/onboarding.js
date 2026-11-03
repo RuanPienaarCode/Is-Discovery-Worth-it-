@@ -11,12 +11,14 @@
      health: household · plan · vhQ · vhStatus (health score)
                (who is on the aid first, so the plan guess prices the right family)
                checks · gym36 (with Vitality Health)
+     gap:    gapAge (the oldest person on the cover: other providers charge
+               more from 45)
      insure: insurePlan · homeCover · vdQ · vdStatus (car score)
      benefits · done
    Each Next writes the answers to settings and awaits save(), so closing the
-   page half way keeps what was answered. Only a benefit level you changed
-   away from the suggestion is stored, so a later budget change can still
-   re-suggest the rest.
+   page half way keeps what was answered. A benefit level you chose is stored
+   even when it equals the suggestion, so a confirmed "I use it" never flips
+   later; a row you did not touch stays on the suggestion.
 
    renderOnboarding(parent, { settings, budget, detected, measured,
      statement, save, onDone }) → the root element. */
@@ -25,7 +27,7 @@ const { el, icon, button, checkRow } = require('./dom');
 const { money, parseTyped, showTyped } = require('./format');
 const { STATUSES } = require('./constants');
 const { healthPremium, HEALTH_PLANS, HEALTH_OWN } = require('./compare');
-const { PRODUCT_NAMES, detectProducts, detectBanking, resolveProducts, resolveVitality, guessHealthPlan } = require('./detect');
+const { PRODUCT_NAMES, detectProducts, detectBanking, resolveProducts, resolveVitality, guessHealthPlan, resolveSuite } = require('./detect');
 
 const IDS = ['bank', 'health', 'gap', 'insure', 'life'];
 const ICONS = { bank: 'landmark', health: 'heart-pulse', gap: 'shield-check', insure: 'car', life: 'umbrella' };
@@ -119,7 +121,11 @@ function radioGroup(parent, o) {
     const text = el(label, 'span', 'dc-onb-opt-text');
     el(text, 'span', 'dc-onb-opt-label', opt.label);
     if (opt.hint) el(text, 'span', 'dc-onb-opt-hint', opt.hint);
-    input.addEventListener('change', () => { if (input.checked) { paint(opt.value); o.onChange(opt.value); } });
+    /* a tap on the answer that is already ticked counts too: it confirms it
+       (a benefit you said you use is then kept, not left to the suggestion) */
+    const pick = () => { if (input.checked) { paint(opt.value); o.onChange(opt.value); } };
+    input.addEventListener('change', pick);
+    input.addEventListener('click', pick);
     rows.push({ label, input, value: opt.value });
   }
   paint(o.value);
@@ -135,16 +141,26 @@ function renderOnboarding(parent, ctx) {
   const picked = resolveProducts(settings, detected);
   const banking = detectBanking(budget);
   const vit = resolveVitality(settings, detected, banking);
+  /* the tier the page will count with if you skip: detect.resolveSuite when
+     it is there, else what the account notes show until you answered */
+  function startTier() {
+    if (typeof resolveSuite === 'function') {
+      const t = resolveSuite(settings, banking);
+      if (t) return t;
+    }
+    return (settings.bankKind ? settings.suite : banking.tier || settings.suite) || 'Black';
+  }
   const st = {
     step: 0,
     error: '',
     /* once the bank question has been answered, what is stored is the answer */
     bankKind: settings.bankKind || banking.kind || '',
-    tier: (settings.bankKind ? settings.suite : banking.tier || settings.suite) || 'Black',
+    tier: startTier(),
     vm: vit.money,
     vh: vit.health,
     vd: vit.drive,
     status: Object.assign({ money: 'Blue', health: 'Blue', drive: 'Blue' }, settings.status || {}),
+    gapAge: showTyped((settings.members || {}).oldestAge),
     adults: showTyped((settings.members || {}).adults || 1),
     children: showTyped((settings.members || {}).children || 0),
     plan: (settings.health || {}).plan || '',
@@ -191,6 +207,7 @@ function renderOnboarding(parent, ctx) {
       ids.push('household', 'plan', 'vhQ');
       if (st.vh) ids.push('vhStatus', 'checks', 'gym36');
     }
+    if (picked.gap) ids.push('gapAge');
     if (picked.insure) {
       ids.push('insurePlan', 'homeCover', 'vdQ');
       if (st.vd) ids.push('vdStatus');
@@ -226,6 +243,18 @@ function renderOnboarding(parent, ctx) {
   };
 
   const discoveryPlans = () => HEALTH_PLANS.concat(HEALTH_OWN).filter(p => p.discovery);
+  /* What guessHealthPlan says for these people: { guess, candidates, why }.
+     guess is a plan only when it is sure (it has an id); when it is not, it
+     may still name the plans that fit (candidates, as ids or plan objects). */
+  function planGuess() {
+    const m = members();
+    if (m.error) return { m, guess: null, candidates: [], why: '' };
+    const g = guessHealthPlan(budget, m, discoveryPlans());
+    const guess = g && g.id ? g : null;
+    const raw = g && Array.isArray(g.candidates) ? g.candidates : [];
+    const candidates = raw.map(c => (typeof c === 'string' ? c : c && (c.id || (c.plan && c.plan.id)))).filter(Boolean);
+    return { m, guess, candidates, why: g && g.why ? g.why : '' };
+  }
 
   /* ── writing answers ── */
   /* → true when the screen's answers were good and have been kept */
@@ -238,6 +267,8 @@ function renderOnboarding(parent, ctx) {
       settings.bankKind = st.bankKind || null;
     } else if (id === 'tier') {
       settings.suite = st.tier;
+      /* the tier is now an answer, not the default */
+      settings.suiteAnswered = true;
     } else if (id === 'vmQ') {
       settings.vitality = Object.assign({}, settings.vitality, { money: st.vm });
     } else if (id === 'vmStatus') {
@@ -252,10 +283,14 @@ function renderOnboarding(parent, ctx) {
     } else if (id === 'household') {
       const m = members();
       if (m.error) { st.error = m.error; return false; }
-      settings.members = { adults: m.adults, children: m.children };
+      settings.members = Object.assign({}, settings.members, { adults: m.adults, children: m.children });
       /* the plan follows who is on the aid until you picked one yourself */
       settings.health = Object.assign({}, settings.health);
       if (st.plan) settings.health.plan = st.plan; else delete settings.health.plan;
+    } else if (id === 'gapAge') {
+      const a = parseTyped(st.gapAge);
+      if (a !== null && (!Number.isFinite(a) || Math.floor(a) !== a || a < 16 || a > 110)) { st.error = 'Type the age in whole years, like 38. Leave it blank if you are not sure.'; return false; }
+      settings.members = Object.assign({}, settings.members, { oldestAge: a });
     } else if (id === 'vhQ') {
       settings.vitality = Object.assign({}, settings.vitality, { health: st.vh });
     } else if (id === 'vhStatus') {
@@ -265,13 +300,13 @@ function renderOnboarding(parent, ctx) {
     } else if (id === 'vdStatus') {
       settings.status = Object.assign({}, settings.status, { drive: st.status.drive });
     } else if (id === 'benefits') {
-      /* only a level changed away from the suggestion is kept; one put back
-         on the suggestion is dropped, so the budget can suggest again */
+      /* every level you chose is kept, even one equal to the suggestion, so
+         a confirmed answer never flips when the budget changes; a row you did
+         not touch stays on the suggestion */
       settings.benefits = Object.assign({}, settings.benefits);
       for (const b of benefitRows()) {
         if (st.levels[b.id] === undefined) continue;
-        if (st.levels[b.id] === suggestedOf(b)) delete settings.benefits[b.id];
-        else settings.benefits[b.id] = st.levels[b.id];
+        settings.benefits[b.id] = st.levels[b.id];
       }
     }
     return true;
@@ -412,18 +447,25 @@ function renderOnboarding(parent, ctx) {
     plan(h, lead, body) {
       h.textContent = 'Which Discovery Health plan are you on?';
       lead.textContent = 'It splits your debit order into medical aid and Vitality.';
-      const m = members();
-      const guess = m.error ? null : guessHealthPlan(budget, m, discoveryPlans());
-      if (!st.planTouched && guess) st.plan = guess.id;
+      const { m, guess, candidates, why } = planGuess();
+      /* a plan is chosen for you only when the guess is sure */
+      if (!st.planTouched) st.plan = guess ? guess.id : '';
       const who = m.error ? '' : `for ${m.adults === 1 ? '1 adult' : m.adults + ' adults'}${m.children ? ' and ' + (m.children === 1 ? '1 child' : m.children + ' children') : ''}`;
-      const options = discoveryPlans().map(p => {
+      const all = discoveryPlans();
+      const first = guess ? [] : candidates.map(id => all.find(p => p.id === id)).filter(Boolean);
+      const ordered = first.concat(all.filter(p => !first.includes(p)));
+      const options = ordered.map(p => {
         const price = m.error ? null : healthPremium(p, m);
-        return { value: p.id, label: p.plan, hint: price === null ? 'Price not listed' : `${money(price)} a month ${who}` };
+        const text = price === null ? 'Price not listed' : `${money(price)} a month ${who}`;
+        return { value: p.id, label: p.plan, hint: first.includes(p) ? `Could be yours. ${text}` : text };
       });
       options.push({ value: '', label: 'I am not sure', hint: 'You can set it later on the Inputs page.' });
       radioGroup(body, {
         legend: 'Your Discovery Health plan',
-        hint: guess ? guess.why : 'No Discovery Health debit order was found to match a plan to, so pick yours.',
+        hint: guess ? guess.why : `We could not tell which plan; pick yours.${first.length ? ' The ones that could fit are first.' : ''}`,
+        more: guess ? '' : why,
+        moreKey: 'plan.why',
+        opened,
         options,
         value: st.plan,
         onChange: v => { st.plan = v; st.planTouched = true; },
@@ -439,9 +481,8 @@ function renderOnboarding(parent, ctx) {
       const note = el(body, 'p', 'dc-onb-hint dc-onb-guess');
       note.setAttribute('aria-live', 'polite');
       const refresh = () => {
-        const m = members();
-        const guess = m.error ? null : guessHealthPlan(budget, m, discoveryPlans());
-        if (!st.planTouched && guess) st.plan = guess.id;
+        const { guess } = planGuess();
+        if (!st.planTouched) st.plan = guess ? guess.id : '';
         note.textContent = guess && !st.planTouched ? guess.why : '';
       };
       const num = (label, key) => {
@@ -459,6 +500,26 @@ function renderOnboarding(parent, ctx) {
       num('Adults', 'adults');
       num('Children', 'children');
       refresh();
+    },
+
+    gapAge(h, lead, body) {
+      h.textContent = 'How old is the oldest person on your gap cover?';
+      lead.textContent = 'Gap cover costs more from 45, so it changes which prices fit you.';
+      const who = el(body, 'fieldset', 'dc-onb-group');
+      el(who, 'legend', 'dc-onb-legend', 'Age of the oldest person');
+      const fields = el(who, 'div', 'dc-onb-fields');
+      const f = el(fields, 'label', 'dc-onb-field');
+      el(f, 'span', 'dc-onb-field-label', 'Age in years');
+      const input = el(f, 'input', 'dc-onb-num');
+      input.type = 'text';
+      input.setAttribute('inputmode', 'numeric');
+      input.setAttribute('pattern', '[0-9]*');
+      input.setAttribute('enterkeyhint', 'next');
+      input.autocomplete = 'off';
+      input.value = st.gapAge;
+      if (st.error) input.setAttribute('aria-invalid', 'true');
+      input.addEventListener('input', () => { st.gapAge = input.value; input.removeAttribute('aria-invalid'); });
+      el(body, 'p', 'dc-onb-hint', 'Not sure? Leave it blank. The other providers\' prices shown are for under 45s.');
     },
 
     vhQ(h, lead, body) {

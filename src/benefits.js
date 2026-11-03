@@ -382,6 +382,8 @@ function suggestBenefits(m, milesSummary, settings) {
   if (fuelRand >= 0.5) put('fuel', 'full', `You spent ${money(fuelRand)} on fuel at ${joinNames(fuelSeen.map(x => x.name))} ${when}.${otherText}`);
   else if (driveCash >= 0.5) put('fuel', 'full', `Vitality Drive paid you ${money(driveCash)} in fuel rewards ${when}.`);
   else if (stmtMiles('money.fuel') >= 0.5) put('fuel', 'full', `Your Miles statement shows ${fmtMiles(stmtMiles('money.fuel'))} of fuel rewards ${when}, worth ${money(stmtMiles('money.fuel') * FACE_VALUE)}.`);
+  /* Vitality Drive can pay its fuel rewards in Miles instead of cash */
+  else if (stmtMiles('drive') >= 0.5) put('fuel', 'full', `Your Miles statement shows ${fmtMiles(stmtMiles('drive'))} from Vitality Drive ${when}, worth ${money(stmtMiles('drive') * FACE_VALUE)}.`);
   else if (otherFuel >= 0.5) put('fuel', 'none', `You spent ${money(otherFuel)} on fuel ${when}, all at other brands, which earn nothing. Only bp and Shell count.`);
   else put('fuel', 'none', `We found no fuel bought at bp or Shell ${when}.`);
 
@@ -431,6 +433,19 @@ function suggestBenefits(m, milesSummary, settings) {
   if (!ms) put('gameboard', 'half', 'There is no Miles statement to show whether you play the gameboard, so it counts at half.');
   else if (board >= 0.5) put('gameboard', 'full', `Your Miles statement shows ${fmtMiles(board)} from the gameboard ${when}, worth ${money(board * FACE_VALUE)}.`);
   else put('gameboard', 'none', `Your Miles statement shows no gameboard rewards ${when}.`);
+
+  /* You said you use something the budget shows no sign of: the payments
+     may sit under a name the rules do not know, so take your word for it
+     and say nothing about what was not found. The budget's own sentence
+     stays in `seen`. */
+  const chosen = s.benefits || {};
+  for (const id of Object.keys(out)) {
+    const lv = chosen[id];
+    if ((lv === 'full' || lv === 'half') && out[id].suggested === 'none') {
+      out[id].seen = out[id].why;
+      out[id].why = lv === 'half' ? 'You said you use it sometimes, so it counts at half.' : 'You said you use it, so it counts.';
+    }
+  }
 
   return out;
 }

@@ -43,7 +43,8 @@ assert.deepStrictEqual(classifyMiles({ type: '', description: 'Digital Life Plan
 assert.deepStrictEqual(classifyMiles({ type: 'Vitality Money Reverse', description: 'Checkers in-store', info: '', miles: -500 }), { key: 'money.healthyFood', group: 'bank' }, 'a reversal nets against what it reverses');
 assert.deepStrictEqual(c('From Sam'), { key: 'received', group: 'none' });
 assert.deepStrictEqual(c('Superbalist reward'), { key: 'money.partners', group: 'bank' });
-assert.deepStrictEqual(c('PerfectDrive reward'), { key: 'insure', group: 'bank' });
+assert.deepStrictEqual(c('PerfectDrive reward'), { key: 'insure', group: 'drive' }, 'Insure Miles are Vitality Drive\'s, never the bank\'s partner Miles');
+assert.deepStrictEqual(classifyMiles({ type: 'Discovery Insure', description: 'Vitality Drive fuel reward', info: '', miles: 4500 }), { key: 'insure', group: 'drive' }, 'Drive fuel rewards paid as Miles (from 1 Nov 2026)');
 assert.deepStrictEqual(classifyMiles(rows[8]), { key: 'base', group: 'bank' }, 'a base Miles reversal nets against base');
 
 const s = summariseMiles(rows, '2026-09', '2026-09');
@@ -53,6 +54,9 @@ assert.strictEqual(s.figures['money.fuel'], 1050);
 assert.strictEqual(s.figures.base, 12 + 12 - 5);
 assert.strictEqual(s.figures.received, undefined, 'Miles from Sam are not earnings');
 assert.strictEqual(s.figures.base !== undefined && s.perMonth.base['2026-09'], 19);
+assert.strictEqual(s.figures.insure, 20, 'Insure Miles are still summed, for Drive');
+assert.strictEqual(s.counts.base, 3, 'how many statement rows each figure rests on');
+assert.strictEqual(s.counts['money.healthyFood'], 1);
 // Mile value from redemptions: (2 000 + 500) rand / (14 000 + 4 000) Miles
 assert.strictEqual(s.spentRand, 2500);
 assert.strictEqual(s.spentMiles, 18000);

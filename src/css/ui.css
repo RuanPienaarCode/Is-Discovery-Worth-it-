@@ -9,6 +9,17 @@
 .dc-market-banner .dc-market-warn { font-weight: 600; color: var(--dc-amber); }
 .dc-market-banner > .dc-more { margin-left: auto; }
 
+/* the stale warning is the visible line: stronger than the quiet dated one */
+.dc-market-banner .dc-market-line.dc-market-warn { color: var(--dc-text); font-weight: 600; }
+
+/* ── the not-affiliated strip and the thin-data note (Overview) ─ */
+.dc-hint.dc-notice, .dc-hint.dc-confidence { margin-bottom: 0; }
+.dc-notice > .dc-more, .dc-confidence > .dc-more { margin-left: auto; }
+
+/* a figure that rests on one or two payments made into a year */
+.dc-rough { display: inline-block; margin-left: 8px; padding: 0 8px; border: 1px dashed var(--dc-muted); border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 18px; color: var(--dc-text-2); white-space: nowrap; vertical-align: middle; }
+.dc-csv-notes > .dc-more { margin-left: auto; }
+
 /* ── Inputs: Your Discovery setup ────────────────────── */
 .dc-setup-prods { display: flex; flex-direction: column; margin-top: 4px; }
 .dc-setup-prod {

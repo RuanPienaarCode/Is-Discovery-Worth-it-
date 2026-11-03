@@ -114,41 +114,97 @@ assert.deepStrictEqual(resolveProducts({}, det), { bank: true, health: true, gap
 assert.deepStrictEqual(resolveProducts({ products: {} }, undefined), { bank: false, health: false, gap: false, insure: false, life: false });
 
 // ---- guessHealthPlan ----
-/* Made-up plans, so the cases do not move when the live price table does. */
+/* Made-up plans, so the cases do not move when the live price table does.
+   One adult may carry up to R1 400 of Vitality and gap cover on the debit
+   (EXTRA_CEILING: R600 an adult, R200 a child, R800 gap). */
+const { EXTRA_CEILING } = require('../src/detect');
+assert.deepStrictEqual(EXTRA_CEILING, { adult: 600, child: 200, gap: 800 });
 const PLANS = [
+  { id: 'pA', plan: 'Plan A', discovery: true, main: 2000, adult: 2000, child: 2000 },
+  { id: 'pB', plan: 'Plan B', discovery: true, main: 5000, adult: 4000, child: 950 },
+  { id: 'pC', plan: 'Plan C', discovery: true, main: 9000, adult: 8000, child: 1200 },
+];
+const CLOSE = [
   { id: 'pA', plan: 'Plan A', discovery: true, main: 2000, adult: 2000, child: 2000 },
   { id: 'pB', plan: 'Plan B', discovery: true, main: 2800, adult: 2300, child: 950 },
   { id: 'pC', plan: 'Plan C', discovery: true, main: 3100, adult: 2400, child: 1200 },
 ];
 const one = { adults: 1, children: 0 };
 const debit = (amount, date) => ({ accounts: {}, categories: {}, rows: [row(date || '2026-10-01', 'DISC PREM 1234', -amount, 'X')] });
-const g1 = guessHealthPlan(debit(2900), one, PLANS);
+// exactly one plan fits: picked, with the rest named as Vitality or gap cover
+const g1 = guessHealthPlan(debit(5400), one, PLANS);
 assert.strictEqual(g1.id, 'pB');
 assert.strictEqual(g1.name, 'Plan B');
-assert.strictEqual(g1.monthly, 2800);
-assert.strictEqual(g1.debit, 2900);
-assert.ok(/Plan B/.test(g1.why) && /1 Oct 2026/.test(g1.why), g1.why);
+assert.strictEqual(g1.monthly, 5000);
+assert.strictEqual(g1.debit, 5400);
+assert.deepStrictEqual(g1.candidates.map(c => c.id), ['pB']);
+assert.ok(/Plan B/.test(g1.why) && /1 Oct 2026/.test(g1.why) && /R\s400/.test(g1.why), g1.why);
 // exactly at the price still fits
-assert.strictEqual(guessHealthPlan(debit(3100), one, PLANS).id, 'pC');
-// a bigger debit picks the dearest plan that still fits
 assert.strictEqual(guessHealthPlan(debit(9000), one, PLANS).id, 'pC');
+// the debit run through a bank's verb still counts
+assert.strictEqual(guessHealthPlan({ accounts: {}, rows: [row('2026-10-01', 'DEBIT ORDER DISC PREM 1234', -9000, 'X')] }, one, PLANS).id, 'pC');
+// several plans fit (close prices): nothing is picked, the candidates are named closest first
+const amb = guessHealthPlan(debit(2900), one, CLOSE);
+assert.strictEqual(amb.id, null);
+assert.strictEqual(amb.monthly, null);
+assert.deepStrictEqual(amb.candidates.map(c => c.id), ['pB', 'pA']);
+assert.strictEqual(amb.candidates[0].rest, 100);
+assert.ok(/2 Discovery plans could fit/.test(amb.why) && /pick yours/.test(amb.why), amb.why);
+// a debit far above every plan (more than any Vitality and gap could add): no plan fits, no pick
+const far = guessHealthPlan(debit(20000), one, PLANS);
+assert.strictEqual(far.id, null);
+assert.deepStrictEqual(far.candidates, []);
+assert.ok(/no Discovery plan/.test(far.why), far.why);
+// a debit under every plan's price: nothing fits
+const under = guessHealthPlan(debit(500), one, PLANS);
+assert.strictEqual(under.id, null);
+assert.deepStrictEqual(under.candidates, []);
 // the LATEST debit is used, not the biggest or the first
-const g2 = guessHealthPlan({ accounts: {}, rows: [row('2026-10-01', 'DISC PREM 1', -2200, 'X'), row('2026-08-01', 'DISC PREM 1', -3200, 'X')] }, one, PLANS);
+const g2 = guessHealthPlan({ accounts: {}, rows: [row('2026-10-01', 'DISC PREM 1', -2200, 'X'), row('2026-08-01', 'DISC PREM 1', -9200, 'X')] }, one, PLANS);
 assert.strictEqual(g2.id, 'pA');
 assert.strictEqual(g2.date, '2026-10-01');
-// members change the price: 2 adults + 1 child on Plan B = 2800 + 2300 + 950
-const g3 = guessHealthPlan(debit(6100), { adults: 2, children: 1 }, PLANS);
+// members change the price and the ceiling: 2 adults + 1 child on Plan B = 5000 + 4000 + 950
+const g3 = guessHealthPlan(debit(10500), { adults: 2, children: 1 }, PLANS);
 assert.strictEqual(g3.id, 'pB');
-assert.strictEqual(g3.monthly, 2800 + 2300 + 950);
-// a debit under every plan's price: nothing fits
-assert.strictEqual(guessHealthPlan(debit(500), one, PLANS), null);
+assert.strictEqual(g3.monthly, 5000 + 4000 + 950);
 // no debit: null (refunds and other lines do not count)
 assert.strictEqual(guessHealthPlan({ accounts: {}, rows: [] }, one, PLANS), null);
 assert.strictEqual(guessHealthPlan({ accounts: {}, rows: [row('2026-10-01', 'DISC PREM 1', 3000, 'X'), row('2026-10-02', 'WOOLWORTHS', -3000, 'X')] }, one, PLANS), null);
 // a plan with no price for this family is skipped
-assert.strictEqual(guessHealthPlan(debit(9000), one, [{ id: 'none', plan: 'Unpriced', discovery: true }, PLANS[0]]).id, 'pA');
+assert.strictEqual(guessHealthPlan(debit(2100), one, [{ id: 'none', plan: 'Unpriced', discovery: true }, PLANS[0]]).id, 'pA');
+// the live Discovery plans: a real plan plus any Vitality and gap cover up to
+// the ceiling is never mistaken for another plan — it is picked or left open,
+// and always among the candidates
+{
+  const { HEALTH_PLANS, HEALTH_OWN, healthPremium } = require('../src/compare');
+  const live = HEALTH_PLANS.concat(HEALTH_OWN).filter(p => p.discovery);
+  for (const fam of [one, { adults: 2, children: 0 }, { adults: 2, children: 2 }]) {
+    for (const p of live) {
+      const price = healthPremium(p, fam);
+      if (price === null) continue;
+      for (const extra of [0, 300, 900, 1300]) {
+        const g = guessHealthPlan(debit(price + extra), fam, live);
+        assert.ok(g.id === null || g.id === p.id, `${p.plan} + R${extra} picked ${g.name}`);
+        assert.ok(g.candidates.some(c => c.id === p.id), `${p.plan} + R${extra} not among the candidates`);
+      }
+    }
+  }
+}
 // the default list is the live Discovery plans and never throws
 guessHealthPlan(debit(9000), one);
+
+// ---- resolveSuite ----
+const { resolveSuite } = require('../src/detect');
+// never answered (onboarding skipped): the tier the fees show
+assert.strictEqual(resolveSuite({ suite: 'Black', suiteAnswered: false }, { tier: 'Gold' }), 'Gold');
+assert.strictEqual(resolveSuite({ suite: 'Black' }, { tier: 'Platinum' }), 'Platinum');
+// answered: the answer wins, even when it is the default tier
+assert.strictEqual(resolveSuite({ suite: 'Black', suiteAnswered: true }, { tier: 'Gold' }), 'Black');
+// a tier other than the default was chosen by someone
+assert.strictEqual(resolveSuite({ suite: 'Purple' }, { tier: 'Gold' }), 'Purple');
+// nothing detected: the setting (the default)
+assert.strictEqual(resolveSuite({ suite: 'Black' }, { tier: null }), 'Black');
+assert.strictEqual(resolveSuite(undefined, undefined), 'Black');
 
 // ---- detectBanking ----
 const { SUITES } = require('../src/rates');

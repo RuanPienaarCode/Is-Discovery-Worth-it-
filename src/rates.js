@@ -34,7 +34,9 @@
              healthyfood-vitality-and-bank.pdf
      HCG     HealthyCare benefit guide, Vitality Health only — discovery.co.za/
              wcm/discoverycoza/assets/vitality/benefit-rules/vitality-
-             healthycare-benefit-guide-vitality-only.pdf (last updated Dec 2026)
+             healthycare-benefit-guide-vitality-only.pdf (read 3 Nov 2026; its
+             footer already says "Last updated December 2026", for changes it
+             lists as coming into effect from 1 December 2026)
      GYM     Virgin Active benefit guide — cdn.discovery.co.za/wcm/discoverycoza/
              assets/vitality/benefit-rules/virgin-active-post-benefit-guide.pdf,
              and the Vitality Premium brochure 2026 (30 Sep 2026)
@@ -66,7 +68,7 @@ const SOURCE_NAMES = {
   CCFEES: 'Discovery Bank Credit Card Account fees guides (from 1 Sep 2026)',
   DYN: 'Dynamic interest rates, Black Suite (as at 25 Sep 2026)',
   HFG: 'HealthyFood benefit guide, Vitality Health and Vitality Money (read 3 Nov 2026)',
-  HCG: 'HealthyCare benefit guide, Vitality Health (last updated Dec 2026, read 3 Nov 2026)',
+  HCG: 'HealthyCare benefit guide, Vitality Health (read 3 Nov 2026; it covers changes from 1 Dec 2026)',
   GYM: 'Virgin Active benefit guide and Vitality Premium brochure 2026 (read 3 Nov 2026)',
   AR: 'Vitality Active Rewards benefit guide (read 3 Nov 2026)',
   DRIVETC: 'How the Vitality Drive programme works, 2026 (read 3 Nov 2026)',
@@ -421,7 +423,7 @@ const FUEL = ['fuel.bp', 'fuel.shell', 'fuel.other'];
    null is unpublished: it earns nothing here, and the page shows the rate
    that would match Discovery instead. */
 const ALTERNATIVES = [
-  { id: 'gotyme', name: 'GoTyme (TymeBank)', fee: 0, backPct: 0, capMonthly: 0,
+  { id: 'gotyme', name: 'GoTyme (TymeBank)', fee: 0, backPct: 0, capMonthly: 0, likeForLike: false,
     note: 'No monthly fee and no rewards, but also no credit card, so it is not a like-for-like swap.', source: 'gotyme.co.za: "Open a bank account for free" (no fee schedule published), fetched 21 Oct 2026' },
   { id: 'capitec', name: 'Capitec Global One', fee: 57.5, backPct: 1, capMonthly: 0,
     note: 'R7,50 for the account and R50 for the credit card. Live Better pays 1% back on credit card spend, with no levels. We could not read Capitec\'s own website, so check before you decide.', source: 'The Citizen 6 Feb 2026 (fees); Currency News, Mar 2026 (1% Live Better cash back on credit card spend; Capitec\'s own page not readable)', unconfirmed: true },
@@ -439,6 +441,31 @@ const ALTERNATIVES = [
     ],
     note: 'The Premium package with a credit card. Absa Rewards pays "up to 30%" back at grocery partners and at Shell or Sasol, on up to R3 000 a month each and no more than 20% of your card spend. Your own rate is only shown in the Absa app. The 0,5% on other spending is a guess.', source: 'absa.co.za premium banking; Absa Rewards terms 2026 (caps); tier rates unpublished' },
 ];
+
+/* Whether a rival bank's figures can be leaned on: not `unconfirmed`, not
+   a `guess`. Works on an ALTERNATIVES row or a model.js result (which
+   carries the id), looking the flags up by id. */
+function altConfirmed(a) {
+  const def = (a && ALTERNATIVES.find(x => x.id === a.id)) || a || {};
+  return !(a && (a.unconfirmed || a.guess)) && !def.unconfirmed && !def.guess;
+}
+const altLikeForLike = a => ((a && ALTERNATIVES.find(x => x.id === a.id)) || a || {}).likeForLike !== false;
+
+/* The rival bank Discovery Bank is weighed against. compareWith (settings)
+   names one, and that wins. Otherwise ('' or an id that is gone) the best
+   — highest net — of the banks whose figures are confirmed and that are a
+   like-for-like swap; failing that the best confirmed one; failing that the
+   best of all. alternatives: model.js results ({ id, net, … }).
+   → one of them, or null */
+function chooseAlternative(alternatives, compareWith) {
+  const list = Array.isArray(alternatives) ? alternatives.filter(Boolean) : [];
+  if (compareWith) {
+    const named = list.find(a => a.id === compareWith);
+    if (named) return named;
+  }
+  const best = xs => xs.slice().sort((x, y) => (y.net || 0) - (x.net || 0))[0] || null;
+  return best(list.filter(a => altConfirmed(a) && altLikeForLike(a))) || best(list.filter(altConfirmed)) || best(list);
+}
 
 /* settings.conditions (constants.js) → the `cases` they meet. Unanswered
    meets none, so the lower published figure counts. */
@@ -511,4 +538,4 @@ function altRate(key) {
   return a ? { value: a[m[2]] || 0 } : null;
 }
 
-module.exports = { metOf, sourceText, FACE_VALUE: 0.1, RATES, ALTERNATIVES, BANDS, FLIGHT_BANDS, SHORT_BANDS, DIAMOND, SUITES, SUITE_TABLES, DEFAULT_SUITE, suiteOf, BANK_PRODUCTS, BANK_KINDS, bankProductOf, bandTable, bandPct, rate };
+module.exports = { metOf, sourceText, chooseAlternative, altConfirmed, FACE_VALUE: 0.1, RATES, ALTERNATIVES, BANDS, FLIGHT_BANDS, SHORT_BANDS, DIAMOND, SUITES, SUITE_TABLES, DEFAULT_SUITE, suiteOf, BANK_PRODUCTS, BANK_KINDS, bankProductOf, bandTable, bandPct, rate };

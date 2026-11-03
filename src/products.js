@@ -34,6 +34,9 @@ function buildProducts(st, m, ms, settings, now, chosen) {
      months is twelve months, whatever the Discovery Bank accounts hold. */
   const yrOf = key => annualOf(m, [key], n);
   const L = key => { const l = st.lines.find(x => x.key === key); return l ? l.annual : 0; };
+  /* Cash that actually arrived is cash whatever the benefit is worth to
+     you: the line's whole value (`full`), never the weighted one. */
+  const cashOf = key => { const l = st.lines.find(x => x.key === key); return l ? (Number.isFinite(l.full) ? l.full : l.annual) : 0; };
   const lineOf = key => st.lines.find(x => x.key === key) || null;
   const rows = key => ((m.rows && m.rows[key]) || []).map(r => ({ ...r, key }));
   const known = settings.bill || {};
@@ -42,8 +45,9 @@ function buildProducts(st, m, ms, settings, now, chosen) {
 
   /* ── Discovery Bank ─────────────────────────────────────────────── */
   const milesKeys = [['miles.healthyFood', 'Extra HealthyFood'], ['miles.card', 'Miles for using your card'], ['fuel.money', 'Extra fuel'], ['miles.healthyCare', 'Extra HealthyCare'], ['miles.partners', 'Partner shops']];
-  const milesParts = milesKeys.map(([k, label]) => [label, L(k)]).filter(p => p[1] >= 0.5);
-  const bankBack = [
+  const milesAll = milesKeys.map(([k, label]) => [label, L(k)]);
+  const milesParts = milesAll.filter(p => p[1] >= 0.5);
+  const bankItems = [
     { label: 'Miles', v: milesParts.reduce((s, p) => s + p[1], 0), parts: milesParts },
     { label: 'Apple Watch', v: L('appleWatch') },
     { label: 'Flight discount', v: L('travel.bank') },
@@ -51,7 +55,13 @@ function buildProducts(st, m, ms, settings, now, chosen) {
     { label: 'Vitality Health Miles worth more', v: L('miles.uplift') },
     { label: 'Extra interest and cashback', v: L('interest.boost') + L('interest.cashback') },
     { label: 'Base interest on savings', v: L('interest.earned') },
-  ].filter(b => b.v >= 0.5);
+  ];
+  const bankBack = bankItems.filter(b => b.v >= 0.5);
+  /* A benefit line below nothing (the Apple Watch when every instalment
+     was paid in full and the activation fee too) cost more than it gave:
+     it goes on the cost side, so the Bank tab and the flow agree. */
+  const bankMinus = milesAll.filter(p => p[1] <= -0.5).map(([label, v]) => [label, v])
+    .concat(bankItems.slice(1).filter(b => b.v <= -0.5).map(b => [b.label === 'Apple Watch' ? 'Apple Watch (it cost more than it saved)' : b.label, b.v]));
   /* Charges any bank makes are left out of the stay-or-switch net, but they
      were still paid to Discovery Bank, so the flow and the whole bill count
      them (and the base interest it paid you) */
@@ -64,14 +74,16 @@ function buildProducts(st, m, ms, settings, now, chosen) {
   const bank = {
     id: 'bank', name: 'Discovery Bank', short: 'Bank', icon: 'landmark',
     figure: st.net, figureLabel: 'Rewards minus fees',
-    paid: st.cost + bankElsewhere.reduce((s, l) => s + l.annual, 0), outLabel: 'Fees and charges',
-    outParts: st.lines.filter(l => l.group === 'cost' && Math.abs(l.annual) >= 0.5).concat(bankElsewhere).map(l => [l.label, -l.annual]),
+    paid: st.cost + bankElsewhere.reduce((s, l) => s + l.annual, 0) - bankMinus.reduce((s, p) => s + p[1], 0), outLabel: 'Fees and charges',
+    outParts: st.lines.filter(l => l.group === 'cost' && Math.abs(l.annual) >= 0.5).concat(bankElsewhere).map(l => [l.label, -l.annual]).concat(bankMinus),
     /* interest (boost, cashback and base) is paid in cash; the rest is value */
-    back: bankBack, cashBack: L('interest.boost') + L('interest.cashback') + L('interest.earned'),
+    back: bankBack, cashBack: cashOf('interest.boost') + cashOf('interest.cashback') + cashOf('interest.earned'),
     note: bankElsewhere.length || L('interest.earned') >= 0.5
       ? 'Foreign payment fees, penalty fees, card interest and normal savings interest are shown here because they went through Discovery Bank. Any bank would charge or pay these, so the Bank tab leaves them out of its figure.'
       : '',
     transactions: bankTx.concat(milesRows(ms, 'bank')),
+    /* the Bank tab's figure (st.net) and this product's net differ only by
+       what any bank charges or pays (bankElsewhere, base interest) */
   };
 
   /* ── Discovery Health (medical aid and Vitality Health) ──────────── */
@@ -133,12 +145,13 @@ function buildProducts(st, m, ms, settings, now, chosen) {
     figure: -insurePaid, figureLabel: 'Cars and Vitality Drive',
     paid: insurePaid, outLabel: 'Premiums',
     back: [
-      ...(drive && drive.annual >= 0.5 ? [{ label: drive.source === 'estimated' ? 'Drive fuel (estimate)' : 'Drive fuel', v: drive.annual }] : []),
+      ...(drive && drive.annual >= 0.5 ? [{ label: drive.source === 'estimated' ? 'Drive fuel (estimate)' : drive.source === 'statement' ? 'Drive fuel (Miles)' : 'Drive fuel', v: drive.annual }] : []),
       ...(insureClaims >= 0.5 ? [{ label: 'Claims paid', v: insureClaims }] : []),
     ],
-    cashBack: insureClaims + (drive && drive.source === 'measured' ? drive.annual : 0),
+    /* claims and INSURECASH that reached the account, unweighted */
+    cashBack: insureClaims + (drive ? driveCashOf(drive) : 0),
     claims: insureClaims, drive, latestMonthly: latestInsure ? -latestInsure.amount : null,
-    transactions: [...insureRows, ...rows('product.insureClaim'), ...rows('insure.driveCash')],
+    transactions: [...insureRows, ...rows('product.insureClaim'), ...rows('insure.driveCash')].concat(milesRows(ms, 'insure')),
   };
 
   /* ── Discovery Life (through the payslip) ───────────────────────── */
@@ -187,16 +200,25 @@ function splitNote(m, st) {
   return `This split uses today's debit order. ${other.length} earlier month${other.length === 1 ? ' had' : 's had'} a different amount, so for ${other.length === 1 ? 'that month' : 'those months'} the split between medical aid and Vitality is a rough guide.`;
 }
 
+/* The Drive cash that reached a bank account (INSURECASH, or a typed
+   total), unweighted; Miles and the Funder Account's money are not cash. */
+function driveCashOf(drive) {
+  if (Number.isFinite(drive.cash)) return drive.cash;
+  return drive.source === 'measured' ? (Number.isFinite(drive.full) ? drive.full : drive.annual) : 0;
+}
+
 /* Miles statement rows for a product, one per month and kind, newest first:
-   the bank's (Vitality Money, base Miles, gameboard) or Vitality Health's. */
+   the bank's (Vitality Money, base Miles, gameboard), Vitality Health's, or
+   Discovery Insure's (Vitality Drive). */
 const MILES_LABELS = {
   'money.healthyFood': 'Vitality Money · HealthyFood', 'money.healthyCare': 'Vitality Money · HealthyCare', 'money.fuel': 'Vitality Money · fuel',
-  'money.partners': 'Vitality Money · partner shops', base: 'Base Miles · card spend', gameboard: 'Active Rewards gameboard', insure: 'Discovery Insure',
+  'money.partners': 'Vitality Money · partner shops', base: 'Base Miles · card spend', gameboard: 'Active Rewards gameboard', insure: 'Discovery Insure · Vitality Drive',
   'health.healthyFood': 'Vitality Health · HealthyFood', 'health.healthyCare': 'Vitality Health · HealthyCare', activeRewards: 'Vitality Active Rewards', 'health.other': 'Vitality Health · other',
 };
 function milesRows(ms, product) {
   if (!ms || !ms.perMonth) return [];
-  const keys = Object.keys(MILES_LABELS).filter(k => (product === 'health' ? /^(health\.|activeRewards)/.test(k) : !/^(health\.|activeRewards)/.test(k)));
+  const ownerOf = k => (/^(health\.|activeRewards)/.test(k) ? 'health' : k === 'insure' ? 'insure' : 'bank');
+  const keys = Object.keys(MILES_LABELS).filter(k => ownerOf(k) === product);
   const out = [];
   for (const k of keys) {
     for (const [ym, miles] of Object.entries(ms.perMonth[k] || {})) {

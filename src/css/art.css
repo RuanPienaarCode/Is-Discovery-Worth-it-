@@ -118,6 +118,13 @@
   animation: dc-hello-rise 0.6s ease 1.6s both;
 }
 
+/* not-affiliated notice: one line and a More */
+.dc-hello-notice { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 34em; animation: dc-hello-rise 0.6s ease 1.8s both; }
+.dc-page .dc-hello-notice-line { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--dc-muted); }
+.dc-hello-notice-line .dc-icon { flex: none; width: 15px; height: 15px; margin-top: 1px; color: var(--dc-accent-ink); }
+.dc-hello-notice-more { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px dashed var(--dc-line-2); font-size: 12.5px; line-height: 1.5; color: var(--dc-text-2); }
+.dc-hello-notice-more p { margin: 0; }
+
 /* the picture keeps its space from the first frame (fixed aspect ratio) */
 .dc-page .dc-hello-figure { position: relative; z-index: 1; min-width: 0; margin: 0; }
 .dc-hello-art { display: block; width: 100%; height: auto; max-height: 70vh; aspect-ratio: 400 / 340; overflow: visible; }
@@ -190,7 +197,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .dc-page .dc-welcome.dc-hello, .dc-page .dc-hello-eyebrow, .dc-hello-ch, .dc-page h1.dc-hello-h1::after, .dc-page .dc-hello-sub,
-  .dc-page button.dc-hello-go, .dc-page button.dc-hello-skip, .dc-hello-art .dc-hello-beam, .dc-hello-art .dc-hello-pan,
+  .dc-page button.dc-hello-go, .dc-page button.dc-hello-skip, .dc-hello-notice, .dc-hello-art .dc-hello-beam, .dc-hello-art .dc-hello-pan,
   .dc-hello-art .dc-hello-coin, .dc-hello-art .dc-hello-ask, .dc-hello-art .dc-hello-tick, .dc-hello-art .dc-hello-chip { animation: none; transition: none; }
 }
 

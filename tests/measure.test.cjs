@@ -19,7 +19,7 @@ const rows = [
   r('2026-09-04', 'Credit Card', 'Returned debit order fee', 'Bank charges & fees', -15),  // a penalty
   r('2026-09-05', 'Transaction Account', 'Dynamic interest boost at 1.5%', 'Interest income', 30),
   r('2026-09-05', 'Transaction Account', 'Dynamic interest boost adjustment at 1.5%', 'Interest income', -2),
-  r('2026-09-06', 'Credit Card', 'WOOLWORTHS SOMETOWN', 'Food', -1000, true),           // excluded from budget, still a swipe
+  r('2026-09-06', 'Credit Card', 'WOOLWORTHS SOMETOWN', 'Food', -1000),                 // a swipe
   r('2026-09-07', 'Credit Card', 'Refund WOOLWORTHS SOMETOWN', 'Food', 100),
   r('2026-09-08', 'Credit Card', 'BP PARK DRIVE', 'Fuel and transport', -500),
   r('2026-09-08', 'Credit Card', 'DL*Uber Eats CPT', 'Eating out', -80),               // Uber Eats is not a ride
@@ -147,5 +147,80 @@ assert.deepStrictEqual(trailingWindow(new Date(2026, 0, 5), 3), { from: '2025-10
   assert.strictEqual(total(mS, 'disc.fuel.shell'), 600);
   assert.strictEqual(total(mS, 'fuel.bp'), 0, 'Vitality Money fuel stays on the credit card');
   assert.strictEqual(total(mS, 'fuel.shell'), 600);
+}
+
+// ── fix wave (audit 3b26f51) ─────────────────────────────────────────
+const W = { from: '2026-09', to: '2026-09' };
+// refunds lower all.* and disc.* as they lower shop.* (audit s2)
+{
+  const mR = measure([
+    r('2026-09-10', 'Other Bank', 'VITALITY TRAVEL JHB-CPT', 'Travel', -6000),
+    r('2026-09-20', 'Other Bank', 'VITALITY TRAVEL REFUND', 'Travel', 6000),
+    r('2026-09-09', 'Credit Card', 'CHECKERS SOMETOWN', 'Food', -4000),
+    r('2026-09-12', 'Credit Card', 'CHECKERS REFUND', 'Food', 4000),
+    r('2026-09-13', 'Transaction Account', 'BP SOMETOWN', 'Fuel', -800),
+    r('2026-09-14', 'Transaction Account', 'BP SOMETOWN REVERSAL', 'Fuel', 300),
+    r('2026-09-15', 'Other Bank', 'CHECKERS SOMETOWN', 'Food', 500),               // money in without "refund": not a refund
+  ], accounts, categories, W);
+  assert.strictEqual(total(mR, 'all.travel.vitality'), 0, 'a refunded booking on another bank nets to nothing');
+  assert.strictEqual(total(mR, 'all.shop.checkers'), 0, 'a card refund lowers all.* too');
+  assert.strictEqual(total(mR, 'shop.checkers'), 0);
+  assert.strictEqual(total(mR, 'disc.shop.checkers'), 0);
+  assert.strictEqual(total(mR, 'disc.fuel.bp'), 500, 'a debit-card reversal lowers disc.*');
+  assert.strictEqual(total(mR, 'all.fuel.bp'), 500);
+  assert.strictEqual(total(mR, 'spend.debit'), 500, 'and the debit card spend');
+}
+// moves between your own Discovery accounts are not card spend, settling up to three days later (audit s6, item 10)
+{
+  const mM = measure([
+    r('2026-09-05', 'Credit Card', 'TAKEALOT', 'Shopping', -8000),
+    r('2026-09-25', 'Credit Card', 'TRANSFER', '', -5000),
+    r('2026-09-25', 'Savings', 'TRANSFER', '', 5000),
+    r('2026-09-26', 'Transaction Account', 'TRANSFER', '', -700),
+    r('2026-09-28', 'Credit Card', 'TRANSFER', '', 700),                           // settled two days later
+    r('2026-09-02', 'Transaction Account', 'PLUMBER', 'Household', -900),
+    r('2026-09-09', 'Credit Card', 'TRANSFER', '', 900),                            // a week later: not the same money
+  ], { ...accounts, Savings: { institution: 'Discovery Bank', type: 'savings' } }, categories, W);
+  assert.strictEqual(total(mM, 'spend.card'), 8000, 'the move to savings is not a purchase');
+  assert.strictEqual(total(mM, 'spend.debit'), 900, 'the next-day move is not a swipe; the plumber is');
+  assert.strictEqual(total(mM, 'payt.payments'), 1, 'only the plumber is a payment');
+  assert.strictEqual(mM.excludedFromSpend['Moves between your accounts'], 5000);
+  const { matchMoves } = require('../src/measure');
+  const twin = [r('2026-09-02', 'Transaction Account', 'A', '', -500), r('2026-09-02', 'Transaction Account', 'B', '', -500), r('2026-09-03', 'Credit Card', 'C', '', 500)];
+  assert.strictEqual(matchMoves(twin, accounts).size, 1, 'one arrival explains one outflow only');
+  assert.strictEqual(matchMoves([r('2026-09-01', 'Transaction Account', 'A', '', -500), r('2026-09-05', 'Credit Card', 'C', '', 500)], accounts).size, 0, 'four days apart: not a move');
+}
+// Excluded rows are not spend; a split parent is skipped only when it is Excluded (audit s7, budget-vault tx-role.js)
+{
+  const mX = measure([
+    { ...r('2026-09-09', 'Credit Card', 'CHECKERS SOMETOWN', 'Food', -3000, true), split: 'parent' },
+    { ...r('2026-09-09', 'Credit Card', 'CHECKERS SOMETOWN', 'Food', -2000), split: 'part' },
+    { ...r('2026-09-09', 'Credit Card', 'CHECKERS SOMETOWN', 'Household', -1000), split: 'part' },
+    { ...r('2026-09-10', 'Credit Card', 'WOOLWORTHS SOMETOWN', 'Food', -600, false), split: 'parent' },   // split undone by hand
+    r('2026-09-25', 'Credit Card', 'TRANSFER TO SAVINGS', '', -5000, true),
+    r('2026-09-26', 'Transaction Account', 'SPAR SOMETOWN', 'Food', -400, true),
+    r('2026-09-27', 'Other Bank', 'CLICKS SOMETOWN', 'Pharmacy', -250, true),
+  ], accounts, categories, W);
+  assert.strictEqual(total(mX, 'spend.card'), 3600, 'the two parts and the hand-undone parent; not the Excluded parent or move');
+  assert.strictEqual(total(mX, 'shop.checkers'), 3000);
+  assert.strictEqual(total(mX, 'shop.woolworths'), 600, 'a parent with Excluded unticked is a real row again');
+  assert.strictEqual(total(mX, 'all.shop.woolworths'), 600);
+  assert.strictEqual(total(mX, 'spend.debit'), 0, 'an Excluded row is not a swipe');
+  assert.strictEqual(total(mX, 'all.shop.clicks'), 0, 'nor partner spend');
+  assert.strictEqual(mX.excludedFromSpend['Rows marked Excluded'], 5000);
+}
+// debit orders out of a transaction account are not card swipes (red team #7)
+{
+  const mO = measure([
+    r('2026-09-01', 'Transaction Account', 'SBSA HOMELOAN 0001', 'Bond', -15000),
+    r('2026-09-02', 'Transaction Account', 'SOMETOWN PRIMARY FEES', 'School', -3000),
+    r('2026-09-03', 'Transaction Account', 'ACB DEBIT ORDER CARLOAN', 'Car', -4000),
+    r('2026-09-04', 'Transaction Account', 'LANDLORD', 'Flat', -7000),
+    r('2026-09-05', 'Transaction Account', 'WOOLWORTHS SOMETOWN', 'Groceries', -3000),
+    r('2026-09-06', 'Transaction Account', 'VIRGIN ACTIVE DEBIT ORDER', 'Gym', -500),
+  ], accounts, { ...categories, Flat: 'housing' }, W);
+  assert.strictEqual(total(mO, 'spend.debit'), 3000, 'only the Woolworths swipe');
+  assert.strictEqual(total(mO, 'disc.gym'), 500, 'a debit order at a partner is still partner spend');
+  assert.strictEqual(total(mO, 'payt.payments'), 6, 'every one of them is still a payment');
 }
 console.log('measure OK');

@@ -206,4 +206,27 @@ assert.strictEqual(RB[0].rivals.find(r => r.name === 'Capitec').items[0].kind, '
   assert.ok(rivalsNoBank.some(x => x.id === 'medical'), 'medical aids still compared');
 }
 
+// Drive rewards paid as Miles are points; INSURECASH beside them makes them cash
+{
+  const drv = (extra) => backItems({ lines: [{ key: 'fuel.drive', label: 'Vitality Drive fuel rewards', annual: 5400, source: 'statement', funder: false, cash: 0, ...extra }] }).drive[0].kind;
+  assert.strictEqual(drv({}), 'points');
+  assert.strictEqual(drv({ cash: 1200 }), 'cash');
+  assert.strictEqual(drv({ source: 'measured', cash: 5400 }), 'cash');
+}
+// a credit card's cashback left off debit card spend says so (red team #7)
+{
+  const alt = { id: 'x', name: 'Rival Bank', fees: 600, rewards: 0, backPct: 0, publishedPct: 1, debitOnly: true, cardOnlyLeftOut: true, partners: [] };
+  const rv = buildRivals({ cost: 1000, value: 0, alternatives: [alt], lines: [] }, {}, { bank: true });
+  assert.ok(/credit card spend only/.test(rv[0].rivals[0].what) && !/No rewards/.test(rv[0].rivals[0].what), rv[0].rivals[0].what);
+}
+// an under-45 gap price is no saving for an older or unknown-age family; a typed quote still is
+{
+  const { buildSwitch: bs } = require('../src/switch');
+  const stG = { lines: [], cost: 0, value: 0, net: 0, alternatives: [], chosen: null, vitality: { premium: null, value: 0, rewards: 0 }, bill: { items: [] } };
+  const gapCmp = rows => ({ gap: { current: { annual: 12000, monthly: 1000 }, rows } });
+  const swAge = bs(stG, gapCmp([{ provider: 'Gapco', plan: 'Lite', monthly: 200, ageLimited: true }]), { gap: true });
+  assert.ok(!JSON.stringify(swAge).includes('Gapco'), 'age-limited price not used as the gap move');
+  const swQuote = bs(stG, gapCmp([{ provider: 'Gapco', plan: 'Lite', monthly: 300, ageLimited: false, quoted: true }]), { gap: true });
+  assert.ok(JSON.stringify(swQuote).includes('Gapco'), 'a typed quote is used');
+}
 console.log('switch back items OK');

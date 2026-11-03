@@ -5,8 +5,9 @@
    The statement (model.js buildStatement) already weighs each benefit:
    st.benefits[id] = { level, suggested, why, full, counted, available,
    reason, note }, in rands a year. This page only shows it and lets the
-   person change a level. A level that equals the suggestion is not stored,
-   so a later budget can suggest something else.
+   person change a level. An answer the person gives is stored even when it
+   equals the suggestion, so a confirmed "I use it" never flips when a later
+   budget suggests something else; "Use the suggestion" removes it again.
 
    Every node is built with dom.js el() and art.js drawMark (createElementNS);
    no innerHTML. CSS lives in src/css/benefits.css under .dc-ben. */
@@ -70,17 +71,27 @@ function benefitTotals(st) {
   return { available, unavailable, full, counted, share: full > 0 ? Math.min(1, counted / full) : 0 };
 }
 
-/* Write a chosen level into settings: the key is removed when it equals the
-   suggestion, so the suggestion can move with later budgets. Returns true
-   when settings changed. */
-function setLevel(s, id, level, suggested) {
+/* Write a chosen level into settings. An explicit answer is kept even when
+   it equals the suggestion (the `suggested` argument is no longer read; it
+   stays so callers do not change). Returns true when settings changed. */
+function setLevel(s, id, level) {
   if (!s || !isLevel(level)) return false;
   if (!s.benefits || typeof s.benefits !== 'object') s.benefits = {};
   const before = s.benefits[id];
-  if (level === (isLevel(suggested) ? suggested : 'full')) delete s.benefits[id];
-  else s.benefits[id] = level;
-  return before !== s.benefits[id];
+  s.benefits[id] = level;
+  return before !== level;
 }
+
+/* Forget the stored answer, so the benefit follows the suggestion again.
+   Returns true when settings changed. */
+function clearLevel(s, id) {
+  if (!s || !s.benefits || typeof s.benefits !== 'object' || !isLevel(s.benefits[id])) return false;
+  delete s.benefits[id];
+  return true;
+}
+
+/* is there a stored answer for this benefit? */
+const hasAnswer = (s, id) => !!(s && s.benefits && isLevel(s.benefits[id]));
 
 /* Amounts per year or per month. */
 function perOf(period) {
@@ -256,7 +267,22 @@ function renderBenefits(panel, ctx) {
       el(txt, 'span', 'dc-ben-opt-l', o.label);
       if (o.value === suggested) el(txt, 'span', 'dc-ben-sug', 'suggested');
       opts.push({ lab, input });
-      input.addEventListener('change', () => { if (input.checked) choose(b.id, o.value, suggested, opts, panel); });
+      input.addEventListener('change', () => { if (input.checked) choose(b.id, o.value, opts, panel); });
+      /* a tap on the answer already showing, with nothing stored yet, confirms
+         it: it goes the way a change does, so it is kept and not left to the
+         suggestion */
+      input.addEventListener('click', () => {
+        if (input.checked && o.value === level && !hasAnswer(s, b.id)) input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
+    /* an answer of yours is kept; a way back to what the statements suggest */
+    if (hasAnswer(s, b.id)) {
+      const names = { full: 'I use it', half: 'Sometimes', none: 'Not for me' };
+      const back = el(c, 'button', 'dc-ben-reset', 'Use the suggestion');
+      back.type = 'button';
+      back.setAttribute('data-ben-reset', b.id);
+      back.setAttribute('aria-label', `Use the suggestion for ${b.label}: ${names[suggested]}`);
+      back.addEventListener('click', e => { e.preventDefault(); reset(b.id, back, panel); });
     }
   }
 
@@ -312,7 +338,23 @@ function renderBenefits(panel, ctx) {
     }
   }
 
-  async function choose(id, value, suggested, opts, from) {
+  /* back to the suggestion: forget the stored answer and redraw */
+  async function reset(id, btn, from) {
+    btn.disabled = true;
+    const scope = (from && typeof from.closest === 'function' && from.closest('.dc-page')) || null;
+    try {
+      clearLevel(s, id);
+      if (typeof save === 'function') await save();
+    } finally {
+      btn.disabled = false;
+    }
+    if (typeof rerender === 'function') await rerender();
+    refocus(scope, id);
+  }
+
+  async function choose(id, value, opts, from) {
+    /* the click and the change of one tap both land here: the second has nothing to do */
+    if (s && s.benefits && s.benefits[id] === value) return;
     for (const o of opts) {
       o.lab.classList.toggle('is-on', o.input.checked);
       o.input.disabled = true;
@@ -320,7 +362,7 @@ function renderBenefits(panel, ctx) {
     /* where to look for the redrawn page: the page wrapper outlives a redraw */
     const scope = (from && typeof from.closest === 'function' && from.closest('.dc-page')) || null;
     try {
-      setLevel(s, id, value, suggested);
+      setLevel(s, id, value);
       if (typeof save === 'function') await save();
     } finally {
       for (const o of opts) o.input.disabled = false;
@@ -342,4 +384,4 @@ function refocus(scope, id) {
   if (!go()) setTimeout(go, 0);
 }
 
-module.exports = { renderBenefits, benefitTotals, setLevel, shareLine, oneLiner, shortReason, LEVELS, MARK_OF, MILES_USE };
+module.exports = { renderBenefits, benefitTotals, setLevel, clearLevel, hasAnswer, shareLine, oneLiner, shortReason, LEVELS, MARK_OF, MILES_USE };

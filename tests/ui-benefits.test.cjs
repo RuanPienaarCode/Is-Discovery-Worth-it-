@@ -13,7 +13,7 @@ Module._load = function (request, ...rest) {
   if (request === 'obsidian') return { setIcon: () => {} };
   return origLoad.call(this, request, ...rest);
 };
-const { benefitTotals, setLevel, shareLine, oneLiner, shortReason, MARK_OF } = require(path.join(root, 'src/ui-benefits.js'));
+const { benefitTotals, setLevel, clearLevel, hasAnswer, shareLine, oneLiner, shortReason, MARK_OF } = require(path.join(root, 'src/ui-benefits.js'));
 const { buildStatement } = require(path.join(root, 'src/model.js'));
 const { BENEFITS, GROUPS } = require(path.join(root, 'src/benefits.js'));
 const { MARKS } = require(path.join(root, 'src/art.js'));
@@ -59,17 +59,36 @@ const tSav = benefitTotals(buildStatement(m, sav));
 assert.ok(tSav.unavailable.some(r => r.b.id === 'miles'), 'Miles need a card');
 assert.ok(tSav.unavailable.every(r => r.x.reason), 'every unavailable benefit says why');
 
-// setLevel: a choice equal to the suggestion is not stored
+// setLevel: an explicit answer is stored even when it equals the suggestion,
+// so a confirmed "I use it" never flips when a later budget suggests otherwise
 const z = { benefits: { gym: 'half' } };
 assert.strictEqual(setLevel(z, 'gym', 'full', 'full'), true);
-assert.ok(!('gym' in z.benefits), 'the suggestion is not stored');
+assert.strictEqual(z.benefits.gym, 'full', 'an answer equal to the suggestion is stored');
+assert.strictEqual(setLevel(z, 'gym', 'full', 'full'), false, 'no change');
 assert.strictEqual(setLevel(z, 'gym', 'none', 'full'), true);
 assert.strictEqual(z.benefits.gym, 'none');
 assert.strictEqual(setLevel(z, 'gym', 'none', 'full'), false, 'no change');
 assert.strictEqual(setLevel(z, 'gym', 'bogus', 'full'), false, 'an unknown level is ignored');
+assert.strictEqual(z.benefits.gym, 'none', 'an unknown level leaves the answer alone');
 const y = {};
 setLevel(y, 'miles', 'half', 'full');
 assert.deepStrictEqual(y.benefits, { miles: 'half' }, 'creates settings.benefits when missing');
+
+// "Use the suggestion": clearLevel forgets the answer, so the benefit follows the budget again
+assert.strictEqual(hasAnswer(z, 'gym'), true);
+assert.strictEqual(clearLevel(z, 'gym'), true);
+assert.ok(!('gym' in z.benefits), 'the stored answer is gone');
+assert.strictEqual(hasAnswer(z, 'gym'), false);
+assert.strictEqual(clearLevel(z, 'gym'), false, 'nothing left to clear');
+assert.strictEqual(clearLevel({}, 'gym'), false, 'no benefits object, no change');
+
+// a stored answer equal to the suggestion holds when the suggestion moves
+const keep = base();
+const stKeep = buildStatement(m, keep);
+const sug = stKeep.benefits.gym.suggested;
+setLevel(keep, 'gym', sug, sug);
+const moved = buildStatement(Object.assign({}, m, { figures: Object.assign({}, m.figures, { gym: fig({}) }) }), keep);
+assert.strictEqual(moved.benefits.gym.level, sug, 'a confirmed answer holds when the budget would now suggest something else');
 
 // choosing "Not for me" lowers what counts and leaves what is on offer
 const before = benefitTotals(buildStatement(m, s));

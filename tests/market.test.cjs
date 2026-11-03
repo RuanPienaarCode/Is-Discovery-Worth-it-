@@ -1,13 +1,28 @@
 'use strict';
 const assert = require('node:assert');
-const { MARKET, marketAge, addMonths, monthsBetween } = require('../src/market');
+const { MARKET, PERIODS, marketAge, priceValidFor, addMonths, monthsBetween } = require('../src/market');
 const { rate, RATES, SUITES, SUITE_TABLES, suiteOf, bandTable, DIAMOND, BANDS, bandPct, ALTERNATIVES, BANK_PRODUCTS, BANK_KINDS, bankProductOf } = require('../src/rates');
 const { STATUSES } = require('../src/constants');
 
-// ── MARKET: dated, and due for review six months later ────────────────
+// ── MARKET: dated, due for review within six months and before the first price change ──
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 assert.ok(ISO.test(MARKET.asOf) && ISO.test(MARKET.reviewBy), 'dates are YYYY-MM-DD');
-assert.strictEqual(MARKET.reviewBy, addMonths(MARKET.asOf, 6), 'reviewBy is asOf plus six months');
+assert.ok(MARKET.reviewBy <= addMonths(MARKET.asOf, 6), 'reviewBy is no more than six months after asOf');
+assert.strictEqual(MARKET.reviewBy, '2026-12-31', 'the day before the other schemes\' 2027 prices');
+const firstChange = Object.values(PERIODS).map(p => p.changes).filter(Boolean).sort()[0];
+assert.ok(MARKET.reviewBy < firstChange, 'reviewBy falls before the first known price change');
+// each table's price period
+assert.deepStrictEqual([PERIODS.discoveryHealth.from, PERIODS.discoveryHealth.to, PERIODS.discoveryHealth.changes], ['2026-04-01', '2027-03-31', '2027-04-01']);
+assert.deepStrictEqual([PERIODS.schemes.from, PERIODS.schemes.to, PERIODS.schemes.changes], ['2026-01-01', '2026-12-31', '2027-01-01']);
+assert.strictEqual(PERIODS.bankFees.from, '2026-09-01');
+assert.strictEqual(PERIODS.rewards.from, '2026-11-01');
+for (const [k, p] of Object.entries(PERIODS)) assert.ok(p.label && ISO.test(p.from) && (p.to === null || ISO.test(p.to)), k);
+assert.strictEqual(priceValidFor('discoveryHealth', '2027-03'), true);
+assert.strictEqual(priceValidFor('discoveryHealth', '2027-04-01'), false);
+assert.strictEqual(priceValidFor('schemes', '2027-01'), false);
+assert.strictEqual(priceValidFor('bankFees', '2030-01'), true, 'no end published');
+assert.strictEqual(priceValidFor('rewards', '2026-10'), false, 'before the rewards guide');
+assert.strictEqual(priceValidFor('nonsense', '2026-10'), false);
 assert.ok(typeof MARKET.note === 'string' && MARKET.note.length > 20, 'a note says what the data covers');
 assert.strictEqual(addMonths('2026-08-31', 6), '2027-02-28', 'the day clamps to the month');
 assert.strictEqual(monthsBetween('2026-11-03', '2027-02-02'), 2, 'not yet three whole months');
@@ -17,7 +32,7 @@ assert.strictEqual(monthsBetween('2026-11-03', '2026-01-01'), 0, 'never negative
 // ── marketAge: stale only after reviewBy ──────────────────────────────
 const m = { asOf: '2026-11-03', reviewBy: '2027-05-03' };
 let a = marketAge('2026-12-15', m);
-assert.deepStrictEqual(a, { asOf: '2026-11-03', reviewBy: '2027-05-03', months: 1, stale: false });
+assert.deepStrictEqual(a, { asOf: '2026-11-03', reviewBy: '2027-05-03', staleFrom: '2027-05-04', staleWhy: 'It is time to check the published prices again.', months: 1, stale: false });
 assert.strictEqual(marketAge('2027-05-03', m).stale, false, 'on reviewBy itself it is still fresh');
 a = marketAge('2027-05-04', m);
 assert.strictEqual(a.stale, true, 'the day after reviewBy it is stale');
@@ -26,6 +41,21 @@ assert.strictEqual(marketAge(new Date(2027, 7, 1), m).stale, true, 'takes a Date
 assert.strictEqual(marketAge(new Date(2026, 10, 10), m).stale, false);
 assert.strictEqual(marketAge(MARKET.asOf).stale, false, 'the shipped data is fresh on its own date');
 assert.strictEqual(typeof marketAge().stale, 'boolean', 'defaults to today');
+// a known price change makes the data stale before reviewBy
+{
+  const withChange = { asOf: '2026-11-03', reviewBy: '2027-05-03', periods: { dh: { label: 'Discovery Health contributions', from: '2026-04-01', to: '2027-03-31', changes: '2027-04-01' } } };
+  assert.strictEqual(marketAge('2027-03-31', withChange).stale, false);
+  const s1 = marketAge('2027-04-01', withChange);
+  assert.strictEqual(s1.stale, true, 'stale on the day the new prices start');
+  assert.strictEqual(s1.staleFrom, '2027-04-01');
+  assert.strictEqual(s1.staleWhy, 'Discovery Health contributions change on 1 Apr 2027.');
+}
+// the shipped data: fresh through 2026, stale from 1 Jan 2027 (the other schemes' new prices)
+assert.strictEqual(marketAge('2026-12-31').stale, false);
+const shipped = marketAge('2027-01-01');
+assert.strictEqual(shipped.stale, true);
+assert.strictEqual(shipped.staleFrom, '2027-01-01');
+assert.ok(/medical aids' contributions change on 1 Jan 2027/.test(shipped.staleWhy), shipped.staleWhy);
 
 // ── SUITES ───────────────────────────────────────────────────────────
 assert.deepStrictEqual(SUITES.map(s => s.id), ['Gold', 'Platinum', 'Black', 'Purple']);
