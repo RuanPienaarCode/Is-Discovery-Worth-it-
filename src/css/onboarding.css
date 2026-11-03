@@ -1,0 +1,220 @@
+/* The first-run questions (src/onboarding.js). Every rule sits under
+   .dc-onb. One column that works down to 320px; tap targets are 44px or
+   more. Product colours reuse the .dc-p-* variables from styles.css. Buttons
+   are reset at (0,2,1) so Obsidian's own `button` and tablet rules cannot
+   leak their height and padding in. No :has(), no color-mix(): the selected
+   look is an .is-on class the script toggles. */
+
+.dc-onb {
+  --p: var(--interactive-accent);
+  --p-rgb: var(--interactive-accent-rgb, 124, 92, 255);
+  box-sizing: border-box;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+  color: var(--text-normal);
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  font-variant-numeric: tabular-nums;
+}
+.dc-onb [hidden] { display: none; }
+.dc-onb *, .dc-onb *::before, .dc-onb *::after { box-sizing: border-box; }
+
+/* ── top: step count, dots, skip ─────────────────────── */
+.dc-onb-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+.dc-onb-progress { min-width: 0; }
+.dc-onb .dc-onb-stepno {
+  margin: 0 0 6px;
+  font-size: var(--font-ui-smaller);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.dc-onb .dc-onb-dots { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.dc-onb .dc-onb-dot {
+  width: 10px;
+  height: 10px;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--background-modifier-border);
+}
+.dc-onb .dc-onb-dot.is-done { background: var(--text-faint); }
+.dc-onb .dc-onb-dot.is-now { width: 24px; border-radius: 5px; background: var(--interactive-accent); }
+
+.dc-onb button.dc-onb-skip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  box-shadow: none;
+  height: auto;
+  font: inherit;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  text-decoration: underline;
+  white-space: normal;
+  cursor: pointer;
+}
+
+/* ── the card ────────────────────────────────────────── */
+.dc-onb-card {
+  padding: 20px 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  background: var(--background-primary);
+}
+.dc-onb .dc-onb-h { margin: 0 0 8px; font-size: 1.35em; line-height: 1.25; font-weight: 700; }
+.dc-onb .dc-onb-h:focus { outline: none; }
+.dc-onb .dc-onb-lead { margin: 0 0 16px; color: var(--text-muted); line-height: 1.5; }
+.dc-onb .dc-onb-hint { margin: 0 0 8px; color: var(--text-muted); font-size: var(--font-ui-small); line-height: 1.45; }
+.dc-onb .dc-onb-error {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border-left: 4px solid var(--color-red);
+  border-radius: 0 6px 6px 0;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  line-height: 1.45;
+}
+
+.dc-onb .dc-onb-points { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.dc-onb .dc-onb-points li {
+  margin: 0;
+  padding: 0 0 0 16px;
+  border-left: 3px solid var(--interactive-accent);
+  line-height: 1.5;
+}
+
+/* ── groups of choices ───────────────────────────────── */
+.dc-onb .dc-onb-group { min-width: 0; margin: 0 0 20px; padding: 0; border: 0; }
+.dc-onb .dc-onb-group:last-child { margin-bottom: 0; }
+.dc-onb .dc-onb-legend { padding: 0; margin: 0 0 6px; font-weight: 600; line-height: 1.35; }
+.dc-onb .dc-onb-opts { display: grid; gap: 8px; }
+.dc-onb .dc-onb-opts.is-compact { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.dc-onb .dc-onb-products { display: grid; gap: 8px; }
+
+.dc-onb .dc-onb-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-primary);
+  cursor: pointer;
+}
+.dc-onb .dc-onb-opt.is-on {
+  border-color: var(--interactive-accent);
+  background: var(--background-secondary);
+  box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+.dc-onb .dc-onb-prod { border-left: 4px solid var(--p); }
+.dc-onb .dc-onb-prod.is-on { box-shadow: none; border-color: var(--p); }
+.dc-onb .dc-onb-opts.is-compact .dc-onb-opt { align-items: center; }
+
+.dc-onb input.dc-onb-in {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  accent-color: var(--interactive-accent);
+  cursor: pointer;
+}
+.dc-onb .dc-onb-opt-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.dc-onb .dc-onb-opt-label { display: flex; align-items: center; gap: 8px; font-weight: 600; line-height: 1.35; }
+.dc-onb .dc-onb-opt-hint { color: var(--text-muted); font-size: var(--font-ui-small); line-height: 1.4; }
+.dc-onb .dc-onb-prod-icon { color: var(--p); }
+.dc-onb .dc-icon { display: inline-flex; width: 16px; height: 16px; flex: none; }
+.dc-onb .dc-icon svg { width: 100%; height: 100%; }
+
+/* the benefits screen: one tight block per benefit */
+.dc-onb .dc-onb-benefit { padding-bottom: 16px; border-bottom: 1px solid var(--background-modifier-border); }
+.dc-onb .dc-onb-benefit:last-child { padding-bottom: 0; border-bottom: 0; }
+
+/* ── number fields ───────────────────────────────────── */
+.dc-onb .dc-onb-fields { display: flex; flex-wrap: wrap; gap: 12px; }
+.dc-onb .dc-onb-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 120px; min-width: 0; }
+.dc-onb .dc-onb-field-label { font-size: var(--font-ui-small); color: var(--text-muted); }
+.dc-onb input.dc-onb-num {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font: inherit;
+  font-size: 16px;
+}
+.dc-onb input.dc-onb-num[aria-invalid="true"] { border-color: var(--color-red); }
+
+/* ── back and next ───────────────────────────────────── */
+.dc-onb-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.dc-onb .dc-onb-nav-gap { flex: none; }
+.dc-onb button.dc-onb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  height: auto;
+  padding: 0 20px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-primary);
+  box-shadow: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-normal);
+  white-space: normal;
+  cursor: pointer;
+}
+.dc-onb button.dc-onb-btn.is-primary {
+  margin-left: auto;
+  border-color: var(--interactive-accent);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.dc-onb button.dc-onb-btn.is-quiet { background: none; }
+.dc-onb button.dc-onb-btn:disabled,
+.dc-onb button.dc-onb-skip:disabled { opacity: 0.5; cursor: default; }
+
+/* focus rings: :focus-visible needs iOS 15.4, so it stands alone and an
+   older WebKit gets :focus in the fallback below */
+.dc-onb input:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+.dc-onb button:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+@supports not selector(:focus-visible) {
+  .dc-onb input:focus { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+  .dc-onb button:focus { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+}
+
+/* ── motion: only for people who have not asked for less ─ */
+@media (prefers-reduced-motion: no-preference) {
+  .dc-onb-card.is-animated { animation: dc-onb-in 220ms ease-out; }
+  .dc-onb .dc-onb-dot { transition: width 180ms ease-out, background-color 180ms ease-out; }
+}
+@keyframes dc-onb-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (min-width: 480px) {
+  .dc-onb { padding: 28px 24px 40px; }
+  .dc-onb-card { padding: 28px 24px; }
+}

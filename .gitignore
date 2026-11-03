@@ -10,3 +10,8 @@ _preview/discovery-worth-it.css
 _preview/obsidian-app.css
 # never commit real statement figures
 *.local.*
+
+# the plugin's own settings file and any statement a developer drops in
+# while testing hold real figures: never commit them
+data.json
+*.statement.csv

@@ -14,6 +14,8 @@
    that matches Discovery. A gain under MATERIAL a year is not worth the
    switch, so it reads as good. */
 
+const { has, only } = require('./switch');
+
 const MATERIAL = 600;
 
 /* The best priced row of a comparison (rows come best first), skipping a
@@ -35,12 +37,14 @@ function fromMarket(id, cmp, name, opts) {
 }
 
 /* st: the bank statement; cmp: { health, gap, insure, life, home } from
-   compare.js (null where there is nothing to compare). */
-function buildVerdicts(st, cmp) {
-  const c = cmp || {};
+   compare.js (null where there is nothing to compare); products: the
+   resolveProducts() map — a product set to false gets no verdict (leave it
+   out for all). */
+function buildVerdicts(st, cmp, products) {
+  const c = only(cmp, products);
   const out = {};
 
-  const alt = st && st.chosen;
+  const alt = has(products, 'bank') && st && st.chosen;
   if (alt) {
     out.bank = st.verdict === 'stay'
       ? { id: 'bank', tone: 'good', word: 'Worth it', amount: -alt.gainIfSwitch, vs: alt.name, why: 'Its rewards are worth more than its fees, and more than the other bank would give you.' }
@@ -93,6 +97,8 @@ function buildVerdicts(st, cmp) {
     }
   }
 
+  /* a product left out has no verdict at all, not an empty one */
+  for (const id of ['bank', 'health', 'gap', 'insure', 'life']) if (!has(products, id)) delete out[id];
   return out;
 }
 

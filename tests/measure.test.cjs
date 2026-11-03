@@ -95,6 +95,19 @@ assert.strictEqual(m2.lastSeen['insure.driveCash'], '2024-11-20');
 assert.strictEqual(m2.lastSeen['product.insureClaim'], '2025-02-03');
 assert.strictEqual(total(m2, 'insure.driveCash'), 0, 'outside the window');
 
+// partner spend on another bank's account counts as all.<tag>, never as Discovery card spend
+const mA = measure([
+  r('2026-09-02', 'Other Card', 'VIRGIN ACTIVE SOMETOWN', 'Gym', -450),
+  r('2026-09-03', 'Other Card', 'WOOLWORTHS SOMETOWN', 'Groceries', -900),
+  r('2026-09-04', 'Other Card', 'WOOLWORTHS SOMETOWN', 'Card payment', -100),
+  r('2026-09-05', 'Credit Card', 'CLICKS SOMETOWN', 'Pharmacy', -200),
+], { ...accounts, 'Other Card': { institution: 'Other Bank', type: 'credit_card' } }, { ...categories, 'Card payment': 'transfer' }, { from: '2026-09', to: '2026-09' });
+assert.strictEqual(total(mA, 'all.gym'), 450);
+assert.strictEqual(total(mA, 'all.shop.woolworths'), 900, 'a transfer-typed row is not spend');
+assert.strictEqual(total(mA, 'all.shop.clicks'), 200, 'a Discovery card counts too');
+assert.strictEqual(total(mA, 'shop.woolworths'), 0, 'not on a Discovery card');
+assert.strictEqual(total(mA, 'spend.card'), 200);
+
 assert.deepStrictEqual(monthsBetween('2025-11', '2026-02'), ['2025-11', '2025-12', '2026-01', '2026-02']);
 assert.deepStrictEqual(trailingWindow(new Date(2026, 9, 21), 12), { from: '2025-10', to: '2026-09' });
 assert.deepStrictEqual(trailingWindow(new Date(2026, 0, 5), 3), { from: '2025-10', to: '2025-12' });

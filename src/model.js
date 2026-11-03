@@ -21,8 +21,45 @@
    All amounts returned are annual: total × 12 / months that hold data. */
 
 const { total, monthsBetween } = require('./measure');
-const { rate, ALTERNATIVES, FACE_VALUE } = require('./rates');
+const { rate, ALTERNATIVES, FACE_VALUE, suiteOf, bankProductOf } = require('./rates');
 const { monthLabel, dayLabel } = require('./format');
+const { BENEFITS, WEIGHT, suggestBenefits, levelOf, availableFor, anyKey } = require('./benefits');
+
+/* detect.js's resolveVitality when it is there (it reads the products
+   list, which pulls in compare.js), else the same rule written here. */
+let detect = null;
+try { detect = require('./detect'); } catch (e) { detect = null; }
+
+/* Which products and Vitality programmes this person has, for what the
+   statement may count (benefits.js availableFor). opts.products and
+   opts.vitality, when given, are the resolved maps and win. Otherwise a
+   true or false in settings wins, and an unanswered product counts as had
+   (the old behaviour). An unanswered Vitality Money is read from the
+   budget: a Vitality Money premium, the extra interest it pays, or the
+   bank's Miles on the Miles statement. Vitality Health follows Discovery
+   Health and Vitality Drive follows Insure. */
+function setupOf(m, settings, ms, opts) {
+  const o = opts || {};
+  const set = (settings && settings.products) || {};
+  const products = Object.assign({}, o.products || {});
+  for (const k of ['bank', 'health', 'gap', 'insure', 'life']) {
+    if (typeof products[k] !== 'boolean') products[k] = set[k] !== false;
+  }
+  const stmt = (ms && ms.figures) || {};
+  const moneySeen = total(m, 'fee.vitalityMoney') > 0 || total(m, 'interest.boost') > 0 || total(m, 'interest.cashback') > 0
+    || ['base', 'gameboard', 'money.healthyFood', 'money.healthyCare', 'money.fuel', 'money.partners'].some(k => stmt[k] > 0);
+  let vitality = o.vitality || null;
+  if (!vitality && detect && typeof detect.resolveVitality === 'function') {
+    try {
+      const found = k => ({ found: products[k] });
+      vitality = detect.resolveVitality(settings, { bank: found('bank'), health: found('health'), gap: found('gap'), insure: found('insure'), life: found('life') }, { vitalityMoney: moneySeen });
+    } catch (e) { vitality = null; }
+  }
+  const v = vitality || {};
+  const sv = (settings && settings.vitality) || {};
+  const pick = (k, dflt) => (typeof v[k] === 'boolean' ? v[k] : typeof sv[k] === 'boolean' ? sv[k] : dflt);
+  return { products, vitality: { money: pick('money', moneySeen), health: pick('health', products.health), drive: pick('drive', products.insure) } };
+}
 
 const sumKeys = (m, keys) => keys.reduce((s, k) => s + total(m, k), 0);
 const inMonth = (m, key, ym) => (m.figures[key] && m.figures[key].perMonth[ym]) || 0;
@@ -84,7 +121,7 @@ function statementView(ms, m) {
   return { covered: months.length, months, from: months[0], to: months[months.length - 1], miles: key => ms.figures[key] || 0, ms };
 }
 
-function buildStatement(m, settings, milesSummary) {
+function buildStatement(m, settings, milesSummary, opts) {
   const st = settings.status || {};
   const R = (key, spend) => rate(settings, key, st, { spend });
   const r = key => R(key, 0);
@@ -125,31 +162,45 @@ function buildStatement(m, settings, milesSummary) {
   const avgSpend = cardSpendYear / 12;
 
   // ── What Discovery Bank costs ────────────────────────────────────────
-  line('cost', 'fee.account', 'Monthly account fee', yr(total(m, 'fee.account')), 'measured', 'The account\'s monthly fee on your Discovery statements. It has been R435 a month since January 2026.');
-  line('cost', 'fee.facility', 'Credit card fee', yr(total(m, 'fee.facility')), 'measured', 'The credit card\'s own monthly fee (R69).');
-  line('cost', 'fee.vitalityMoney', 'Vitality Money fee', yr(total(m, 'fee.vitalityMoney')), 'measured', 'Vitality Money is the part of Discovery Bank that gives you the extra Miles and discounts below. You only get it with Discovery Bank. It has been R101 a month since January 2026.');
+  /* The published fees of THIS person's product (rates.js BANK_PRODUCTS),
+     for the detail texts; the figures counted are always the statements'. */
+  const prod = bankProductOf(settings);
+  const onProd = (fee, what) => (fee > 0 ? ` The ${prod.label}'s published ${what} is ${fmtR(fee)} a month.` : '');
+  const status = st.money || 'Blue';
+  /* the most a band rate pays at your status (the top spend band) */
+  const topPct = key => R(key, 1e9);
+  const upTo = key => (topPct(key) > 0 ? ` (up to ${fmtPct(topPct(key))} at your ${status} status)` : '');
+  line('cost', 'fee.account', 'Monthly account fee', yr(total(m, 'fee.account')), 'measured', 'The account\'s monthly fee on your Discovery statements.' + onProd(prod.accountFee, 'account fee'));
+  line('cost', 'fee.facility', 'Credit card fee', yr(total(m, 'fee.facility')), 'measured', 'The credit card\'s own monthly fee.' + onProd(prod.creditFee, 'credit card fee'));
+  line('cost', 'fee.vitalityMoney', 'Vitality Money fee', yr(total(m, 'fee.vitalityMoney')), 'measured', 'Vitality Money is the part of Discovery Bank that gives you the extra Miles and discounts below. You only get it with Discovery Bank.' + onProd(prod.vitalityMoneyFee, 'Vitality Money fee'));
   line('cost', 'fee.other', 'Other bank charges', yr(total(m, 'fee.other')), 'measured', 'Anything else marked as a bank charge on a Discovery account.');
 
   // ── What you would lose by leaving ───────────────────────────────────
   let miles = 0, hfMoney = 0, hfHealth = 0, hcMoney = 0, hcHealth = 0, fuelDrive = 0, fuelMoney = 0, fuelCounted = 0;
+  /* The bank's extras need the Discovery card, so they read the card's
+     shop figures. Vitality Health pays whichever card paid, so its share
+     reads spend on any account (all.<key>, measure.js) when it was measured. */
   const [foodPrimary, foodSecondary] = primaryOf(m, 'shop.checkers', 'shop.woolworths');
   const [carePrimary] = primaryOf(m, 'shop.clicks', 'shop.dischem');
+  const [foodPrimaryAny, foodSecondaryAny] = primaryOf(m, anyKey(m, 'shop.checkers'), anyKey(m, 'shop.woolworths'));
+  const [carePrimaryAny] = primaryOf(m, anyKey(m, 'shop.clicks'), anyKey(m, 'shop.dischem'));
   const minSpend = r('healthyMinSpend');
   const over = q => (q >= minSpend ? q : 0);
   for (const ym of m.months) {
     const spend = cardIn(ym);
     miles += monthMiles(spend, r);
 
-    const q1 = over(Math.max(0, inMonth(m, foodPrimary, ym)) * r('healthyFoodShare') / 100);
-    const q2 = over(Math.max(0, inMonth(m, foodSecondary, ym)) * r('healthyFoodShare') / 100);
+    const food = key => over(Math.max(0, inMonth(m, key, ym)) * r('healthyFoodShare') / 100);
+    const q1 = food(foodPrimary);
+    const a1 = food(foodPrimaryAny), a2 = food(foodSecondaryAny);
     const hCap = r('healthyFoodHealthCap');
-    const h1 = Math.min(q1, hCap);
-    hfHealth += h1 * r('healthyFoodHealthPct') / 100 + Math.min(q2, Math.max(0, hCap - h1)) * r('healthyFoodSecondaryPct') / 100;
+    const h1 = Math.min(a1, hCap);
+    hfHealth += h1 * r('healthyFoodHealthPct') / 100 + Math.min(a2, Math.max(0, hCap - h1)) * r('healthyFoodSecondaryPct') / 100;
     hfMoney += Math.min(q1, r('healthyFoodMoneyCap')) * R('healthyFoodMoneyPct', spend) / 100;
 
-    const qc = over(Math.max(0, inMonth(m, carePrimary, ym)) * r('healthyCareShare') / 100);
-    hcHealth += Math.min(qc, r('healthyCareCap')) * r('healthyCareHealthPct') / 100;
-    hcMoney += Math.min(qc, r('healthyCareMoneyCap')) * R('healthyCareMoneyPct', spend) / 100;
+    const care = key => over(Math.max(0, inMonth(m, key, ym)) * r('healthyCareShare') / 100);
+    hcHealth += Math.min(care(carePrimaryAny), r('healthyCareCap')) * r('healthyCareHealthPct') / 100;
+    hcMoney += Math.min(care(carePrimary), r('healthyCareMoneyCap')) * R('healthyCareMoneyPct', spend) / 100;
 
     const fuel = Math.min(Math.max(0, inMonth(m, 'fuel.bp', ym) + inMonth(m, 'fuel.shell', ym)), r('fuelCap') * Math.max(1, r('fuelDrivers')));
     fuelCounted += fuel;
@@ -181,19 +232,19 @@ function buildStatement(m, settings, milesSummary) {
   const hf = split('healthyFood', hfMoney, hfHealth);
   const partner = k => (k === 'shop.checkers' ? 'Checkers' : 'Woolworths');
   line('bank', 'miles.healthyFood', 'Extra HealthyFood Miles from the bank', yr(hf.bank), hf.source,
-    `We take ${r('healthyFoodShare')}% of what you spend at ${partner(foodPrimary)} as HealthyFood (it is your main HealthyFood shop, and the bank's extra only applies there). On up to ${fmtR(r('healthyFoodMoneyCap'))} of HealthyFood a month the bank adds a percentage that grows with that month's card spend (up to 25% at Diamond). A month with less than ${fmtR(minSpend)} of HealthyFood gets nothing.`,
+    `We take ${r('healthyFoodShare')}% of what you spend at ${partner(foodPrimary)} as HealthyFood (it is your main HealthyFood shop, and the bank's extra only applies there). On up to ${fmtR(r('healthyFoodMoneyCap'))} of HealthyFood a month the bank adds a percentage that grows with that month's card spend${upTo('healthyFoodMoneyPct')}. A month with less than ${fmtR(minSpend)} of HealthyFood gets nothing.`,
     ['healthyFoodShare', 'healthyFoodMoneyPct', 'healthyFoodMoneyCap', 'healthyMinSpend'], { miles: hf.miles });
 
   const hc = split('healthyCare', hcMoney, hcHealth);
   line('bank', 'miles.healthyCare', 'Extra HealthyCare Miles from the bank', yr(hc.bank), hc.source,
-    `We take ${r('healthyCareShare')}% of what you spend at ${carePrimary === 'shop.clicks' ? 'Clicks' : 'Dis-Chem'} as HealthyCare. On up to ${fmtR(r('healthyCareMoneyCap'))} of it a month the bank adds a percentage that grows with that month's card spend. A month with less than ${fmtR(minSpend)} of HealthyCare gets nothing.`,
+    `We take ${r('healthyCareShare')}% of what you spend at ${carePrimary === 'shop.clicks' ? 'Clicks' : 'Dis-Chem'} as HealthyCare. On up to ${fmtR(r('healthyCareMoneyCap'))} of it a month the bank adds a percentage that grows with that month's card spend${upTo('healthyCareMoneyPct')}. A month with less than ${fmtR(minSpend)} of HealthyCare gets nothing.`,
     ['healthyCareShare', 'healthyCareMoneyPct', 'healthyCareMoneyCap', 'healthyMinSpend'], { miles: hc.miles });
 
   const fm = num(actual.fuel) ? { annual: yr(Number(actual.fuel) * mileValue), source: 'entered' }
     : sv ? { annual: fromStmt('money.fuel'), source: 'statement' }
       : { annual: yr(fuelMoney), source: 'estimated' };
   line('bank', 'fuel.money', 'Extra fuel Miles from the bank', fm.annual, fm.source,
-    'A percentage of what you spend at bp and Shell, paid in Miles. The percentage grows with that month\'s card spend (up to 15% at Diamond from 1 Nov 2026). It needs Vitality Money, so you lose it if you leave the bank.',
+    `A percentage of what you spend at bp and Shell, paid in Miles. The percentage grows with that month's card spend${upTo('fuelMoneyPct')}. It needs Vitality Money, so you lose it if you leave the bank.`,
     ['fuelMoneyPct'], { miles: fm.source !== 'estimated' });
 
   if (sv) {
@@ -224,7 +275,7 @@ function buildStatement(m, settings, milesSummary) {
       `The watch costs ${fmtR(watchMonthly)} a month in full, ${fmtR(watchMonthly * 24)} over its 24-month contract${!watchSet ? ` (worked out from what you were charged in months you missed goals: ${charges.map(c => fmtR(c)).join(', ')}; three goals met costs half, two goals three quarters)` : ''}. You pay less, or nothing, in months you meet your weekly exercise goals. This is that saving, less the ${fmtR(paid)} a year you did pay and the ${fmtR(r('appleWatchActivation'))} activation fee spread over two years. It needs the Discovery Bank Suite with a credit card; a new watch means a new 24-month contract.`,
       ['appleWatchMonthly', 'appleWatchActivation']);
   }
-  line('bank', 'interest.boost', 'Extra interest on your savings', yr(total(m, 'interest.boost')), 'measured', 'The extra interest Discovery Bank adds to your accounts for your Vitality Money status (up to 1,5% more on savings at Diamond).');
+  line('bank', 'interest.boost', 'Extra interest on your savings', yr(total(m, 'interest.boost')), 'measured', `The extra interest Discovery Bank adds to your accounts for your Vitality Money status${(() => { const b = r(prod.kind === 'card' ? 'ccSavingsBoostPct' : 'savingsBoostPct'); return b > 0 ? ` (${fmtPct(b)} more on savings at your ${status} status)` : ''; })()}.`);
   line('bank', 'interest.cashback', 'Cashback on money left in the card', yr(total(m, 'interest.cashback')), 'measured', 'Interest paid on money you keep in the credit card account.');
 
   /* Receipts count only for the window they were typed for. */
@@ -264,6 +315,13 @@ function buildStatement(m, settings, milesSummary) {
     travelSource = 'estimated';
     travelDetail = `You paid ${fmtR(yr(paid))} a year on Vitality Travel. With ${fmtR(avgSpend)} a month of card spend, the bank adds ${money}% off on top of Vitality Health's ${healthPct}%. That only applies to local flights you book for yourself, up to three return flights a year; flights for others get Vitality Health's part only. Type your receipts on the Inputs tab for the real figure.`;
   }
+  /* Bookings paid with another bank's card get Vitality Health's part only
+     (all.travel.vitality less what the Discovery card paid). */
+  if (!receiptsFit) {
+    const elsewhere = Math.max(0, total(m, anyKey(m, 'travel.vitality')) - Math.max(0, total(m, 'travel.vitality')));
+    const hp = receipts ? Math.min(Number(tr.discount), Number(tr.baseFare) * healthPct / 100) / Number(tr.baseFare) : healthPct / 100;
+    if (elsewhere > 0 && hp < 1) travelStays += yr(elsewhere / (1 - hp) * hp);
+  }
   line('bank', 'travel.bank', 'Flight discount from the bank', travelBank, travelSource, travelDetail, ['travelHealthPct', 'travelMoneyPct'], { travel: true });
 
   // ── Kept whichever bank you use (listed, not counted) ────────────────
@@ -284,9 +342,10 @@ function buildStatement(m, settings, milesSummary) {
     ['driveFunderAccount', 'fuelDrivePct', 'fuelCap', 'fuelDrivers'], { funder });
   /* Gym: the current monthly price, so a month before the discount started
      does not inflate the saving. */
-  const gym = m.figures.gym;
+  const gymKey = anyKey(m, 'gym');
+  const gym = m.figures[gymKey];
   const gymLatest = gym ? gym.perMonth[Object.keys(gym.perMonth).sort().pop()] : 0;
-  line('stays', 'gym', 'Gym fees (after the Vitality discount)', yr(total(m, 'gym')), 'measured', 'Virgin Active or Planet Fitness. Vitality Health gives you 75% off (36 visits a year), with or without the bank.');
+  line('stays', 'gym', 'Gym fees (after the Vitality discount)', yr(total(m, gymKey)), 'measured', `Virgin Active or Planet Fitness. Vitality Health gives you ${fmtPct(r('gymDiscountPct'))} off (36 visits a year), with or without the bank.`);
   line('stays', 'healthyFood.health', 'HealthyFood Miles from Vitality Health', yr(hf.stays), hf.source, 'Vitality Health pays these whether or not you bank with Discovery (each Mile counted at 10c).', ['healthyFoodHealthPct', 'healthyFoodSecondaryPct', 'healthyFoodHealthCap']);
   line('stays', 'healthyCare.health', 'HealthyCare Miles from Vitality Health', yr(hc.stays), hc.source, 'Vitality Health pays these whether or not you bank with Discovery (each Mile counted at 10c).', ['healthyCareHealthPct', 'healthyCareCap']);
   line('stays', 'travel.health', 'Flight discount from Vitality Health', travelStays, travelSource, 'The part of the flight discount you keep without the bank.', ['travelHealthPct']);
@@ -301,6 +360,37 @@ function buildStatement(m, settings, milesSummary) {
   line('elsewhere', 'fee.fx', 'Foreign payment fees', yr(total(m, 'fee.fx')), 'measured', 'Fees for paying in other currencies. Discovery charges 2% (at most R100 a payment) and lists a 3% conversion fee; FNB charges 2,75%.');
   line('elsewhere', 'interest.charged', 'Interest charged on the card', yr(total(m, 'interest.charged')), 'measured', 'Every bank charges interest when the card is not paid off in full.');
   line('elsewhere', 'interest.earned', 'Normal interest on savings', yr(total(m, 'interest.earned')), 'measured', 'Other banks pay interest too, so only the extra interest above counts for Discovery.');
+
+  /* What each benefit is worth to YOU (benefits.js): a weighted line keeps
+     its whole value as `full` and counts `full × weight`. Costs are never
+     weighted. */
+  /* A line this person's setup cannot earn (no Vitality Health, a savings
+     account only…) counts nothing whatever its level, and says so with
+     available: false; its whole value is still kept as `full`. */
+  const setup = setupOf(m, settings, milesSummary, opts);
+  const avail = availableFor(settings, setup.products, setup.vitality);
+  const suggestions = suggestBenefits(m, milesSummary, settings);
+  const benefits = {};
+  const benefitOf = {};
+  for (const b of BENEFITS) {
+    const sug = suggestions[b.id] || { suggested: 'full', why: '' };
+    const a = avail.benefits[b.id];
+    benefits[b.id] = { level: levelOf(settings, b.id, sug), suggested: sug.suggested, why: sug.why, full: 0, counted: 0, available: a.available, reason: a.reason, note: a.note };
+    for (const k of b.lineKeys) benefitOf[k] = b.id;
+  }
+  for (const l of lines) {
+    const id = benefitOf[l.key];
+    if (!id || l.group === 'cost') continue;
+    const open = avail.lines.has(l.key);
+    const w = open ? WEIGHT[benefits[id].level] : 0;
+    l.full = l.annual;
+    l.weight = w;
+    l.benefit = id;
+    l.available = open;
+    l.annual = w === 0 ? 0 : l.full * w;
+    /* worth at full use counts only what this setup can earn */
+    if (Number.isFinite(l.full) && open) { benefits[id].full += l.full; benefits[id].counted += l.annual; }
+  }
 
   /* Which way each figure points on the page: money out is negative. */
   const OUT = new Set(['fee.fx', 'fee.penalty', 'interest.charged', 'gym', 'benefit.appleWatch']);
@@ -321,13 +411,19 @@ function buildStatement(m, settings, milesSummary) {
   const best = alternatives.slice().sort((x, y) => y.net - x.net)[0] || null;
   const chosen = alternatives.find(a => a.id === settings.compareWith) || best;
 
-  const downgrade = downgradeResult({ lines, r, R, m, yr, monthly, avgSpend, net, watchMonthly });
+  const downgrade = downgradeResult({ settings, st, lines, r, R, m, yr, monthly, avgSpend, net, watchMonthly });
 
   const bill = discoveryBill(m, yr, settings.bill || {});
   const gd = Math.min(95, r('gymDiscountPct')) / 100;
+  const gymSavingFull = gd > 0 ? (gymLatest * 12 / (1 - gd)) * gd : 0;
+  const gymOpen = avail.lines.has('gym');
+  const gymWeight = gymOpen ? WEIGHT[benefits.gym.level] : 0;
+  benefits.gym.full = gymOpen ? gymSavingFull : 0;
+  benefits.gym.counted = gymWeight === 0 ? 0 : gymSavingFull * gymWeight;
   const vitality = {
     premium: bill.vitalityMonthly !== null ? bill.vitalityMonthly * 12 : null,
-    gymSaving: gd > 0 ? (gymLatest * 12 / (1 - gd)) * gd : 0,
+    gymSaving: benefits.gym.counted,
+    gymSavingFull,
     rewards: sumKeysOf(lines, ['healthyFood.health', 'healthyCare.health', 'travel.health', 'activeRewards', 'activeRewards.basic']),
   };
   vitality.value = vitality.gymSaving + vitality.rewards;
@@ -343,6 +439,11 @@ function buildStatement(m, settings, milesSummary) {
     cardSpendSource: swipes ? 'statement' : 'transactions',
     avgMonthlySpend: avgSpend,
     lines, cost, value, net,
+    /* { [benefit id]: { level, suggested, why, full, counted, available,
+       reason, note } }, annual rands */
+    benefits,
+    /* the products and Vitality programmes the benefits were judged on */
+    setup: { products: setup.products, vitality: setup.vitality, bankKind: settings && settings.bankKind ? settings.bankKind : null },
     cautious: { value: cautiousValue, net: cautiousNet },
     alternatives, best, chosen, downgrade,
     verdict: chosen ? (chosen.gainIfSwitch > 0 ? 'switch' : 'stay') : null,
@@ -394,13 +495,23 @@ function altResult(a, settings, st, m, monthly, n, net, cautiousNet) {
   };
 }
 
-/* Keeping Discovery but dropping the Suite for a standalone Black Credit
-   Card Account: lower fees, pay-as-you-transact charges, a lower base-Miles
-   rate, smaller flight and savings boosts, and no Apple Watch benefit
-   (it needs a Suite). HealthyFood, HealthyCare, fuel, the gameboard and
-   Miles+ are the same on both (Black rewards guide). */
-function downgradeResult({ lines, r, R, m, yr, monthly, avgSpend, net, watchMonthly }) {
+/* Keeping Discovery but dropping the Suite for your collection's Credit
+   Card Account on its own: lower fees, pay-as-you-transact charges, a lower
+   base-Miles rate, smaller flight and savings boosts, and no Apple Watch
+   benefit (it needs a Suite). The card's own reward tables decide the rest
+   (rates.js BANK_PRODUCTS): on Black and Platinum HealthyFood, HealthyCare
+   and fuel are the same, but the Gold Credit Card Account gets no HealthyCare
+   from the bank. null when there is nothing to move to: Purple has no Credit
+   Card Account, and someone already on a card, transaction or savings
+   account has no Suite to drop. */
+function downgradeResult({ settings, st, lines, r, R, m, yr, monthly, avgSpend, net, watchMonthly }) {
+  const suite = suiteOf(settings);
+  const kind = settings && settings.bankKind;
+  if (!suite.creditCard || kind === 'card' || kind === 'transaction' || kind === 'savings') return null;
   const L = key => { const l = lines.find(x => x.key === key && x.group === 'bank'); return l ? l.annual : 0; };
+  /* the same rate on the Credit Card Account, at this average card spend */
+  const onCard = key => rate(settings, key, st, { spend: avgSpend, bankKind: 'card' });
+  const ratioOf = key => { const now = R(key, avgSpend); return now > 0 ? onCard(key) / now : 1; };
   const fees = r('ccFee') * 12;
   const payments = yr(total(m, 'payt.payments'));
   const payt = payments * r('paytFee');
@@ -415,6 +526,10 @@ function downgradeResult({ lines, r, R, m, yr, monthly, avgSpend, net, watchMont
     { key: 'travel.bank', label: `Smaller flight discount from the bank (${fmtPct(flightCc)} instead of ${fmtPct(flightSuite)})`, delta: flightSuite > 0 ? L('travel.bank') * (flightCc / flightSuite - 1) : 0 },
     { key: 'interest.boost', label: `Less extra interest on savings (${fmtPct(r('ccSavingsBoostPct'))} instead of ${fmtPct(r('savingsBoostPct'))})`, delta: L('interest.boost') * (boostRatio - 1) },
     { key: 'interest.cashback', label: 'Less cashback on money left in the card', delta: L('interest.cashback') * (boostRatio - 1) },
+    ...[['miles.healthyFood', 'healthyFoodMoneyPct', 'HealthyFood'], ['miles.healthyCare', 'healthyCareMoneyPct', 'HealthyCare'], ['fuel.money', 'fuelMoneyPct', 'fuel']].map(([key, rk, what]) => {
+      const ratio = ratioOf(rk);
+      return { key, label: ratio === 0 ? `No extra ${what} from the bank on the ${suite.creditCard.label}` : `${ratio < 1 ? 'Less' : 'More'} extra ${what} from the bank`, delta: L(key) * (ratio - 1) };
+    }),
     { key: 'appleWatch', label: 'No Apple Watch deal (it needs the Suite)', delta: -L('appleWatch') },
   ].filter(c => Math.abs(c.delta) >= 0.5);
   const value = lines.filter(l => l.group === 'bank').reduce((s, l) => s + l.annual, 0) + changes.reduce((s, c) => s + c.delta, 0);
@@ -428,6 +543,7 @@ function downgradeResult({ lines, r, R, m, yr, monthly, avgSpend, net, watchMont
     watchEnds = `${y + 2}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   }
   return {
+    label: suite.creditCard.label,
     fees, payments, payt, cost, value, net: ddNet, changes,
     gainIfDowngrade: ddNet - net,
     /* once the watch term is over the Suite no longer carries the watch */

@@ -1,3 +1,4 @@
+# Is Discovery Worth It? (plugin id discovery-worth-it), RuanPienaarCode/Is-Discovery-Worth-it-
 # The pre-tag gate, run on every pull request and every push to main: the
 # same steps as a local ./build.sh, in the same order, so "CI is red" and
 # "build.sh is red" are always the same sentence. Nothing release-only here —

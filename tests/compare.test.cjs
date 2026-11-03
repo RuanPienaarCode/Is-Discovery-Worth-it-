@@ -158,4 +158,22 @@ assert.strictEqual(new Set(HOME_INSURERS.map(a => a.id)).size, HOME_INSURERS.len
 for (const p of INSURERS) assert.ok(p.id && p.name && p.source && Number.isFinite(p.rewardPct) && p.rewardPct >= 0 && p.rewardPct < 100, `insurer ${p.id}`);
 assert.ok(INSURERS.length >= 6, 'at least six insurers');
 
+// ── every Discovery Health plan is priced, so your plan can be guessed ─
+{
+  const { HEALTH_OWN: OWN } = require('../src/compare');
+  const discovery = HEALTH_PLANS.concat(OWN).filter(p => p.discovery);
+  assert.ok(discovery.length >= 30, 'the whole Discovery Health range: ' + discovery.length);
+  assert.strictEqual(new Set(discovery.map(p => p.id)).size, discovery.length, 'unique Discovery plan ids');
+  for (const p of discovery) {
+    assert.ok(p.id && p.plan && p.source, `Discovery plan ${p.id} named and sourced`);
+    for (const members of [{ adults: 1, children: 0 }, { adults: 2, children: 2 }, { adults: 2, children: 5 }]) {
+      const v = healthPremium(p, members);
+      assert.ok(Number.isFinite(v) && v > 0, `healthPremium prices ${p.id} for ${JSON.stringify(members)}`);
+    }
+  }
+  const own = id => OWN.find(p => p.id === id);
+  assert.strictEqual(healthPremium(own('dhClassicSmart'), { adults: 2, children: 1 }), 3018 + 2381 + 1205, 'Classic Smart from the 2026 plan comparison');
+  assert.strictEqual(healthPremium(own('dhExecutive'), { adults: 1, children: 4 }), 12338 + 3 * 2358, 'at most three children are charged');
+}
+
 console.log('compare: ok');

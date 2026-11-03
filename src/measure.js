@@ -117,6 +117,14 @@ function measure(rows, accounts, categories, opts) {
       keep(rule.key, row);
       continue;
     }
+    /* Partner spend on ANY account, as all.<tag>: Vitality Health pays
+       HealthyFood, HealthyCare, the gym and flight discounts whichever
+       bank's card paid. Only Vitality Money's extras need a Discovery card
+       (the shop.* figures below). */
+    if (row.amount < 0 && !NOT_SPEND_TYPES.includes(type) && !notSpend.has(row.category)) {
+      const anyTag = SHOP_TAGS.find(t => t.desc.test(row.description) && !(t.not && t.not.test(row.description)));
+      if (anyTag) add('all.' + anyTag.key, ym, -row.amount);
+    }
     if (!(acct.discovery && acct.card)) continue;
     cardAccounts.add(row.account);
 

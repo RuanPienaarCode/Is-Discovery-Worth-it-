@@ -1,7 +1,7 @@
 'use strict';
-/* Run the calculator over a REAL vault from the terminal and print what it
-   measured and concluded. Prints to stdout only — never write real figures
-   into this repo.
+/* Run Is Discovery Worth It? over a REAL vault from the terminal and print
+   what it measured and concluded. Prints to the terminal only: it writes no
+   file, and nothing it prints may be pasted into this repo (real figures).
      node scripts/real-vault.cjs "<vault path>" [YYYY-MM-DD today] */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -31,6 +31,12 @@ function walk(dir, rel = '', out = []) {
   const all = walk(vault);
   const b = await loadBudget({ paths: () => all, read: async p => fs.readFileSync(path.join(vault, p), 'utf8'), stat: p => { const t = fs.statSync(path.join(vault, p)); return { mtime: t.mtimeMs, size: t.size }; } }, settings.budgetFolder);
   console.log(`budget folder: ${b.folder} · ${b.notes} notes · ${b.rows.length} rows · ${b.skipped} unreadable`);
+  /* Which Discovery products the statements show (added by the detect module;
+     skipped quietly while that module is not in the tree). */
+  try {
+    const { detectProducts } = require('../src/detect');
+    for (const [k, d] of Object.entries(detectProducts(b))) console.log(`  detected ${k.padEnd(7)} ${d.found ? 'yes' : 'no '}  ${d.why || ''}`);
+  } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; }
   const win = trailingWindow(today, settings.months);
   const m = measure(b.rows, b.accounts, b.categories, { ...win, notCardSpend: settings.notCardSpend });
   console.log(`window ${m.from}..${m.to} · ${m.rowsSeen} rows · card accounts ${m.cardAccounts.join(', ')}`);

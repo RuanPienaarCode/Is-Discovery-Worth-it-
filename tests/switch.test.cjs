@@ -180,4 +180,30 @@ assert.deepStrictEqual(SB.rows.find(r => r.key === 'drive').stayItems.map(i => i
 const RB = buildRivals(stB, {});
 assert.deepStrictEqual(RB[0].discovery.items.map(i => i.key), BI.bank.map(i => i.key));
 assert.strictEqual(RB[0].rivals.find(r => r.name === 'Capitec').items[0].kind, 'cash', 'a bank with no reward kind pays cash');
+// ── products left out: not on Compare at all ─────────────────────────
+{
+  const all = buildSwitch(st, cmp, { bank: true, health: true, gap: true, insure: true, life: true });
+  assert.deepStrictEqual(all.rows.map(r => r.key), S.rows.map(r => r.key), 'all products on = no map');
+  const noBank = buildSwitch(st, cmp, { bank: false, health: true, gap: true, insure: true, life: true });
+  assert.ok(!noBank.rows.some(r => r.key === 'bank' || r.key === 'bank.rewards'), 'no bank rows without the bank');
+  assert.ok(!noBank.groups.some(g => g.id === 'bank'), 'no bank group');
+  const onlyBank = buildSwitch(st, cmp, { bank: true, health: false, gap: false, insure: false, life: false });
+  assert.deepStrictEqual(onlyBank.rows.map(r => r.key), ['bank', 'bank.rewards'], 'only the bank: ' + onlyBank.rows.map(r => r.key).join(', '));
+  assert.deepStrictEqual(onlyBank.groups.map(g => g.id), ['bank']);
+  near(onlyBank.gain, (300 - 690) - (12000 - 7200), 'the total is the bank alone');
+  const noHealth = buildSwitch(st, cmp, { bank: true, health: false, gap: true, insure: true, life: true });
+  assert.ok(!noHealth.rows.some(r => ['medical', 'vitality', 'vitality.rewards'].includes(r.key)), 'no medical aid or Vitality Health rows');
+  assert.ok(noHealth.rows.some(r => r.key === 'gap'), 'gap cover stays');
+  const noInsure = buildSwitch(st, cmp, { insure: false });
+  assert.ok(!noInsure.rows.some(r => r.key === 'car' || r.key === 'drive'), 'no car or Drive rows without Insure');
+  assert.ok(noInsure.rows.some(r => r.key === 'life'), 'a product not named stays in');
+
+  const stAlt = { ...st, alternatives: [{ name: 'Capitec Global One', fees: 690, rewards: 300 }] };
+  const rivalsOnlyBank = buildRivals(stAlt, cmp, { bank: true, health: false, gap: false, insure: false, life: false });
+  assert.deepStrictEqual(rivalsOnlyBank.map(x => x.id), ['bank']);
+  const rivalsNoBank = buildRivals(stAlt, cmp, { bank: false });
+  assert.ok(!rivalsNoBank.some(x => x.id === 'bank'), 'no rival banks without the bank');
+  assert.ok(rivalsNoBank.some(x => x.id === 'medical'), 'medical aids still compared');
+}
+
 console.log('switch back items OK');

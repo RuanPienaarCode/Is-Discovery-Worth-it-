@@ -930,3 +930,428 @@
    pushing the table past the screen: a landscape phone is a "wide" layout
    with narrow columns. */
 .dc-cmp-r .dc-amt.is-words { white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.3; }
+
+/* ── the plugin's own artwork (src/art.js) ──────────────────────────────
+   Every mark is line art drawn in currentColor; the class on each mark sets
+   its colour from Obsidian's theme colours, so it follows light and dark.
+   This file owns the size of the .dc-logo box and the .dc-tile-logo mark. */
+
+.dc-art { flex: none; }
+.dc-art-app { color: var(--interactive-accent); }
+.dc-art-bank { color: var(--color-blue); }
+.dc-art-health { color: var(--color-purple); }
+.dc-art-gap { color: var(--color-cyan); }
+.dc-art-insure { color: var(--color-orange); }
+.dc-art-life { color: var(--color-yellow); }
+.dc-art-rewards { color: var(--color-green); }
+.dc-art-miles { color: var(--color-yellow); }
+
+.dc-logo { display: inline-flex; flex: none; width: 20px; height: 20px; }
+.dc-logo > .dc-art { display: block; width: 100%; height: 100%; }
+.dc-tile-logo { display: block; flex: none; width: 18px; height: 18px; }
+.dc-tile .dc-tile-logo { width: 22px; height: 22px; }
+
+/* ── welcome screen ──────────────────────────────────────────────────── */
+/* full bleed, in the theme's own background (light or dark) */
+.workspace-leaf-content .view-content.dc-view.dc-welcoming { padding: 0; background: var(--background-primary); }
+.dc-page .dc-welcome.dc-hello {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: center;
+  align-content: center;
+  gap: 32px;
+  flex: 1;
+  min-height: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 40px 48px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 72% 48%, hsla(var(--interactive-accent-hsl), 0.12), hsla(var(--interactive-accent-hsl), 0) 62%), var(--background-primary);
+  color: var(--text-normal);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.dc-page .dc-welcome.dc-hello.is-leaving { opacity: 0; transform: scale(0.985); }
+.dc-hello-copy { position: relative; z-index: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.dc-page .dc-hello-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  animation: dc-hello-rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.05s both;
+}
+.dc-hello-eyebrow .dc-hello-mark { width: 18px; height: 18px; }
+.dc-page h1.dc-hello-h1 {
+  position: relative;
+  margin: 0 0 6px;
+  padding-bottom: 14px;
+  font-size: 3.6em;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-normal);
+}
+.dc-hello-ch {
+  display: inline-block;
+  animation: dc-hello-rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(0.25s + var(--i, 0) * 0.07s);
+}
+/* a short rule in the five product colours */
+.dc-page h1.dc-hello-h1::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 80px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--color-blue) 0 20%, var(--color-purple) 20% 40%, var(--color-cyan) 40% 60%, var(--color-orange) 60% 80%, var(--color-yellow) 80% 100%);
+  transform-origin: left center;
+  animation: dc-hello-grow 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.9s both;
+}
+.dc-page .dc-hello-sub {
+  margin: 0;
+  max-width: 30em;
+  font-size: var(--font-ui-medium);
+  line-height: 1.5;
+  color: var(--text-muted);
+  animation: dc-hello-rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.8s both;
+}
+.dc-page button.dc-hello-go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 50px;
+  margin-top: 8px;
+  padding: 0 26px;
+  border-radius: 999px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: var(--font-ui-medium);
+  font-weight: 600;
+  text-align: center;
+  animation: dc-hello-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 1.4s both, dc-hello-pulse 2.8s ease-out 3.6s infinite;
+}
+.dc-page button.dc-hello-go .dc-icon { width: 18px; height: 18px; }
+@media (hover: hover) { .dc-page button.dc-hello-go:hover { background: var(--interactive-accent-hover); } }
+.dc-page button.dc-hello-skip {
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  text-decoration: underline;
+  animation: dc-hello-rise 0.6s ease 1.6s both;
+}
+
+/* the picture keeps its space from the first frame (fixed aspect ratio) */
+.dc-page .dc-hello-figure { position: relative; z-index: 1; min-width: 0; margin: 0; }
+.dc-hello-art { display: block; width: 100%; height: auto; max-height: 70vh; aspect-ratio: 400 / 340; overflow: visible; }
+.dc-hello-art text { font-family: var(--font-interface); }
+.dc-hello-art .dc-hello-ink { color: var(--text-muted); }
+.dc-hello-art .dc-hello-knob { fill: var(--background-primary); color: var(--interactive-accent); }
+.dc-hello-art .dc-hello-ask, .dc-hello-art .dc-hello-tick { color: var(--interactive-accent); }
+.dc-hello-art .dc-hello-face { fill: var(--background-primary); }
+.dc-hello-art .dc-hello-cost { color: var(--color-red); }
+.dc-hello-art .dc-hello-back { color: var(--color-green); }
+
+/* The resting picture is the last frame: the scale leaning to the benefit
+   side, the coins in, a tick at the pivot. The animations play from a level
+   scale to there (fill-mode both), so with motion off nothing is lost. */
+.dc-hello-art .dc-hello-beam { transform: rotate(7deg); transform-origin: 0 0; animation: dc-hello-tip 3.2s ease-in-out 0.3s both; }
+.dc-hello-art .dc-hello-pan { transform: rotate(-7deg); transform-origin: 0 0; animation: dc-hello-hang 3.2s ease-in-out 0.3s both; }
+.dc-hello-art .dc-hello-coin { animation: dc-hello-drop 0.55s ease-in 0.45s both; }
+.dc-hello-art .dc-hello-coin.is-back { animation-delay: calc(1.45s + var(--i, 0) * 0.15s); }
+.dc-hello-art .dc-hello-ask { opacity: 0; animation: dc-hello-out 0.3s ease 2.9s both; }
+.dc-hello-art .dc-hello-tick { stroke-dasharray: 22; stroke-dashoffset: 0; animation: dc-hello-draw 0.45s ease-out 3.05s both; }
+.dc-hello-art .dc-hello-chip {
+  transform-origin: 0 0;
+  animation: dc-hello-pop 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both, dc-hello-bob 3.6s ease-in-out infinite alternate;
+  animation-delay: calc(0.15s + var(--i, 0) * 0.08s), calc(3.4s + var(--i, 0) * 0.35s);
+}
+
+/* hold every animation on its first frame until the layout has settled */
+.dc-page .dc-hello:not(.is-ready) *, .dc-page .dc-hello:not(.is-ready) h1.dc-hello-h1::after { animation-play-state: paused; }
+
+@keyframes dc-hello-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes dc-hello-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes dc-hello-pop { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: none; } }
+@keyframes dc-hello-bob { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+@keyframes dc-hello-drop {
+  0% { opacity: 0; transform: translateY(-170px); }
+  25% { opacity: 1; }
+  80% { opacity: 1; transform: translateY(0); }
+  90% { transform: translateY(-5px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes dc-hello-tip {
+  0% { transform: rotate(0deg); }
+  22% { transform: rotate(0deg); }
+  34% { transform: rotate(-10deg); }
+  40% { transform: rotate(-8deg); }
+  62% { transform: rotate(-8deg); }
+  76% { transform: rotate(9deg); }
+  84% { transform: rotate(6deg); }
+  92% { transform: rotate(7.5deg); }
+  100% { transform: rotate(7deg); }
+}
+@keyframes dc-hello-hang {
+  0% { transform: rotate(0deg); }
+  22% { transform: rotate(0deg); }
+  34% { transform: rotate(10deg); }
+  40% { transform: rotate(8deg); }
+  62% { transform: rotate(8deg); }
+  76% { transform: rotate(-9deg); }
+  84% { transform: rotate(-6deg); }
+  92% { transform: rotate(-7.5deg); }
+  100% { transform: rotate(-7deg); }
+}
+@keyframes dc-hello-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes dc-hello-draw { from { stroke-dashoffset: 22; } to { stroke-dashoffset: 0; } }
+@keyframes dc-hello-pulse {
+  0% { box-shadow: 0 0 0 0 hsla(var(--interactive-accent-hsl), 0.45); }
+  70% { box-shadow: 0 0 0 14px hsla(var(--interactive-accent-hsl), 0); }
+  100% { box-shadow: 0 0 0 14px hsla(var(--interactive-accent-hsl), 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-page .dc-welcome.dc-hello, .dc-page .dc-hello-eyebrow, .dc-hello-ch, .dc-page h1.dc-hello-h1::after, .dc-page .dc-hello-sub,
+  .dc-page button.dc-hello-go, .dc-page button.dc-hello-skip, .dc-hello-art .dc-hello-beam, .dc-hello-art .dc-hello-pan,
+  .dc-hello-art .dc-hello-coin, .dc-hello-art .dc-hello-ask, .dc-hello-art .dc-hello-tick, .dc-hello-art .dc-hello-chip { animation: none; transition: none; }
+}
+
+/* narrow pane: the picture above the words */
+.dc-page.is-narrow .dc-welcome.dc-hello { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 24px 20px 28px; }
+.dc-page.is-narrow .dc-hello-figure { order: -1; }
+.dc-page.is-narrow .dc-hello-art { max-height: 280px; }
+.dc-page.is-narrow h1.dc-hello-h1 { font-size: 2.8em; }
+.dc-page.is-phone .dc-welcome.dc-hello { padding: 18px 16px 22px; }
+.dc-page.is-phone .dc-hello-art { max-height: 240px; }
+.dc-page.is-phone h1.dc-hello-h1 { font-size: 2.4em; }
+.dc-page.is-phone button.dc-hello-go { width: 100%; }
+
+/* The first-run questions (src/onboarding.js). Every rule sits under
+   .dc-onb. One column that works down to 320px; tap targets are 44px or
+   more. Product colours reuse the .dc-p-* variables from styles.css. Buttons
+   are reset at (0,2,1) so Obsidian's own `button` and tablet rules cannot
+   leak their height and padding in. No :has(), no color-mix(): the selected
+   look is an .is-on class the script toggles. */
+
+.dc-onb {
+  --p: var(--interactive-accent);
+  --p-rgb: var(--interactive-accent-rgb, 124, 92, 255);
+  box-sizing: border-box;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+  color: var(--text-normal);
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  font-variant-numeric: tabular-nums;
+}
+.dc-onb [hidden] { display: none; }
+.dc-onb *, .dc-onb *::before, .dc-onb *::after { box-sizing: border-box; }
+
+/* ── top: step count, dots, skip ─────────────────────── */
+.dc-onb-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+.dc-onb-progress { min-width: 0; }
+.dc-onb .dc-onb-stepno {
+  margin: 0 0 6px;
+  font-size: var(--font-ui-smaller);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.dc-onb .dc-onb-dots { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.dc-onb .dc-onb-dot {
+  width: 10px;
+  height: 10px;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--background-modifier-border);
+}
+.dc-onb .dc-onb-dot.is-done { background: var(--text-faint); }
+.dc-onb .dc-onb-dot.is-now { width: 24px; border-radius: 5px; background: var(--interactive-accent); }
+
+.dc-onb button.dc-onb-skip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  box-shadow: none;
+  height: auto;
+  font: inherit;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  text-decoration: underline;
+  white-space: normal;
+  cursor: pointer;
+}
+
+/* ── the card ────────────────────────────────────────── */
+.dc-onb-card {
+  padding: 20px 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  background: var(--background-primary);
+}
+.dc-onb .dc-onb-h { margin: 0 0 8px; font-size: 1.35em; line-height: 1.25; font-weight: 700; }
+.dc-onb .dc-onb-h:focus { outline: none; }
+.dc-onb .dc-onb-lead { margin: 0 0 16px; color: var(--text-muted); line-height: 1.5; }
+.dc-onb .dc-onb-hint { margin: 0 0 8px; color: var(--text-muted); font-size: var(--font-ui-small); line-height: 1.45; }
+.dc-onb .dc-onb-error {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border-left: 4px solid var(--color-red);
+  border-radius: 0 6px 6px 0;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  line-height: 1.45;
+}
+
+.dc-onb .dc-onb-points { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.dc-onb .dc-onb-points li {
+  margin: 0;
+  padding: 0 0 0 16px;
+  border-left: 3px solid var(--interactive-accent);
+  line-height: 1.5;
+}
+
+/* ── groups of choices ───────────────────────────────── */
+.dc-onb .dc-onb-group { min-width: 0; margin: 0 0 20px; padding: 0; border: 0; }
+.dc-onb .dc-onb-group:last-child { margin-bottom: 0; }
+.dc-onb .dc-onb-legend { padding: 0; margin: 0 0 6px; font-weight: 600; line-height: 1.35; }
+.dc-onb .dc-onb-opts { display: grid; gap: 8px; }
+.dc-onb .dc-onb-opts.is-compact { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.dc-onb .dc-onb-products { display: grid; gap: 8px; }
+
+.dc-onb .dc-onb-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-primary);
+  cursor: pointer;
+}
+.dc-onb .dc-onb-opt.is-on {
+  border-color: var(--interactive-accent);
+  background: var(--background-secondary);
+  box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+.dc-onb .dc-onb-prod { border-left: 4px solid var(--p); }
+.dc-onb .dc-onb-prod.is-on { box-shadow: none; border-color: var(--p); }
+.dc-onb .dc-onb-opts.is-compact .dc-onb-opt { align-items: center; }
+
+.dc-onb input.dc-onb-in {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  accent-color: var(--interactive-accent);
+  cursor: pointer;
+}
+.dc-onb .dc-onb-opt-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.dc-onb .dc-onb-opt-label { display: flex; align-items: center; gap: 8px; font-weight: 600; line-height: 1.35; }
+.dc-onb .dc-onb-opt-hint { color: var(--text-muted); font-size: var(--font-ui-small); line-height: 1.4; }
+.dc-onb .dc-onb-prod-icon { color: var(--p); }
+.dc-onb .dc-icon { display: inline-flex; width: 16px; height: 16px; flex: none; }
+.dc-onb .dc-icon svg { width: 100%; height: 100%; }
+
+/* the benefits screen: one tight block per benefit */
+.dc-onb .dc-onb-benefit { padding-bottom: 16px; border-bottom: 1px solid var(--background-modifier-border); }
+.dc-onb .dc-onb-benefit:last-child { padding-bottom: 0; border-bottom: 0; }
+
+/* ── number fields ───────────────────────────────────── */
+.dc-onb .dc-onb-fields { display: flex; flex-wrap: wrap; gap: 12px; }
+.dc-onb .dc-onb-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 120px; min-width: 0; }
+.dc-onb .dc-onb-field-label { font-size: var(--font-ui-small); color: var(--text-muted); }
+.dc-onb input.dc-onb-num {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font: inherit;
+  font-size: 16px;
+}
+.dc-onb input.dc-onb-num[aria-invalid="true"] { border-color: var(--color-red); }
+
+/* ── back and next ───────────────────────────────────── */
+.dc-onb-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.dc-onb .dc-onb-nav-gap { flex: none; }
+.dc-onb button.dc-onb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  height: auto;
+  padding: 0 20px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-primary);
+  box-shadow: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-normal);
+  white-space: normal;
+  cursor: pointer;
+}
+.dc-onb button.dc-onb-btn.is-primary {
+  margin-left: auto;
+  border-color: var(--interactive-accent);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.dc-onb button.dc-onb-btn.is-quiet { background: none; }
+.dc-onb button.dc-onb-btn:disabled,
+.dc-onb button.dc-onb-skip:disabled { opacity: 0.5; cursor: default; }
+
+/* focus rings: :focus-visible needs iOS 15.4, so it stands alone and an
+   older WebKit gets :focus in the fallback below */
+.dc-onb input:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+.dc-onb button:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+@supports not selector(:focus-visible) {
+  .dc-onb input:focus { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+  .dc-onb button:focus { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+}
+
+/* ── motion: only for people who have not asked for less ─ */
+@media (prefers-reduced-motion: no-preference) {
+  .dc-onb-card.is-animated { animation: dc-onb-in 220ms ease-out; }
+  .dc-onb .dc-onb-dot { transition: width 180ms ease-out, background-color 180ms ease-out; }
+}
+@keyframes dc-onb-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (min-width: 480px) {
+  .dc-onb { padding: 28px 24px 40px; }
+  .dc-onb-card { padding: 28px 24px; }
+}

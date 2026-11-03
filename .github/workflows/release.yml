@@ -1,3 +1,4 @@
+# Is Discovery Worth It? (plugin id discovery-worth-it), RuanPienaarCode/Is-Discovery-Worth-it-
 # A tag push (no 'v' prefix) triggers this. Why each part is load-bearing:
 #   - permissions: contents:write creates the release; id-token + attestations mint provenance.
 #   - Rebuild and diff: main.js and styles.css are committed build output and
@@ -62,6 +63,10 @@ jobs:
           if [ "$TAG" != "$MANIFEST_VERSION" ]; then
             echo "Tag '$TAG' does not match manifest version '$MANIFEST_VERSION'." >&2
             echo "Obsidian matches releases to the manifest version exactly — no 'v' prefix." >&2
+            exit 1
+          fi
+          if [ "$(jq -r .id manifest.json)" != "discovery-worth-it" ]; then
+            echo "manifest.json id is not 'discovery-worth-it'." >&2
             exit 1
           fi
           # versions.json maps plugin version -> minAppVersion; a missing entry

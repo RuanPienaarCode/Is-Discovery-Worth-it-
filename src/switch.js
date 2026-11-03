@@ -12,16 +12,20 @@
    so it can never tip the total by itself.
 
    All amounts are per year and positive; `kind` says which way they count.
-     buildSwitch(st, { health, gap, insure, life })
+     buildSwitch(st, { health, gap, insure, life }, products?)
        → { rows: [{ key, label, kind, stay, go, goName, goNote, assumed }],
            groups: [{ id, label, stay, go, saving, assumed, rows }] — one per
              product, stay/go = what it really costs (paid − got back) and
              saving = stay − go (above 0: moving is cheaper),
            stay: { cost, benefit, net, real }, go: { … },
-           gain: go.net − stay.net, assumed: [labels] } */
+           gain: go.net − stay.net, assumed: [labels] }
+   products: the resolveProducts() map ({ bank, health, gap, insure, life });
+   a product set to false is left out entirely. Leave it out for all. */
 
 const { money, pct } = require('./format');
 
+/* products[id] === false leaves that product out; no map = everything */
+const has = (products, id) => !products || products[id] !== false;
 const isDiscovery = r => !!r.discovery || /^discovery/i.test(r.id || '') || /^discovery\b/i.test(r.name || r.scheme || r.provider || '');
 const priced = r => r.monthly !== null && r.monthly !== undefined && Number.isFinite(r.monthly);
 /* the cheapest row by what it costs after its own rewards */
@@ -71,6 +75,15 @@ function byKind(items) {
 /* another bank's rewards, as one item of its own kind */
 const altItems = a => (a.rewards >= 0.5 ? [{ key: 'alt.' + a.id, label: a.backPct ? `${pct(a.backPct)} back on card spend` : 'Rewards', annual: a.rewards, kind: a.rewardKind || 'cash', estimated: !!a.guess }] : []);
 
+/* the comparisons for the products kept; home is not a Discovery product,
+   so it always stays */
+const CMP_PRODUCT = { health: 'health', gap: 'gap', insure: 'insure', life: 'life' };
+function only(cmp, products) {
+  const c = Object.assign({}, cmp || {});
+  for (const k of Object.keys(CMP_PRODUCT)) if (!has(products, CMP_PRODUCT[k])) c[k] = null;
+  return c;
+}
+
 const GROUPS = [
   { id: 'bank', label: 'Bank', keys: ['bank', 'bank.rewards'] },
   { id: 'medical', label: 'Medical aid', keys: ['medical', 'vitality', 'vitality.rewards'] },
@@ -79,8 +92,9 @@ const GROUPS = [
   { id: 'life', label: 'Life cover', keys: ['life', 'life.rewards'] },
 ];
 
-function buildSwitch(st, cmp) {
-  const c = cmp || {};
+function buildSwitch(st, cmp, products) {
+  const c = only(cmp, products);
+  const bankOn = has(products, 'bank');
   const rows = [];
   const add = (key, label, kind, stay, go, extra) => rows.push(Object.assign({ key, label, kind, stay, go, goName: '', goNote: '', assumed: false }, extra || {}));
   const rewardsAfter = [];
@@ -102,14 +116,14 @@ function buildSwitch(st, cmp) {
   };
 
   // ── what you pay ──
-  const alt = st.chosen;
+  const alt = bankOn ? st.chosen : null;
   if (alt) add('bank', 'Bank fees', 'cost', st.cost, alt.fees, { goName: alt.name });
   if (c.health) {
     const best = cheapest(c.health.rows.filter(r => priced(r) && r.likeForLike !== false && !isDiscovery(r)));
     if (best) add('medical', 'Medical aid', 'cost', c.health.current.annual, best.monthly * 12, { goName: `${best.scheme} ${best.plan}`, goNote: 'The cheapest plan that covers what you ticked' });
     else add('medical', 'Medical aid', 'cost', c.health.current.annual, c.health.current.annual, { assumed: true, goNote: 'No other plan is priced for your family, so taken as the same as now.' });
   }
-  const vit = st.vitality || {};
+  const vit = has(products, 'health') ? st.vitality || {} : {};
   if (vit.premium !== null && vit.premium > 0) add('vitality', 'Vitality Health fee', 'cost', vit.premium, 0, { goNote: 'Ends when you leave Discovery Health' });
   if (c.gap) {
     const best = cheapest(c.gap.rows.filter(r => priced(r) && !isDiscovery(r)));
@@ -121,7 +135,7 @@ function buildSwitch(st, cmp) {
   // ── what you get back ──
   if (alt) add('bank.rewards', 'Bank rewards (Miles, discounts, interest)', 'benefit', st.value, alt.rewards, { goName: alt.name, stayItems: BI.bank, goItems: altItems(alt) });
   if (vit.value >= 0.5) add('vitality.rewards', 'Vitality Health rewards (gym, HealthyFood, flights)', 'benefit', vit.value, 0, { goNote: 'Ends when you leave Discovery Health', stayItems: BI.vitality, goItems: [] });
-  const drive = (st.lines || []).find(l => l.key === 'fuel.drive');
+  const drive = has(products, 'insure') ? (st.lines || []).find(l => l.key === 'fuel.drive') : null;
   if (drive && drive.annual >= 0.5) add('drive', 'Vitality Drive fuel rewards', 'benefit', drive.annual, 0, { goNote: 'Ends when you leave Discovery Insure and the bank', stayItems: BI.drive, goItems: [] });
   for (const [key, label, v, name, items] of rewardsAfter) add(key, label, 'benefit', 0, v, { goName: name, stayItems: [], goItems: items });
 
@@ -144,7 +158,7 @@ function buildSwitch(st, cmp) {
 
 /* The top competitors for each product, next to what Discovery costs you,
    so "compared to what" always has an answer.
-     buildRivals(st, { health, gap, insure, life })
+     buildRivals(st, { health, gap, insure, life }, products?)
        → [{ id, label, discovery: { name, pay, back, real, backNote },
             rivals: [{ name, pay, back, real, what, misses, quoteUnder, quoted }] }]
    Per year. A rival nobody has priced has pay/real null and quoteUnder,
@@ -160,14 +174,14 @@ function topFive(rows) {
 }
 const rival = (name, pay, back, what, extra) => Object.assign({ name, pay, back, real: pay === null ? null : pay - back, what: what || '', misses: [], quoteUnder: null, quoted: false, items: [] }, extra || {});
 
-function buildRivals(st, cmp) {
-  const c = cmp || {};
+function buildRivals(st, cmp, products) {
+  const c = only(cmp, products);
   const out = [];
   const section = (id, label, discovery, rivals) => { if (rivals.length) out.push({ id, label, discovery: { ...discovery, real: discovery.pay - discovery.back }, rivals: topFive(rivals) }); };
   const vit = st.vitality || {};
   const BI = backItems(st);
 
-  section('bank', 'Banks', { name: 'Discovery Bank', pay: st.cost, back: st.value, backNote: 'Miles, discounts, the Apple Watch and interest', items: BI.bank },
+  if (has(products, 'bank')) section('bank', 'Banks', { name: 'Discovery Bank', pay: st.cost, back: st.value, backNote: 'Miles, discounts, the Apple Watch and interest', items: BI.bank },
     (st.alternatives || []).map(a => rival(a.name, a.fees, a.rewards,
       [a.backPct ? `${pct(a.backPct)} back on card spend${a.guess ? ' (a guess)' : ''}` : 'No rewards', ...(a.partners || []).map(p => (p.known ? `${pct(p.pct)} back: ${p.label}` : 'shop deals (rate not published)')).filter((x, i, xs) => xs.indexOf(x) === i)].join(' + '), { items: altItems(a) })));
 
@@ -179,7 +193,7 @@ function buildRivals(st, cmp) {
   if (c.gap) section('gap', 'Gap cover', { name: 'Discovery Gap Cover', pay: c.gap.current.annual, back: 0, backNote: '' },
     c.gap.rows.filter(r => !isDiscovery(r)).map(r => rival(`${r.provider} ${r.plan}`, priced(r) ? r.monthly * 12 : null, 0, r.cover, { quoted: !!r.quoted })));
 
-  const drive = (st.lines || []).find(l => l.key === 'fuel.drive');
+  const drive = has(products, 'insure') ? (st.lines || []).find(l => l.key === 'fuel.drive') : null;
   const quoteOnly = r => (r.quoted && priced(r)
     ? rival(r.name, r.monthly * 12, r.rewards || 0, r.rewardNote, { quoted: true, items: (r.rewards || 0) >= 0.5 ? [{ key: r.id + '.rewards', label: 'Cash back for claim-free years', annual: r.rewards, kind: 'cash', estimated: false }] : [] })
     : rival(r.name, null, 0, r.rewardNote || 'Quote only', { quoteUnder: r.breakEven > 0 ? r.breakEven : null }));
@@ -190,4 +204,4 @@ function buildRivals(st, cmp) {
   return out;
 }
 
-module.exports = { buildSwitch, buildRivals, backItems, byKind, KINDS };
+module.exports = { buildSwitch, buildRivals, backItems, byKind, KINDS, has, only };

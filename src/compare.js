@@ -67,12 +67,49 @@ const HEALTH_PLANS = [
     cover: { doctors: 'limited', psychology: 'limited', babies: 'limited', checkups: 'yes' },
     coverNote: { doctors: 'any GP, from larger savings', psychology: 'from savings, plus 15 PMB sessions', babies: '9 antenatal visits; baby visits from savings', checkups: 'flu, mammogram, Pap smear, child immunisations', hospital: 'network hospitals: up to R15 025 co-payment elsewhere' } },
 ];
-/* Your own plan, graded the same way, for the needs table
-   (settings.health.plan). Smart plan guide 2026. */
+/* Every other Discovery Health plan you might be on, for the needs table
+   (settings.health.plan) and for guessing your plan from your debit order
+   (detect.js guessHealthPlan, which reads HEALTH_PLANS and HEALTH_OWN).
+   Total monthly contributions from 1 Apr 2026 (savings portion included),
+   per main member / adult / child, from Discovery's own 2026 plan
+   comparison. KeyCare plans are priced by household income, one row per
+   band. Cover grades are only filled in where a plan guide was read;
+   the rest show as unknown until you set them. */
 const HEALTH_OWN = [
-  { id: 'dhClassicSmart', scheme: 'Discovery', plan: 'Classic Smart', discovery: true, source: DHMS,
+  { id: 'dhClassicSmart', scheme: 'Discovery', plan: 'Classic Smart', discovery: true, main: 3018, adult: 2381, child: 1205, dayToDay: 'Smart network GPs, no savings', source: DHMS,
     cover: { doctors: 'limited', psychology: 'limited', babies: 'yes', checkups: 'yes' },
     coverNote: { doctors: 'unlimited Smart network GP visits at R75; anything else from the Personal Health Fund (R2 000 an adult, R1 000 a child); specialists in hospital up to 200% of the Discovery rate', psychology: 'Mental Health Care Programme, trauma counselling and two maternity consults; otherwise the Personal Health Fund', babies: '8 antenatal visits, two scans, two visits for a child under 2, Nurture at Home', checkups: 'Screening and Prevention Benefit' } },
+  { id: 'dhExecutive', scheme: 'Discovery', plan: 'Executive', discovery: true, main: 12338, adult: 12338, child: 2358, dayToDay: 'Medical savings account, then Above Threshold Benefit (unlimited)', source: DHMS },
+  { id: 'dhClassicComprehensive', scheme: 'Discovery', plan: 'Classic Comprehensive', discovery: true, main: 10037, adult: 9492, child: 2002, dayToDay: 'Medical savings account, then Above Threshold Benefit', source: DHMS },
+  { id: 'dhClassicSmartComprehensive', scheme: 'Discovery', plan: 'Classic Smart Comprehensive', discovery: true, main: 8576, adult: 7920, child: 2002, dayToDay: 'Medical savings account, then Above Threshold Benefit', source: DHMS },
+  { id: 'dhClassicPriority', scheme: 'Discovery', plan: 'Classic Priority', discovery: true, main: 6198, adult: 4889, child: 2478, dayToDay: 'Medical savings account, then Above Threshold Benefit', source: DHMS },
+  { id: 'dhEssentialPriority', scheme: 'Discovery', plan: 'Essential Priority', discovery: true, main: 5327, adult: 4189, child: 2127, dayToDay: 'Medical savings account', source: DHMS },
+  { id: 'dhClassicSaver', scheme: 'Discovery', plan: 'Classic Saver', discovery: true, main: 4850, adult: 3825, child: 1943, dayToDay: 'Medical savings account', source: DHMS },
+  { id: 'dhClassicDeltaSaver', scheme: 'Discovery', plan: 'Classic Delta Saver', discovery: true, main: 3875, adult: 3062, child: 1556, dayToDay: 'Medical savings account; Delta network', source: DHMS },
+  { id: 'dhEssentialSaver', scheme: 'Discovery', plan: 'Essential Saver', discovery: true, main: 3886, adult: 2914, child: 1556, dayToDay: 'Medical savings account', source: DHMS },
+  { id: 'dhEssentialDeltaSaver', scheme: 'Discovery', plan: 'Essential Delta Saver', discovery: true, main: 3099, adult: 2339, child: 1243, dayToDay: 'Medical savings account; Delta network', source: DHMS },
+  { id: 'dhCoastalSaver', scheme: 'Discovery', plan: 'Coastal Saver', discovery: true, main: 4098, adult: 3082, child: 1648, dayToDay: 'Medical savings account; coastal hospitals', source: DHMS },
+  { id: 'dhClassicSmartSaver', scheme: 'Discovery', plan: 'Classic Smart Saver', discovery: true, main: 3350, adult: 2840, child: 1400, dayToDay: 'Medical savings account; Smart network', source: DHMS },
+  { id: 'dhEssentialDynamicSmart', scheme: 'Discovery', plan: 'Essential Dynamic Smart', discovery: true, main: 1797, adult: 1797, child: 1797, dayToDay: 'Smart network GPs, no savings', source: DHMS },
+  { id: 'dhActiveSmart', scheme: 'Discovery', plan: 'Active Smart', discovery: true, main: 1350, adult: 1350, child: 1350, dayToDay: 'Smart network GPs, no savings', source: DHMS },
+  { id: 'dhClassicCore', scheme: 'Discovery', plan: 'Classic Core', discovery: true, main: 3905, adult: 3083, child: 1562, dayToDay: 'Hospital plan only', source: DHMS },
+  { id: 'dhEssentialCore', scheme: 'Discovery', plan: 'Essential Core', discovery: true, main: 3356, adult: 2517, child: 1347, dayToDay: 'Hospital plan only', source: DHMS },
+  { id: 'dhEssentialDeltaCore', scheme: 'Discovery', plan: 'Essential Delta Core', discovery: true, main: 2681, adult: 2018, child: 1076, dayToDay: 'Hospital plan only; Delta network', source: DHMS },
+  { id: 'dhCoastalCore', scheme: 'Discovery', plan: 'Coastal Core', discovery: true, main: 3250, adult: 2438, child: 1291, dayToDay: 'Hospital plan only; coastal hospitals', source: DHMS },
+  { id: 'dhKeyCarePlus1', scheme: 'Discovery', plan: 'KeyCare Plus (income up to R10 250)', discovery: true, banded: true, main: 1961, adult: 1961, child: 713, dayToDay: 'KeyCare network GPs', source: DHMS },
+  { id: 'dhKeyCarePlus2', scheme: 'Discovery', plan: 'KeyCare Plus (income R10 251 – R16 600)', discovery: true, banded: true, main: 2695, adult: 2695, child: 760, dayToDay: 'KeyCare network GPs', source: DHMS },
+  { id: 'dhKeyCarePlus3', scheme: 'Discovery', plan: 'KeyCare Plus (income R16 601 or more)', discovery: true, banded: true, main: 3980, adult: 3980, child: 1064, dayToDay: 'KeyCare network GPs', source: DHMS },
+  { id: 'dhKeyCareCore1', scheme: 'Discovery', plan: 'KeyCare Core (income up to R10 250)', discovery: true, banded: true, main: 1490, adult: 1490, child: 390, dayToDay: 'Hospital plan only; KeyCare network', source: DHMS },
+  { id: 'dhKeyCareCore2', scheme: 'Discovery', plan: 'KeyCare Core (income R10 251 – R16 600)', discovery: true, banded: true, main: 1859, adult: 1859, child: 461, dayToDay: 'Hospital plan only; KeyCare network', source: DHMS },
+  { id: 'dhKeyCareCore3', scheme: 'Discovery', plan: 'KeyCare Core (income R16 601 or more)', discovery: true, banded: true, main: 2845, adult: 2845, child: 645, dayToDay: 'Hospital plan only; KeyCare network', source: DHMS },
+  { id: 'dhKeyCareStart1', scheme: 'Discovery', plan: 'KeyCare Start (income up to R10 950)', discovery: true, banded: true, main: 1436, adult: 1436, child: 875, dayToDay: 'One chosen KeyCare Start GP', source: DHMS },
+  { id: 'dhKeyCareStart2', scheme: 'Discovery', plan: 'KeyCare Start (income R10 951 – R16 550)', discovery: true, banded: true, main: 2107, adult: 2107, child: 947, dayToDay: 'One chosen KeyCare Start GP', source: DHMS },
+  { id: 'dhKeyCareStart3', scheme: 'Discovery', plan: 'KeyCare Start (income R16 551 – R25 150)', discovery: true, banded: true, main: 3306, adult: 3306, child: 992, dayToDay: 'One chosen KeyCare Start GP', source: DHMS },
+  { id: 'dhKeyCareStart4', scheme: 'Discovery', plan: 'KeyCare Start (income R25 151 or more)', discovery: true, banded: true, main: 3765, adult: 3765, child: 1024, dayToDay: 'One chosen KeyCare Start GP', source: DHMS },
+  { id: 'dhKeyCareStartRegional1', scheme: 'Discovery', plan: 'KeyCare Start Regional (income up to R10 950)', discovery: true, banded: true, main: 1278, adult: 1278, child: 769, dayToDay: 'One chosen KeyCare Start GP', source: DHMS },
+  { id: 'dhKeyCareStartRegional2', scheme: 'Discovery', plan: 'KeyCare Start Regional (income R10 951 – R16 550)', discovery: true, banded: true, main: 1932, adult: 1932, child: 869, dayToDay: 'One chosen KeyCare Start GP', source: DHMS },
+  { id: 'dhKeyCareStartRegional3', scheme: 'Discovery', plan: 'KeyCare Start Regional (income R16 551 – R25 150)', discovery: true, banded: true, main: 3011, adult: 3011, child: 922, dayToDay: 'One chosen KeyCare Start GP', source: DHMS },
+  { id: 'dhKeyCareStartRegional4', scheme: 'Discovery', plan: 'KeyCare Start Regional (income R25 151 or more)', discovery: true, banded: true, main: 3430, adult: 3430, child: 961, dayToDay: 'One chosen KeyCare Start GP', source: DHMS },
 ];
 
 /* Gap cover, 2026 monthly premium for a family whose oldest member is
@@ -99,15 +136,15 @@ const GAP_PLANS = [
    paid-for add-on, counts 0 and is named in the note. Sources fetched
    21 Oct 2026. */
 const INSURERS = [
-  { id: 'outsurance', name: 'OUTsurance', rewardPct: 10 / 3, rewardNote: 'OUTbonus: 10% of premiums back after 3 claim-free years', source: 'outsurance.co.za/car-insurance (OUTbonus)' },
-  { id: 'miway', name: 'MiWay', rewardPct: 5, rewardNote: 'Micashback: 10% of premiums every 2 claim-free years', source: 'miway.co.za/micashback' },
+  { id: 'outsurance', name: 'OUTsurance', rewardPct: 10 / 3, rewardNote: 'OUTbonus: 10% of premiums back after 3 claim-free years', source: 'outsurance.co.za/car-insurance (OUTbonus), fetched 21 Oct 2026' },
+  { id: 'miway', name: 'MiWay', rewardPct: 5, rewardNote: 'Micashback: 10% of premiums every 2 claim-free years', source: 'miway.co.za/micashback, fetched 21 Oct 2026' },
   { id: 'santam', name: 'Santam', rewardPct: 10 / 3, rewardNote: 'CashBack: 10% of premiums after 3 claim-free years (from 1 Jul 2026)', source: 'santam.co.za blog: Santam CashBack (Jul 2026)' },
   { id: 'kingprice', name: 'King Price', rewardPct: 0, rewardNote: 'Premium drops as the car ages; up to 20% multi-car discount (in the quote)', source: 'kingprice.co.za blog, 27 May 2026' },
-  { id: 'momentum', name: 'Momentum Insure', rewardPct: 0, rewardNote: 'Safety Returns: up to 30% of premiums back a year by driving points — not counted', source: 'momentum.co.za Safety Returns' },
+  { id: 'momentum', name: 'Momentum Insure', rewardPct: 0, rewardNote: 'Safety Returns: up to 30% of premiums back a year by driving points — not counted', source: 'momentum.co.za Safety Returns, fetched 21 Oct 2026' },
   { id: 'naked', name: 'Naked', rewardPct: 0, rewardNote: 'No claim-free refund; CoverPause cuts days the car is parked', source: 'naked.insure (CoverPause; 2026 cost guide)' },
-  { id: 'pineapple', name: 'Pineapple', rewardPct: 0, rewardNote: 'Up to 30% back in months you drive 300 km or less — not counted', source: 'pineapple.co.za/car-insurance' },
-  { id: 'dialdirect', name: 'Dialdirect', rewardPct: 0, rewardNote: 'Payback Bonus is an add-on you pay extra for — not counted', source: 'dialdirect.co.za/car-insurance' },
-  { id: 'budget', name: 'Budget Insurance', rewardPct: 0, rewardNote: 'Cash back after 2 years, rate not published — not counted', source: 'budgetinsurance.co.za/car-insurance' },
+  { id: 'pineapple', name: 'Pineapple', rewardPct: 0, rewardNote: 'Up to 30% back in months you drive 300 km or less — not counted', source: 'pineapple.co.za/car-insurance, fetched 21 Oct 2026' },
+  { id: 'dialdirect', name: 'Dialdirect', rewardPct: 0, rewardNote: 'Payback Bonus is an add-on you pay extra for — not counted', source: 'dialdirect.co.za/car-insurance, fetched 21 Oct 2026' },
+  { id: 'budget', name: 'Budget Insurance', rewardPct: 0, rewardNote: 'Cash back after 2 years, rate not published — not counted', source: 'budgetinsurance.co.za/car-insurance, fetched 21 Oct 2026' },
 ];
 
 /* Individual risk-cover insurers to quote against an employer scheme.
@@ -116,14 +153,14 @@ const INSURERS = [
    off inside the quote, so they are not counted again. Sources fetched
    22 Oct 2026. */
 const LIFE_OFFERS = [
-  { id: 'discoveryLife', name: 'Discovery Life (individual)', rewardNote: 'Integrator discounts up to 48% with Vitality, Health or Bank; PayBack up to 50% of premiums', source: 'discovery.co.za/life-insurance/discounts-and-paybacks' },
+  { id: 'discoveryLife', name: 'Discovery Life (individual)', rewardNote: 'Integrator discounts up to 48% with Vitality, Health or Bank; PayBack up to 50% of premiums', source: 'discovery.co.za/life-insurance/discounts-and-paybacks, fetched 22 Oct 2026' },
   { id: 'momentumMyriad', name: 'Momentum Myriad', rewardNote: 'LifeReturns: up to 35% off after a health assessment', source: 'momentum.co.za life cover (2026)' },
-  { id: 'brightrock', name: 'BrightRock', rewardNote: 'Needs-matched cover, no reward programme', source: 'brightrock.co.za' },
-  { id: 'oldmutual', name: 'Old Mutual', source: 'oldmutual.co.za (quote only)' },
-  { id: 'sanlam', name: 'Sanlam', rewardNote: 'Indie Wealth Bonus invests up to 100% of the premium (not counted)', source: 'sanlam.co.za (quote only)' },
-  { id: 'liberty', name: 'Liberty', source: 'liberty.co.za (quote only)' },
-  { id: 'outsuranceLife', name: 'OUTsurance Life', rewardNote: 'Life cover from R132 a month (published "from" price)', source: 'outsurance.co.za/life-insurance' },
-  { id: 'bidvestLife', name: 'Bidvest Life (FMI)', rewardNote: 'Income protection specialist', source: 'bidvestlife.co.za (quote only)' },
+  { id: 'brightrock', name: 'BrightRock', rewardNote: 'Needs-matched cover, no reward programme', source: 'brightrock.co.za, fetched 22 Oct 2026' },
+  { id: 'oldmutual', name: 'Old Mutual', source: 'oldmutual.co.za (quote only), fetched 22 Oct 2026' },
+  { id: 'sanlam', name: 'Sanlam', rewardNote: 'Indie Wealth Bonus invests up to 100% of the premium (not counted)', source: 'sanlam.co.za (quote only), fetched 22 Oct 2026' },
+  { id: 'liberty', name: 'Liberty', source: 'liberty.co.za (quote only), fetched 22 Oct 2026' },
+  { id: 'outsuranceLife', name: 'OUTsurance Life', rewardNote: 'Life cover from R132 a month (published "from" price)', source: 'outsurance.co.za/life-insurance, fetched 22 Oct 2026' },
+  { id: 'bidvestLife', name: 'Bidvest Life (FMI)', rewardNote: 'Income protection specialist', source: 'bidvestlife.co.za (quote only), fetched 22 Oct 2026' },
 ];
 /* Individual life cover alone, R per month per R1 000 000, healthy male
    non-smoker in an office job, by age band: a broker's published range,
@@ -137,15 +174,15 @@ const LIFE_BENCHMARK = { source: 'Peter Pyburn (FSP 2995), "What life insurance 
    fetched 22 Oct 2026. */
 const HOME_INSURERS = [
   { id: 'kingprice', name: 'King Price', per100k: 620 / 6.5, rewardNote: 'Example: R620 a month for R650 000, R3 000 excess (Centurion); a bundle with the car "may" earn a discount', source: 'King Price blog, best home contents insurance (27 May 2026)', unconfirmed: true },
-  { id: 'discovery', name: 'Discovery Insure', rewardNote: 'Alongside your car policy; no-average guarantee after an inventory assessment', source: 'discovery.co.za/car-and-home-insurance/home-insurance' },
+  { id: 'discovery', name: 'Discovery Insure', rewardNote: 'Alongside your car policy; no-average guarantee after an inventory assessment', source: 'discovery.co.za/car-and-home-insurance/home-insurance, fetched 22 Oct 2026' },
   { id: 'iwyze', name: 'iWYZE (Old Mutual)', rewardNote: 'Car and contents together save 5% on average', source: 'iwyze.co.za/home/bundle-and-save (23 Sep 2026)' },
-  { id: 'budget', name: 'Budget Insurance', rewardNote: '10–15% off car and home together', source: 'budgetinsurance.co.za/home-insurance' },
-  { id: 'outsurance', name: 'OUTsurance', rewardPct: 10 / 3, rewardNote: 'OUTbonus: 10% back after 3 claim-free years', source: 'outsurance.co.za/home-insurance' },
-  { id: 'dialdirect', name: 'Dialdirect', rewardPct: 25 / 4, rewardNote: 'Payback Bonus: 25% back after 4 claim-free years', source: 'dialdirect.co.za home insurance' },
-  { id: 'miway', name: 'MiWay', source: 'miway.co.za (quote only)' },
-  { id: 'santam', name: 'Santam', source: 'santam.co.za (quote only)' },
-  { id: 'naked', name: 'Naked', source: 'naked.insure (quote only)' },
-  { id: 'pineapple', name: 'Pineapple', rewardNote: '"My Things" for contents under R100 000', source: 'pineapple.co.za (quote only)' },
+  { id: 'budget', name: 'Budget Insurance', rewardNote: '10–15% off car and home together', source: 'budgetinsurance.co.za/home-insurance, fetched 22 Oct 2026' },
+  { id: 'outsurance', name: 'OUTsurance', rewardPct: 10 / 3, rewardNote: 'OUTbonus: 10% back after 3 claim-free years', source: 'outsurance.co.za/home-insurance, fetched 22 Oct 2026' },
+  { id: 'dialdirect', name: 'Dialdirect', rewardPct: 25 / 4, rewardNote: 'Payback Bonus: 25% back after 4 claim-free years', source: 'dialdirect.co.za home insurance, fetched 22 Oct 2026' },
+  { id: 'miway', name: 'MiWay', source: 'miway.co.za (quote only), fetched 22 Oct 2026' },
+  { id: 'santam', name: 'Santam', source: 'santam.co.za (quote only), fetched 22 Oct 2026' },
+  { id: 'naked', name: 'Naked', source: 'naked.insure (quote only), fetched 22 Oct 2026' },
+  { id: 'pineapple', name: 'Pineapple', rewardNote: '"My Things" for contents under R100 000', source: 'pineapple.co.za (quote only), fetched 22 Oct 2026' },
 ];
 /* What contents cover costs across the market, R a month per R100 000:
    King Price's "R400–R900 for R500 000–R800 000" and a broker's "R150–R400

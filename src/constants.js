@@ -72,8 +72,23 @@ const DEFAULT_SETTINGS = {
   /* Categories paid FROM the card account that are not swipes (an EFT for
      rent, say). Their total is shown so the choice stays visible. */
   notCardSpend: [],
+  /* The three Vitality statuses: money = Vitality Money (the bank score),
+     health = Vitality Health, drive = Vitality Drive (the car score). */
   status: { money: 'Blue', health: 'Blue', drive: 'Blue' },
+  /* Which Discovery Bank product: 'suite' (a banking suite with a credit
+     card), 'card' (a credit card account on its own), 'transaction' (only a
+     transaction account), 'savings' (savings only). null = not answered. */
+  bankKind: null,
+  /* A Transaction Account's fee option: 'bundled' or 'payt'
+     (pay-as-you-transact). Unset = bundled. */
+  bankFees: '',
+  /* The card tier: Gold, Platinum, Black or Purple (rates.js SUITES). */
   suite: 'Black',
+  /* Which Vitality programmes you pay for: money (with the bank), health
+     (with the medical aid) and drive (with Insure). Each unlocks its own
+     benefits (src/benefits.js). null = not answered: taken from the budget
+     (src/detect.js resolveVitality). */
+  vitality: { money: null, health: null, drive: null },
   /* Rate overrides keyed like rates.js entries; blank = the published default. */
   rates: {},
   /* What the Discovery app says you actually earned, in Miles, over the same

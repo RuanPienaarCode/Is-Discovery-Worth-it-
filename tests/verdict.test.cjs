@@ -65,4 +65,17 @@ assert.strictEqual(buildVerdicts(null, { life: life(100) }).life.tone, 'quote', 
 assert.strictEqual(buildVerdicts(null, { life: life(null) }).life.tone, 'quote');
 assert.strictEqual(buildVerdicts(null, { life: life(250, [row(2000, { quoted: true })]) }).life.tone, 'over', 'a quote beats the estimate');
 
+// ── products left out get no verdict at all ───────────────────────────
+{
+  const full = { health: cmp([row(1500)]), gap: cmp([row(1500)]), insure: cmp([row(null, { breakEven: 1300 })]), life: { current: { monthly: 800 }, lifeOnly: null, rows: [row(null, { breakEven: 800 })] } };
+  const all = buildVerdicts(st('stay', -5000), full);
+  assert.deepStrictEqual(Object.keys(buildVerdicts(st('stay', -5000), full, { bank: true, health: true, gap: true, insure: true, life: true })).sort(), Object.keys(all).sort(), 'all on = no map');
+  const some = buildVerdicts(st('stay', -5000), full, { bank: false, health: true, gap: false, insure: true, life: false });
+  assert.ok(!('bank' in some) && !('gap' in some) && !('life' in some), 'left out: ' + Object.keys(some).join(', '));
+  assert.strictEqual(some.health.tone, 'check');
+  assert.strictEqual(some.insure.tone, 'quote');
+  const home = buildVerdicts(null, { home: cmp([row(1000)]) }, { bank: false, health: false, gap: false, insure: false, life: false });
+  assert.strictEqual(home.home.tone, 'check', 'home contents is not a Discovery product, so it stays');
+}
+
 console.log('verdict: ok');

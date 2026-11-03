@@ -1,31 +1,26 @@
 'use strict';
-/* Discovery's marks, from assets/logos (embedded as data: URIs by
-   scripts/build-assets.mjs). They sit in the page header and in each
-   product's tab and heading — never in the data. */
+/* The marks beside the page title and in each product's tab, tile and
+   heading. They are the plugin's own drawings (src/art.js), never any
+   company's logo. */
 
-const ASSETS = require('./assets');
 const { el } = require('./dom');
+const { drawMark } = require('./art');
 
-/* A logo by its key in assets/logos. */
+/* A mark by key, in a dc-logo box. 'discovery' (or 'app') is the app's own
+   balance scale; any art.js mark name works too (bank, health, gap, insure,
+   life, rewards, miles). */
+const BRAND = { discovery: 'app', vitality: 'rewards' };
 function brandLogo(parent, key, cls) {
   const box = el(parent, 'span', 'dc-logo' + (cls ? ' ' + cls : ''));
   box.setAttribute('aria-hidden', 'true');
-  const img = el(box, 'img');
-  img.src = ASSETS.logos[key] || ASSETS.logos.discovery;
-  img.alt = '';
-  img.decoding = 'async';
+  drawMark(box, BRAND[key] || key, null, 20);
   return box;
 }
 
-/* Each product's own mark: the bank, the medical aid and Insure have their
-   own Discovery icons; gap cover and Life use the main Discovery app icon. */
-const PRODUCT_BRAND = { bank: 'discoverybank', health: 'discoveryhealth', insure: 'discoveryinsure', gap: 'discoveryapp', life: 'discoveryapp' };
+/* A product's own mark (id: bank | health | gap | insure | life), as an
+   <svg class="dc-tile-logo"> placed straight in the parent. */
 function productLogo(parent, id) {
-  const img = el(parent, 'img', 'dc-tile-logo');
-  img.src = ASSETS.logos[PRODUCT_BRAND[id]] || ASSETS.logos.discovery;
-  img.alt = '';
-  img.decoding = 'async';
-  return img;
+  return drawMark(parent, id, 'dc-tile-logo', 18);
 }
 
 module.exports = { brandLogo, productLogo };

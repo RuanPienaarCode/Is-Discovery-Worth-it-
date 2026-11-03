@@ -9,7 +9,7 @@ const { loadBudget } = require('./load');
    reaches someone whose data.json predates it. */
 function mergeSettings(saved) {
   const out = { ...DEFAULT_SETTINGS, ...(saved || {}) };
-  for (const k of ['status', 'rates', 'actualMiles', 'travel', 'members', 'quotes', 'products', 'benefits', 'health', 'life', 'home']) out[k] = { ...DEFAULT_SETTINGS[k], ...((saved || {})[k] || {}) };
+  for (const k of ['status', 'rates', 'actualMiles', 'travel', 'members', 'quotes', 'products', 'benefits', 'vitality', 'health', 'life', 'home']) out[k] = { ...DEFAULT_SETTINGS[k], ...((saved || {})[k] || {}) };
   return out;
 }
 
