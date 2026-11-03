@@ -107,3 +107,35 @@ const stL = { ...st, mileValue: 0.1, milesStatement: { covered: 12 } };
 const lifeP = buildProducts(stL, m, msL, settings, new Date(2026, 9, 21)).products.find(p => p.id === 'life');
 near(lifeP.back[0].v, 1000 * 0.1, 'Life rewards at the Mile value');
 console.log('products OK');
+
+/* ── only the products you chose ─────────────────────────────────────── */
+{
+  const some = { bank: false, health: true, gap: false, insure: true, life: false };
+  const r = buildProducts(st, m, null, settings, new Date(2026, 9, 21), some);
+  assert.deepStrictEqual(r.products.map(p => p.id), ['health', 'insure'], 'only the chosen products are listed');
+  assert.deepStrictEqual(r.all.map(p => p.id), ['bank', 'health', 'gap', 'insure', 'life'], 'all keeps every product for lookups');
+  // the totals add up the chosen products and nothing else
+  near(r.totals.paid, r.products.reduce((s, p) => s + p.paid, 0));
+  near(r.totals.paid, P('health').paid + P('insure').paid, 'no bank fees, gap or life premiums in the bill');
+  near(r.totals.cash, P('health').cashBack + P('insure').cashBack);
+  assert.ok(r.totals.paid < totals.paid, 'fewer products, a smaller bill');
+  // dated reminders for a product you do not have stay out
+  assert.ok(r.dates.every(d => d.product === 'insure'), 'only Insure dates remain');
+  assert.ok(!r.dates.some(d => d.product === 'bank'));
+  // a product you did not choose is still built (the comparisons look it up)
+  near(r.all.find(p => p.id === 'gap').paid, 300 * 12);
+
+  // one product on its own, and none at all
+  const one = buildProducts(st, m, null, settings, new Date(2026, 9, 21), { bank: false, health: false, gap: true, insure: false, life: false });
+  assert.deepStrictEqual(one.products.map(p => p.id), ['gap']);
+  near(one.totals.paid, 300 * 12);
+  const none = buildProducts(st, m, null, settings, new Date(2026, 9, 21), { bank: false, health: false, gap: false, insure: false, life: false });
+  assert.strictEqual(none.products.length, 0);
+  assert.strictEqual(none.totals.paid, 0);
+  assert.strictEqual(none.totals.value, 0);
+  assert.deepStrictEqual(none.dates, []);
+
+  // a missing map, or a product left out of it, means all of them
+  assert.strictEqual(buildProducts(st, m, null, settings, new Date(2026, 9, 21)).products.length, 5);
+  assert.strictEqual(buildProducts(st, m, null, settings, new Date(2026, 9, 21), { health: false }).products.length, 4);
+}

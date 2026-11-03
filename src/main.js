@@ -9,11 +9,11 @@ const { loadBudget } = require('./load');
    reaches someone whose data.json predates it. */
 function mergeSettings(saved) {
   const out = { ...DEFAULT_SETTINGS, ...(saved || {}) };
-  for (const k of ['status', 'rates', 'actualMiles', 'travel', 'members', 'quotes', 'products', 'benefits', 'vitality', 'health', 'life', 'home']) out[k] = { ...DEFAULT_SETTINGS[k], ...((saved || {})[k] || {}) };
+  for (const k of ['status', 'rates', 'actualMiles', 'travel', 'members', 'quotes', 'products', 'benefits', 'vitality', 'health', 'life', 'home', 'bill']) out[k] = { ...DEFAULT_SETTINGS[k], ...((saved || {})[k] || {}) };
   return out;
 }
 
-class DiscoveryCalculatorPlugin extends Plugin {
+class DiscoveryWorthItPlugin extends Plugin {
   async onload() {
     this.settings = mergeSettings(await this.loadData());
     this.registerView(VIEW_TYPE, leaf => new BottomLineView(leaf, this));
@@ -72,4 +72,4 @@ class DiscoveryCalculatorPlugin extends Plugin {
   }
 }
 
-module.exports = DiscoveryCalculatorPlugin;
+module.exports = DiscoveryWorthItPlugin;

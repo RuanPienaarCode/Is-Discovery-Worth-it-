@@ -7,7 +7,8 @@
    applies to what has been ticked and answered so far:
      hello · products ·
      bank:   bankKind · tier (not savings) · vmQ · vmStatus (bank score)
-     health: plan · household · vhQ · vhStatus (health score)
+     health: household · plan · vhQ · vhStatus (health score)
+               (who is on the aid first, so the plan guess prices the right family)
      insure: vdQ · vdStatus (car score)
      benefits · done
    Each Next writes the answers to settings and awaits save(), so closing the
@@ -143,7 +144,7 @@ function renderOnboarding(parent, ctx) {
       if (st.vm) ids.push('vmStatus');
     }
     if (picked.health) {
-      ids.push('plan', 'household', 'vhQ');
+      ids.push('household', 'plan', 'vhQ');
       if (st.vh) ids.push('vhStatus');
     }
     if (picked.insure) {

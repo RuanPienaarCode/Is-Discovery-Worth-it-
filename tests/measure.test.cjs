@@ -107,6 +107,13 @@ assert.strictEqual(total(mA, 'all.shop.woolworths'), 900, 'a transfer-typed row 
 assert.strictEqual(total(mA, 'all.shop.clicks'), 200, 'a Discovery card counts too');
 assert.strictEqual(total(mA, 'shop.woolworths'), 0, 'not on a Discovery card');
 assert.strictEqual(total(mA, 'spend.card'), 200);
+// a Discovery transaction account's money out is spend.debit (not fees, premiums or own transfers)
+const mD = measure([
+  r('2026-09-02', 'Transaction Account', 'SPAR SOMETOWN', 'Groceries', -300),
+  r('2026-09-03', 'Transaction Account', 'Monthly Account fee', 'Bank charges & fees', -125),
+  r('2026-09-04', 'Transaction Account', 'To savings', 'Settle Credit Card', -1000),
+], accounts, categories, { from: '2026-09', to: '2026-09' });
+assert.strictEqual(total(mD, 'spend.debit'), 300);
 
 assert.deepStrictEqual(monthsBetween('2025-11', '2026-02'), ['2025-11', '2025-12', '2026-01', '2026-02']);
 assert.deepStrictEqual(trailingWindow(new Date(2026, 9, 21), 12), { from: '2025-10', to: '2026-09' });

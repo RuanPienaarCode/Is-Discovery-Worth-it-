@@ -1,5 +1,5 @@
 'use strict';
-/* The workspace view hosting the bottom line. */
+/* The workspace view hosting the page (src/bottom-line.js). */
 
 const { ItemView } = require('obsidian');
 const { VIEW_TYPE } = require('./constants');
@@ -11,7 +11,7 @@ class BottomLineView extends ItemView {
     this.plugin = plugin;
   }
   getViewType() { return VIEW_TYPE; }
-  getDisplayText() { return 'The bottom line'; }
+  getDisplayText() { return 'Is Discovery Worth It?'; }
   getIcon() { return 'calculator'; }
 
   async onOpen() {

@@ -1,9 +1,9 @@
 'use strict';
 /* Only what has no better home on the page itself. Statuses, rates and
-   actual Miles are edited on the bottom-line page, beside the figure they
+   actual Miles are edited on the plugin's page, beside the figure they
    change. */
 
-const { PluginSettingTab, Setting } = require('obsidian');
+const { PluginSettingTab, Setting, Notice } = require('obsidian');
 
 class SettingsTab extends PluginSettingTab {
   constructor(app, plugin) {
@@ -42,6 +42,16 @@ class SettingsTab extends PluginSettingTab {
       .setName('Welcome screen')
       .setDesc('Show the welcome screen each time the page opens.')
       .addToggle(t => t.setValue(s.welcome !== false).onChange(async v => { s.welcome = v; await this.plugin.saveSettings(); }));
+
+    new Setting(containerEl)
+      .setName('First-time questions')
+      .setDesc('Which Discovery products you have, your bank product and tier, your Vitality statuses and the benefits you use. Run them again to change your answers; the page asks them the next time you open it.')
+      .addButton(b => b.setButtonText('Run the first-time questions again').onClick(async () => {
+        s.onboarded = false;
+        await this.plugin.saveSettings();
+        this.plugin.refreshViews();
+        new Notice('Open Is Discovery Worth It to answer the questions.');
+      }));
 
     new Setting(containerEl)
       .setName('Reset rates')

@@ -1,5 +1,5 @@
 'use strict';
-/* The bottom line: what Discovery Bank costs, what you would LOSE by leaving
+/* Is Discovery Bank worth it: what it costs, what you would LOSE by leaving
    it, and how that compares with another bank.
 
    The question is "stay or switch bank", so the statement only counts value
@@ -153,9 +153,13 @@ function buildStatement(m, settings, milesSummary, opts) {
 
   /* Card spend: what the bank counted on your Miles statement when there is
      one (it leaves out EFTs and debit orders paid from the card account),
-     else the card purchases in your transactions. */
+     else the card purchases in your transactions. With only a transaction
+     account (or no Discovery credit card in the budget) its debit card is
+     the card, read from spend.debit, debit orders included. */
   const swipes = sv && sv.ms.swipes && Object.keys(sv.ms.swipes).length ? sv.ms.swipes : null;
-  const cardIn = ym => Math.max(0, swipes ? swipes[ym] || 0 : inMonth(m, 'spend.card', ym));
+  const debitOnly = m.figures['spend.debit'] && (settings.bankKind === 'transaction' || !(m.cardAccounts && m.cardAccounts.length));
+  const spendKey = debitOnly ? 'spend.debit' : 'spend.card';
+  const cardIn = ym => Math.max(0, swipes ? swipes[ym] || 0 : inMonth(m, spendKey, ym));
   const spendMonths = swipes ? sv.months : dataMonths;
   const cardSpendTotal = spendMonths.reduce((s, ym) => s + cardIn(ym), 0);
   const cardSpendYear = (cardSpendTotal * 12) / (spendMonths.length || 1);
@@ -436,7 +440,7 @@ function buildStatement(m, settings, milesSummary, opts) {
     /* the window the typed Miles were for, when it is not this one */
     actualStale,
     cardSpend: cardSpendYear,
-    cardSpendSource: swipes ? 'statement' : 'transactions',
+    cardSpendSource: swipes ? 'statement' : debitOnly ? 'debit' : 'transactions',
     avgMonthlySpend: avgSpend,
     lines, cost, value, net,
     /* { [benefit id]: { level, suggested, why, full, counted, available,

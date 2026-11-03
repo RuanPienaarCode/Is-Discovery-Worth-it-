@@ -125,6 +125,11 @@ function measure(rows, accounts, categories, opts) {
       const anyTag = SHOP_TAGS.find(t => t.desc.test(row.description) && !(t.not && t.not.test(row.description)));
       if (anyTag) add('all.' + anyTag.key, ym, -row.amount);
     }
+    /* Money out of a Discovery transaction account that is not a fee, a
+       premium or a move between your own accounts: its debit card swipes,
+       mixed with debit orders a statement cannot tell apart. Card spend for
+       someone whose only Discovery card is the transaction account's. */
+    if (acct.discovery && acct.checking && row.amount < 0 && !own && !NOT_SPEND_TYPES.includes(type) && !notSpend.has(row.category)) add('spend.debit', ym, -row.amount);
     if (!(acct.discovery && acct.card)) continue;
     cardAccounts.add(row.account);
 

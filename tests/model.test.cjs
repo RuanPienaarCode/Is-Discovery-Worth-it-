@@ -436,4 +436,14 @@ assert.ok(hcChange, 'losing it is a change');
 near(hcChange.delta, -sGd.lines.find(l => l.key === 'miles.healthyCare').annual);
 assert.ok(/No extra HealthyCare from the bank on the Gold Credit Card Account/.test(hcChange.label));
 assert.strictEqual(sGd.downgrade.label, 'Gold Credit Card Account');
+// a transaction account's debit card is the card when there is no Discovery credit card
+{
+  const mT = { ...m, cardAccounts: [], figures: { ...m.figures, 'spend.card': undefined, 'spend.debit': fig({ '2026-08': 8000, '2026-09': 8000 }) } };
+  delete mT.figures['spend.card'];
+  const sT = buildStatement(mT, { rates, status: { money: 'Diamond' }, bankKind: 'transaction', vitality: { money: true } }, null, { products: { bank: true }, vitality: { money: true, health: false, drive: false } });
+  assert.strictEqual(sT.cardSpendSource, 'debit');
+  near(sT.cardSpend, 96000, 'debit spend becomes card spend');
+  const withCard = buildStatement({ ...m, cardAccounts: ['Card'], figures: { ...m.figures, 'spend.debit': fig({ '2026-08': 99999 }) } }, { rates, status: { money: 'Diamond' } }, null);
+  assert.strictEqual(withCard.cardSpendSource, 'transactions', 'a credit card holder keeps credit card spend');
+}
 console.log('model OK');

@@ -1,5 +1,5 @@
 'use strict';
-/* The money flow: your money → the five products → what comes back.
+/* The money flow: your money → the products you have (one to five) → what comes back.
    Band widths follow the rand amounts; dashes move along each band in the
    direction the money goes (out red, back green) and stop under
    prefers-reduced-motion. Tap or hover a product to follow its money.
@@ -24,7 +24,8 @@ function txt(parent, x, y, s, cls, anchor) {
   return t;
 }
 /* A label wider than maxW wraps onto a second line at a word break;
-   returns the extra height it took (0 when it fits). */
+   returns the extra height it took (0 when it fits): a line is 15px, so the
+   two lines of text do not touch. */
 function fitText(parent, x, y, s, maxW) {
   const t = txt(parent, x, y, s, '');
   if (!t.getComputedTextLength || t.getComputedTextLength() <= maxW) return 0;
@@ -37,9 +38,9 @@ function fitText(parent, x, y, s, maxW) {
   if (i < 1) return 0;
   t.textContent = words.slice(0, i).join(' ');
   const rest = words.slice(i).join(' ');
-  const t2 = txt(parent, x, y + 13, rest, '');
+  const t2 = txt(parent, x, y + 15, rest, '');
   for (let n = rest.length - 1; n > 1 && t2.getComputedTextLength() > maxW; n--) t2.textContent = rest.slice(0, n) + '…';
-  return 13;
+  return 15;
 }
 const ribbon = (x0, a0, b0, x1, a1, b1) => {
   const m = (x0 + x1) / 2;
@@ -53,6 +54,14 @@ const mid = (x0, y0, x1, y1) => {
 /* opts: { products, totals, per(v) → period value, perLabel(), onOpen(id) } */
 function mountFlow(parent, opts) {
   const root = el(parent, 'div', 'dc-flow');
+  /* a product with no money in or out has nothing to draw; with none at
+     all (no product chosen, or no payments in this period) say so */
+  if (!opts.products.some(p => p.paid >= 0.5 || p.backSum >= 0.5)) {
+    el(root, 'p', 'dc-muted dc-fl-empty', opts.products.length
+      ? 'No money went to or came back from your Discovery products in this period, so there is nothing to draw.'
+      : 'You have not chosen any Discovery products yet. Choose them under Your Discovery setup on the Inputs tab.');
+    return { refresh() {}, destroy() {} };
+  }
   const legend = el(root, 'div', 'dc-fl-legend');
   const lg = (cls, label) => { const s = el(legend, 'span'); el(s, 'span', 'dc-fl-sw ' + cls); el(s, 'span', null, label); };
   lg('out', 'Money out');

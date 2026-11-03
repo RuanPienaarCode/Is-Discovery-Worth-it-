@@ -22,7 +22,12 @@ const DATES = [
   { date: '2027-01-01', product: 'bank', text: 'Discovery\'s new rates usually start now. The figures here use the 2026 rates, so check them again.' },
 ];
 
-function buildProducts(st, m, ms, settings, now) {
+/* chosen: the resolveProducts() map ({ bank, health, gap, insure, life }).
+   A product set to false is left out of `products`, the totals and the
+   dates, so the page never shows or adds up what the person does not have.
+   `all` keeps every product, for callers that look one up by id. Leave
+   chosen out for all five. */
+function buildProducts(st, m, ms, settings, now, chosen) {
   const n = st.window.dataMonths || 1;
   const yr = v => (v * 12) / n;
   const L = key => { const l = st.lines.find(x => x.key === key); return l ? l.annual : 0; };
@@ -140,22 +145,24 @@ function buildProducts(st, m, ms, settings, now) {
     transactions: rows('product.life'),
   };
 
-  const products = [bank, health, gap, insure, lifeP];
-  for (const p of products) {
+  const all = [bank, health, gap, insure, lifeP];
+  for (const p of all) {
     p.backSum = p.back.reduce((s, b) => s + b.v, 0);
     p.net = p.backSum - p.paid;
     p.transactions.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   }
+  const has = id => !chosen || chosen[id] !== false;
+  const products = all.filter(p => has(p.id));
   const paid = products.reduce((s, p) => s + p.paid, 0);
   const cash = products.reduce((s, p) => s + p.cashBack, 0);
   const value = products.reduce((s, p) => s + p.backSum, 0);
 
   const today = ymd(now || new Date());
-  const dates = DATES.slice();
-  if (st.downgrade && st.downgrade.watchEnds) dates.push({ date: st.downgrade.watchEnds, product: 'bank', text: 'Your Apple Watch contract ends. After this, Discovery\'s cheaper Black Credit Card Account may suit you better than the full Suite. See the Bank tab.' });
+  const dates = DATES.filter(d => has(d.product));
+  if (has('bank') && st.downgrade && st.downgrade.watchEnds) dates.push({ date: st.downgrade.watchEnds, product: 'bank', text: `Your Apple Watch contract ends. After this, Discovery's cheaper ${st.downgrade.label} may suit you better than the full Suite. See the Bank tab.` });
   const ahead = dates.filter(d => d.date >= today).sort((a, b) => (a.date < b.date ? -1 : 1));
 
-  return { products, totals: { paid, cash, value, cashNet: cash - paid, flowNet: value - paid }, dates: ahead };
+  return { products, all, totals: { paid, cash, value, cashNet: cash - paid, flowNet: value - paid }, dates: ahead };
 }
 
 /* The Health debit is split with today's figures; say so when earlier
