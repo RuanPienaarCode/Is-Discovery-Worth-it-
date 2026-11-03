@@ -28,7 +28,31 @@
      HC      HealthyCare benefit guide, Aug 2026
      DRIVE   How the Vitality Drive programme works, 2026
      MILES   discovery.co.za/bank/info-and-tips-discovery-bank-rewards
-     DYN     Dynamic interest rates (as at 25 Sep 2026, Black Suite) */
+     DYN     Dynamic interest rates (as at 25 Sep 2026, Black Suite)
+     HFG     HealthyFood benefit guide, Vitality Health and Vitality Money —
+             discovery.co.za/wcm/discoverycoza/assets/vitality/bank/
+             healthyfood-vitality-and-bank.pdf
+     HCG     HealthyCare benefit guide, Vitality Health only — discovery.co.za/
+             wcm/discoverycoza/assets/vitality/benefit-rules/vitality-
+             healthycare-benefit-guide-vitality-only.pdf (last updated Dec 2026)
+     GYM     Virgin Active benefit guide — cdn.discovery.co.za/wcm/discoverycoza/
+             assets/vitality/benefit-rules/virgin-active-post-benefit-guide.pdf,
+             and the Vitality Premium brochure 2026 (30 Sep 2026)
+     AR      Vitality Active Rewards benefit guide — discovery.co.za/wcm/
+             discoverycoza/assets/vitality/benefit-rules/vitality-active-
+             rewards-benefit-guide.pdf
+     DRIVETC How the Vitality Drive programme works, 2026 — discovery.co.za/
+             assets/discoverycoza/vitality/vitality-drive-ts-cs.pdf (page 16)
+     DMILES  Discovery Miles benefit guide (1 Nov 2026) — discovery.co.za/assets/
+             discoverycoza/bank/discovery-miles-bank-benefit-guide.pdf, and
+             discovery.co.za/bank/discovery-miles
+
+   Some figures depend on something other than a status: whether you have
+   done your health checks, how often you go to the gym, whether Discovery
+   insures your home, your Insure plan. Those rates carry `cases`: the
+   figure counted by default is the lower one, and a case replaces it when
+   the caller says it applies (ctx.met[when] === true). No setting feeds
+   ctx.met yet; the questions it needs are listed with each case. */
 
 /* The shorthand used in `source` below, spelled out on the page. */
 const SOURCE_NAMES = {
@@ -41,11 +65,17 @@ const SOURCE_NAMES = {
   MILES: 'Discovery Bank rewards: info and tips',
   CCFEES: 'Discovery Bank Credit Card Account fees guides (from 1 Sep 2026)',
   DYN: 'Dynamic interest rates, Black Suite (as at 25 Sep 2026)',
+  HFG: 'HealthyFood benefit guide, Vitality Health and Vitality Money (read 3 Nov 2026)',
+  HCG: 'HealthyCare benefit guide, Vitality Health (last updated Dec 2026, read 3 Nov 2026)',
+  GYM: 'Virgin Active benefit guide and Vitality Premium brochure 2026 (read 3 Nov 2026)',
+  AR: 'Vitality Active Rewards benefit guide (read 3 Nov 2026)',
+  DRIVETC: 'How the Vitality Drive programme works, 2026 (read 3 Nov 2026)',
+  DMILES: 'Discovery Miles benefit guide (1 Nov 2026)',
 };
 /* "GUIDE: grows with…" → "Grows with…. Source: Discovery Bank rewards
    guide…" — the plain sentence first, the document it came from after. */
 function sourceText(src) {
-  const m = /^(GUIDE|BLACK|FEES|CCFEES|HF|HC|DRIVE|MILES|DYN)\b:?\s*(.*)$/.exec(String(src || ''));
+  const m = /^(GUIDE|BLACK|FEES|CCFEES|HFG|HCG|HF|HC|DRIVETC|DRIVE|DMILES|MILES|DYN|GYM|AR)\b:?\s*(.*)$/.exec(String(src || ''));
   if (!m) return String(src || '');
   const said = m[2] ? m[2].charAt(0).toUpperCase() + m[2].slice(1) + ' ' : '';
   return `${said}Source: ${SOURCE_NAMES[m[1]]}.`;
@@ -306,38 +336,71 @@ function bankProductOf(settings, ctx) {
 
 const RATES = {
   mileValue: { label: 'What one Discovery Mile is worth', unit: 'R', value: 0.1, source: 'MILES: partners take 10 Miles as R1.', year: 2026 },
-  milesRandPerMile: { label: 'Card spend for one Mile, virtual card', unit: 'R per Mile', on: 'money', byStatus: { Blue: 65, Bronze: 50, Silver: 40, Gold: 30, Diamond: 15 }, source: 'GUIDE: at Diamond, one Mile for every R15 on the Platinum, Black and Purple Suites, and for every R20 on the Gold Suite.', year: 2026 },
-  milesThreshold: { label: 'Monthly card spend that earns Miles at the full rate', unit: 'R/month', value: 25000, source: 'GUIDE: R10 000 on the Gold Suite, R15 000 on Platinum, R25 000 on Black and R30 000 on Purple. Above it you get one Mile per R100.', year: 2026 },
-  milesAboveThreshold: { label: 'Card spend for one Mile above that amount', unit: 'R per Mile', value: 100, source: 'GUIDE', year: 2026 },
-  milesPhysical: { label: 'Card spend for one Mile, plastic card', unit: 'R per Mile', value: 200, source: 'GUIDE: one Mile per R200, up to your monthly limit, on every Suite.', year: 2026 },
+  /* Spending Miles: Miles+ partners take a discount off the price when you
+     pay with Miles, bigger on Ð-Day (the 15th of each month). Electricity,
+     data and airtime take Miles at face value. */
+  /* Per active Vitality programme (Money, Health, Drive): model.js
+     multiplies by how many the person has, so 15% and 30% are the most. */
+  milesDdayPct: { label: 'Discount when you spend Miles on Ð-Day (the 15th), per active Vitality programme', unit: '%', value: 10, perProgramme: true, source: 'DMILES: double the everyday discount on the 15th of each month, so 10% for each Vitality programme you have (Vitality Money, Health and Drive), up to 30%. It is for online and in-store purchases at Discovery Miles partners; prepaid airtime, data and electricity bought in the app get only the everyday discount.', year: 2026 },
+  milesPartnerPct: { label: 'Discount when you spend Miles at Discovery Miles partners, per active Vitality programme', unit: '%', value: 5, perProgramme: true, source: 'DMILES: 5% off for every Vitality programme you have switched on (Vitality Money, Health and Drive), up to 15%. It applies at Discovery Miles partners online and in store, in the Vitality Mall, and on prepaid airtime, data and electricity in the Discovery Bank app. Not on travel, cash or Miles sent to someone.', year: 2026 },
+  milesRandPerMile: { label: 'Card spend for one Mile, virtual card', unit: 'R per Mile', on: 'money', byStatus: { Blue: 65, Bronze: 50, Silver: 40, Gold: 30, Diamond: 15 }, source: 'GUIDE: at Diamond, one Mile for every R15 on the Platinum, Black and Purple Suites, and for every R20 on the Gold Suite. This is the only Miles figure your Vitality Money status changes.', year: 2026 },
+  milesThreshold: { label: 'Monthly card spend that earns Miles at the full rate', unit: 'R/month', value: 25000, source: 'GUIDE: R10 000 on the Gold Suite, R15 000 on Platinum, R25 000 on Black and R30 000 on Purple, the same at every Vitality Money status. Above it you get one Mile per R100.', year: 2026 },
+  milesAboveThreshold: { label: 'Card spend for one Mile above that amount', unit: 'R per Mile', value: 100, source: 'GUIDE: one Mile per R100 at every Vitality Money status.', year: 2026 },
+  milesPhysical: { label: 'Card spend for one Mile, plastic card', unit: 'R per Mile', value: 200, source: 'GUIDE: one Mile per R200 up to your monthly limit, and none above it, whatever your Vitality Money status.', year: 2026 },
   virtualSharePct: { label: 'How much of your card spend is paid with the virtual card', unit: '%', value: 100, source: 'Your own figure. Paying with your phone only counts if the phone holds the virtual card; the plastic card earns about a thirteenth as much.', year: null, guess: true },
-  activeRewardsWithoutBank: { label: 'Basic exercise rewards you would still get without the bank', unit: 'R/month', value: 100, source: 'Your own guess. Without Discovery Bank, Vitality Health still gives small weekly rewards (a coffee or smoothie) but not the gameboard.', year: null, guess: true },
+  activeRewardsWithoutBank: { label: 'Basic exercise rewards you would still get without the bank', unit: 'R/month', value: 100, source: 'AR: your own guess. Without Discovery Bank you still get a gameboard play for each weekly goal, but its Miles are hidden and vary, and you can spend them only on Vitality Active Rewards (a coffee or smoothie). Discovery publishes no rand figure, and it does not depend on your Vitality Health status.', year: null, guess: true,
+    unconfirmed: true, unconfirmedWhy: 'Discovery does not publish what a gameboard play is worth without the bank, so this is a guess.' },
 
   healthyFoodShare: { label: 'How much of your Checkers / Woolworths spend is HealthyFood', unit: '%', value: 25, source: 'Your own guess. Only HealthyFood items count; the Vitality app shows your real total.', year: null, guess: true },
   healthyFoodMoneyPct: { label: 'Bank\'s extra HealthyFood percentage', unit: '%', band: 'healthyFood', source: 'GUIDE: grows with your monthly card spend and your Vitality Money status. At Diamond it goes up to 15% on the Gold Suite, 25% on Platinum and Black, and 50% on Purple.', year: 2026 },
   healthyFoodMoneyCap: { label: 'HealthyFood spend the bank\'s extra applies to', unit: 'R/month', value: 2500, source: 'HF: R2 500 a month with one Discovery credit card holder, R5 000 when both spouses have one.', year: 2026 },
-  healthyFoodHealthPct: { label: 'HealthyFood back from Vitality Health (main shop)', unit: '%', value: 25, source: 'HF: 25% if you have done the Vitality Age assessment and a Health Check, 10% if not.', year: 2026 },
-  healthyFoodSecondaryPct: { label: 'HealthyFood back at the other shop', unit: '%', value: 10, source: 'HF: up to 10% back at your other HealthyFood shop.', year: 2026 },
+  healthyFoodHealthPct: { label: 'HealthyFood back from Vitality Health (main shop)', unit: '%', value: 10,
+    cases: [{ when: 'assessed', value: 25, label: 'Done your Vitality Age and a Vitality Health Check in the last 12 months' }],
+    source: 'HFG: 10% once you switch HealthyFood on, 25% once each adult has done both the Vitality Age assessment and a Vitality Health Check in the last 12 months. Your Vitality Health status does not change it. We count 10% until you say you have done both; type 25 if you have.', year: 2026 },
+  healthyFoodSecondaryPct: { label: 'HealthyFood back at the other shop', unit: '%', value: 0,
+    cases: [{ when: 'assessed', value: 10, label: 'Done your Vitality Age and a Vitality Health Check in the last 12 months' }],
+    source: 'HFG: 10% at your other HealthyFood shop, but only once you have done both health checks; nothing before that. Vitality Active plans have no second shop. We count nothing until you say you have done both; type 10 if you have.', year: 2026 },
   healthyFoodHealthCap: { label: 'HealthyFood spend Vitality Health pays on (whole family)', unit: 'R/month', value: 5000, source: 'HF: up to R5 000 a month for the family.', year: 2026 },
   healthyMinSpend: { label: 'Least HealthyFood or HealthyCare spend a month before any reward', unit: 'R/month', value: 200, source: 'From September 2026 a month with less than this earns nothing. Discovery counts it per person, per shop, and in store and online separately; here it is checked per shop. Source: Vitality benefit updates, 2026.', year: 2026 },
 
   healthyCareShare: { label: 'How much of your Clicks / Dis-Chem spend is HealthyCare', unit: '%', value: 30, source: 'Your own guess. Schedule 1 and 2 medicines no longer count.', year: null, guess: true },
   healthyCareMoneyPct: { label: 'Bank\'s extra HealthyCare percentage', unit: '%', band: 'healthyCare', source: 'GUIDE: grows with your monthly card spend and your Vitality Money status, up to 15% on the Gold Suite and 25% on the others.', year: 2026 },
-  healthyCareHealthPct: { label: 'HealthyCare back from Vitality Health', unit: '%', value: 25, source: 'Up to 25% at your main shop. Source: Vitality help pages.', year: 2026 },
+  healthyCareHealthPct: { label: 'HealthyCare back from Vitality Health', unit: '%', value: 10,
+    cases: [
+      { when: 'assessed', value: 25, label: 'Done your Vitality Age and a Vitality Health Check in the last 12 months' },
+      { when: 'oneAssessment', value: 15, label: 'Done one of the two health checks in the last 12 months' },
+    ],
+    source: 'HCG: 10% at Clicks and Dis-Chem once you switch HealthyCare on, 15% at your main shop after one of the two health checks, 25% after both (Vitality Age and a Vitality Health Check in the last 12 months). Your Vitality Health status does not change it. We count 10% until you say otherwise; type 15 or 25 if that is yours.', year: 2026 },
   healthyCareCap: { label: 'HealthyCare spend Vitality Health pays on (whole family)', unit: 'R/month', value: 4000, source: 'HC: up to R4 000 a month for the family.', year: 2026 },
   healthyCareMoneyCap: { label: 'HealthyCare spend the bank\'s extra applies to', unit: 'R/month', value: 2000, source: 'HC: up to R2 000 a month with one account holder.', year: 2026 },
 
-  fuelDrivePct: { label: 'Vitality Drive fuel back', unit: '%', on: 'drive', byStatus: { Blue: 0, Bronze: 5, Silver: 15, Gold: 30, Diamond: 50 }, source: 'DRIVE: for the Purple and Classic Insure plans; Essential plans get half.', year: 2026 },
+  fuelDrivePct: { label: 'Vitality Drive fuel back', unit: '%', on: 'drive', byStatus: { Blue: 0, Bronze: 5, Silver: 15, Gold: 30, Diamond: 50 },
+    cases: [
+      { when: 'essentialPlan', on: 'drive', byStatus: { Blue: 0, Bronze: 2.5, Silver: 7.5, Gold: 15, Diamond: 25 }, label: 'On the Essential Insure plan' },
+      { when: 'corePlan', value: 0, label: 'On the Core Insure plan' },
+    ],
+    source: 'DRIVETC: by your Vitality Drive status, for the Purple and Classic Insure plans. The Essential plan gets half, the Core plan none. Paid with the plastic card instead of the virtual card, it stops at the Bronze figure.', year: 2026 },
   fuelMoneyPct: { label: 'Bank\'s extra fuel percentage', unit: '%', band: 'fuel', source: 'GUIDE: grows with your monthly card spend and your Vitality Money status, when you pay with the virtual card. At Diamond it goes up to 10% on the Gold and Platinum Suites and 15% on Black and Purple.', year: 2026 },
-  fuelCap: { label: 'Fuel spend that earns rewards, per driver', unit: 'R/month', value: 1500, source: 'DRIVE: the limit when you have no home insurance with Discovery. It is not published whether the bank\'s extra has the same limit; we assume it does.', year: 2026 },
+  fuelCap: { label: 'Fuel spend that earns rewards, per driver', unit: 'R/month', value: 1500,
+    /* Blue earns 0% from Drive, so its R0 limit is left out: the bank's
+       extra keeps the R1 500 assumption there. */
+    cases: [
+      { when: 'homeBoth', on: 'drive', byStatus: { Bronze: 2000, Silver: 2250, Gold: 2500, Diamond: 3000 }, label: 'Discovery Insure covers your building and your household contents (R300 000 or more each)' },
+      { when: 'homeOne', on: 'drive', byStatus: { Bronze: 1500, Silver: 1750, Gold: 2000, Diamond: 2500 }, label: 'Discovery Insure covers your building or your household contents (R300 000 or more)' },
+    ],
+    source: 'DRIVETC: R1 500 a month at every status from Bronze up when Discovery does not insure your home. With home cover of R300 000 or more it grows with your Vitality Drive status, up to R3 000 at Diamond with both building and contents. It is not published whether the bank\'s extra has the same limit; we assume it does.', year: 2026 },
   fuelDrivers: { label: 'Main drivers who bank with Discovery', unit: 'drivers', value: 1, source: 'Fuel rewards go to main drivers who hold their own Discovery Bank account.', year: null, guess: true },
   driveFunderAccount: { label: 'Drive rewards paid into the Insure Funder Account (1 = yes, 0 = cash)', unit: 'yes/no', value: 0, source: 'DRIVE: money paid into the Insure Funder Account is doubled. You can use it for excesses, tyres, services and licences, and take out up to half every three years at R2 of the account for every R1.', year: 2026 },
   appleWatchMonthly: { label: 'Apple Watch full monthly payment', unit: 'R/month', value: 0, source: 'Worked out from what you were charged in months you missed goals, if there are any: 0–1 weekly goals met costs the full payment, 2 goals three quarters, 3 goals half, 4 goals nothing. Otherwise the watch\'s price divided by 24. The amount follows the shop price, so it can change.', year: 2026 },
   appleWatchActivation: { label: 'Apple Watch activation fee', unit: 'R', value: 1199, source: 'A once-off fee of R1 199 for the 24-month contract. Source: Apple Watch FAQ, 15 Sep 2026.', year: 2026 },
-  gymDiscountPct: { label: 'Vitality gym discount', unit: '%', value: 75, source: '75% off at a Virgin Active or Planet Fitness near you, if you go 36 times a year. Source: Vitality.', year: 2026 },
+  gymDiscountPct: { label: 'Vitality gym discount', unit: '%', value: 50,
+    cases: [{ when: 'gym36', value: 75, label: 'A one-gym (Club) membership and at least 36 workouts in the last 12 months' }],
+    source: 'GYM: up to 75% off a one-gym Club membership when you work out at least 36 times in 12 months; 50% with fewer workouts, and on Premier, Collection and Club-V memberships. Your Vitality Health status does not change it. We count 50% until you say you go 36 times a year; type 75 if you do.', year: 2026 },
   fuelWithoutBankPct: { label: 'Fuel back without Discovery Bank', unit: '%', value: 0, source: 'DRIVE: without any Discovery Bank account there are no fuel rewards, but even the free account is enough.', year: 2026 },
 
-  travelHealthPct: { label: 'Flight discount from Vitality Health on its own', unit: '%', value: 25, source: 'GUIDE: 10% straight away, up to 25% once you have done your health assessments.', year: 2026 },
+  travelHealthPct: { label: 'Flight discount from Vitality Health on its own', unit: '%', value: 10,
+    cases: [{ when: 'assessed', value: 25, label: 'Done your Vitality Age and a Vitality Health Check in the last 12 months' }],
+    source: 'BLACK: 10% straight away, 25% once you have done the Vitality Age assessment and a Vitality Health Check, on three return or six one-way local flights a year. Your Vitality Health status does not change it. We count 10% until you say you have done both; type 25 if you have.', year: 2026 },
   /* Your collection's Credit Card Account on its own (the downgrade option). */
   ccFee: { label: 'Credit Card Account monthly fee', unit: 'R/month', value: 275, source: 'CCFEES: the account, Vitality Money and credit card fees together. R125 for Gold, R180 for Platinum and R275 for Black. Purple has no Credit Card Account on its own.', year: 2026 },
   paytFee: { label: 'Average fee per payment on the cheaper account', unit: 'R', value: 3.25, source: 'CCFEES: debit orders cost R3,75 and online payments R2,75; card purchases and moving money between your own accounts are free. The average is a guess.', year: 2026, guess: true },
@@ -377,9 +440,25 @@ const ALTERNATIVES = [
     note: 'The Premium package with a credit card. Absa Rewards pays "up to 30%" back at grocery partners and at Shell or Sasol, on up to R3 000 a month each and no more than 20% of your card spend. Your own rate is only shown in the Absa app. The 0,5% on other spending is a guess.', source: 'absa.co.za premium banking; Absa Rewards terms 2026 (caps); tier rates unpublished' },
 ];
 
-/* ctx: { spend, suite, bankKind, bankFees } — spend is the month's (or the
-   12-month average) card spend, for band rates; suite, bankKind and
-   bankFees override the same settings. */
+/* settings.conditions (constants.js) → the `cases` they meet. Unanswered
+   meets none, so the lower published figure counts. */
+function metOf(settings) {
+  const c = (settings && settings.conditions) || {};
+  return {
+    assessed: c.checks === 'both',
+    oneAssessment: c.checks === 'one',
+    gym36: c.gym36 === true,
+    essentialPlan: c.insurePlan === 'essential',
+    corePlan: c.insurePlan === 'core',
+    homeOne: c.homeCover === 'one',
+    homeBoth: c.homeCover === 'both',
+  };
+}
+
+/* ctx: { spend, suite, bankKind, bankFees, met } — spend is the month's (or
+   the 12-month average) card spend, for band rates; suite, bankKind and
+   bankFees override the same settings; met: { [case]: true } for the
+   conditions known to apply (see `cases` on a rate). */
 function rate(settings, key, status, ctx) {
   const o = settings && settings.rates ? settings.rates[key] : undefined;
   if (o !== undefined && o !== null && o !== '' && Number.isFinite(Number(o))) return Number(o);
@@ -395,6 +474,14 @@ function rate(settings, key, status, ctx) {
   if (own && has(own, 'value')) v = own.value;
   else if (own && own.byStatus) v = own.byStatus[s[def.on]];
   else v = def.byStatus ? def.byStatus[s[def.on]] : def.value;
+  /* a case that applies (from settings.conditions, or ctx.met) replaces the
+     default figure */
+  const met = Object.assign(metOf(settings), (ctx && ctx.met) || {});
+  for (const c of def.cases || []) {
+    if (met[c.when] !== true) continue;
+    const cv = c.byStatus ? c.byStatus[s[c.on || def.on]] : c.value;
+    if (cv !== undefined) { v = cv; break; }
+  }
   if (def.band) {
     const name = has(prod.bands, def.band) ? prod.bands[def.band] : def.band;
     const table = name ? bandTable(prod.suite || suite.id, name) : null;
@@ -424,4 +511,4 @@ function altRate(key) {
   return a ? { value: a[m[2]] || 0 } : null;
 }
 
-module.exports = { sourceText, FACE_VALUE: 0.1, RATES, ALTERNATIVES, BANDS, FLIGHT_BANDS, SHORT_BANDS, DIAMOND, SUITES, SUITE_TABLES, DEFAULT_SUITE, suiteOf, BANK_PRODUCTS, BANK_KINDS, bankProductOf, bandTable, bandPct, rate };
+module.exports = { metOf, sourceText, FACE_VALUE: 0.1, RATES, ALTERNATIVES, BANDS, FLIGHT_BANDS, SHORT_BANDS, DIAMOND, SUITES, SUITE_TABLES, DEFAULT_SUITE, suiteOf, BANK_PRODUCTS, BANK_KINDS, bankProductOf, bandTable, bandPct, rate };

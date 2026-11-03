@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('node:assert');
 const { BENEFITS, GROUPS, WEIGHT, benefitsFor, availableFor, offerText, bankKindOf, suggestBenefits, levelOf } = require('../src/benefits');
-const { RATES, DIAMOND } = require('../src/rates');
+const { RATES, DIAMOND, SUITE_TABLES } = require('../src/rates');
 
 /* A made-up household over twelve months. */
 const fig = perMonth => ({ total: Object.values(perMonth).reduce((a, b) => a + b, 0), count: 1, perMonth });
@@ -132,14 +132,23 @@ for (const b of BENEFITS) {
   assert.ok(/\.$/.test(b.offer) && /\.$/.test(b.measuredBy), `${b.id} sentences end in a full stop`);
   assert.ok(GROUP_IDS.includes(b.group), `${b.id}.group`);
 }
-// headline figures come from rates.js
-assert.ok(R(B('gym').offer).includes(`${RATES.gymDiscountPct.value}% off`), B('gym').offer);
-assert.ok(R(B('fuel').offer).includes(`${Math.max(...DIAMOND.fuel)}% more`), B('fuel').offer);
-assert.ok(R(B('fuel').offer).includes(`${Math.max(...Object.values(RATES.fuelDrivePct.byStatus))}% back`));
-assert.ok(R(B('healthyFood').offer).includes('R 5 000 a month') && R(B('healthyFood').offer).includes(`${Math.max(...DIAMOND.healthyFood)}% more`));
-assert.ok(R(B('flights').offer).includes(`${RATES.travelHealthPct.value}% off`));
+// headline figures come from rates.js; the static offer quotes the best on ANY tier
+const topAll = band => Math.max(...Object.values(SUITE_TABLES).map(t => (t[band] ? Math.max(...t[band].Diamond) : 0)));
+assert.strictEqual(topAll('healthyFood'), 50, 'Purple goes to 50%');
+assert.ok(R(B('gym').offer).includes(`${RATES.gymDiscountPct.value}% off`) && R(B('gym').offer).includes('75% off a one-gym membership') && /36 times/.test(B('gym').offer), B('gym').offer);
+assert.ok(R(B('fuel').offer).includes(`${topAll('fuel')}% more`), B('fuel').offer);
+assert.ok(R(B('fuel').offer).includes(`${Math.max(...Object.values(RATES.fuelDrivePct.byStatus))}% back`) && /half that on Essential/.test(B('fuel').offer));
+assert.ok(R(B('fuel').offer).includes('R 1 500 of fuel') && R(B('fuel').offer).includes('R 3 000 when Discovery also insures your home'), B('fuel').offer);
+assert.ok(R(B('healthyFood').offer).includes('R 5 000 a month') && R(B('healthyFood').offer).includes('50% more'), B('healthyFood').offer);
+assert.ok(R(B('healthyFood').offer).includes('10% back') && R(B('healthyFood').offer).includes('25% once you have done your Vitality Age'), 'the health checks, not a status');
+assert.ok(R(B('healthyCare').offer).includes('10% back') && R(B('healthyCare').offer).includes('25% once'), B('healthyCare').offer);
+assert.ok(R(B('flights').offer).includes(`${RATES.travelHealthPct.value}% off`) && R(B('flights').offer).includes(`${topAll('flightsLocal')}% more on local flights`), B('flights').offer);
+assert.ok(R(B('miles').offer).includes('every R 15') && R(B('miles').offer).includes('R 10 000 to R 30 000'), B('miles').offer);
 assert.ok(R(B('appleWatch').offer).includes('R 1 199'));
 assert.ok(R(B('interest').offer).includes('1,5%'), 'a decimal comma');
+// spending Miles: Discovery Miles partners, 5% per Vitality programme, double on Ð-Day
+assert.ok(!/Miles\+/.test(B('milesPlus').offer + B('milesPlus').question), 'Miles+ is where you earn, not spend');
+assert.ok(R(B('milesPlus').offer).includes('5% off for each Vitality programme') && R(B('milesPlus').offer).includes('up to 15%') && R(B('milesPlus').offer).includes('up to 30%'), B('milesPlus').offer);
 assert.strictEqual(B('gym').needs, 'Vitality Health');
 assert.ok(/Vitality Drive/.test(B('fuel').needs) && /Vitality Money/.test(B('fuel').needs));
 assert.ok(/Miles statement/.test(B('gameboard').measuredBy) && /do not show/.test(B('gameboard').measuredBy), 'says the bank statements cannot show it');
@@ -219,18 +228,54 @@ assert.ok(benefitsFor(ALL, { bankKind: 'suite', vitality: {} }).some(b => b.id =
 // offerText quotes this person's tier and statuses
 const ot = (id, settings) => R(offerText(id, settings));
 const blackDiamond = { suite: 'Black', status: { money: 'Diamond', health: 'Gold', drive: 'Silver' } };
+assert.ok(BENEFITS.every(b => !/Miles\+/.test(offerText(b, blackDiamond))), 'no Miles+ in what you spend');
 const goldBlue = { suite: 'Gold', status: { money: 'Blue', health: 'Blue', drive: 'Blue' } };
-assert.ok(ot('miles', blackDiamond).includes('every R 15 you pay') && ot('miles', blackDiamond).includes('Diamond status on the Black Suite'), ot('miles', blackDiamond));
+assert.ok(ot('miles', blackDiamond).includes('every R 15 you pay') && ot('miles', blackDiamond).includes('Diamond Vitality Money status on the Black Suite'), ot('miles', blackDiamond));
 assert.ok(ot('miles', goldBlue).includes('every R 100 you pay') && ot('miles', goldBlue).includes('R 10 000 a month'), ot('miles', goldBlue));
 assert.notStrictEqual(ot('healthyFood', blackDiamond), ot('healthyFood', { ...blackDiamond, status: { ...blackDiamond.status, money: 'Gold' } }), 'changes with the bank status');
 assert.ok(ot('healthyFood', blackDiamond).includes(`${Math.max(...DIAMOND.healthyFood)}% more`));
 assert.ok(ot('fuel', blackDiamond).includes(`${RATES.fuelDrivePct.byStatus.Silver}% back at bp and Shell at your Silver Drive status`), ot('fuel', blackDiamond));
 assert.ok(/nothing back at your Blue Drive status/.test(ot('fuel', goldBlue)));
-assert.ok(/No extra interest at your Blue status/.test(ot('interest', goldBlue)));
+assert.ok(/No extra interest at your Blue Vitality Money status on the Gold Suite/.test(ot('interest', goldBlue)));
 assert.ok(ot('interest', blackDiamond).includes('1,5% more'));
 assert.ok(/Credit Card Account/.test(ot('miles', { ...blackDiamond, bankKind: 'card' })), 'a card on its own is named as such');
+// the person's actual product, not the Suite of its tier
+const goldTx = { suite: 'Gold', bankKind: 'transaction', status: { money: 'Blue', health: 'Blue', drive: 'Blue' } };
+assert.ok(ot('miles', goldTx).includes('Blue Vitality Money status on the Gold Transaction Account (bundled fees)') && !/Gold Suite/.test(ot('miles', goldTx)), ot('miles', goldTx));
+assert.ok(/Gold Transaction Account/.test(ot('interest', goldTx)) && !/Gold Suite/.test(ot('healthyFood', goldTx)), ot('healthyFood', goldTx));
+// no base Miles (pay-as-you-transact, savings only): says so, never the Black Diamond sentence
+const payt = { ...goldTx, bankFees: 'payt' };
+assert.strictEqual(ot('miles', payt), 'The Gold Transaction Account (pay-as-you-transact) earns no Miles on card spend.');
+assert.strictEqual(ot('miles', { ...goldTx, bankKind: 'savings' }), 'The Ðiscovery Account (savings only) earns no Miles on card spend.');
+// HealthyFood, HealthyCare and flights: the health checks set Vitality Health's part, not the status
+for (const id of ['healthyFood', 'healthyCare', 'flights']) {
+  const lo = ot(id, { ...blackDiamond, status: { ...blackDiamond.status, health: 'Blue' } });
+  const hi = ot(id, { ...blackDiamond, status: { ...blackDiamond.status, health: 'Diamond' } });
+  assert.ok(/gives 10% /.test(lo) && /up to 25% once you have done your Vitality Age/.test(lo), lo);
+  assert.strictEqual(lo.replace('Blue Vitality Health', 'X'), hi.replace('Diamond Vitality Health', 'X'), `${id}: only the status name changes`);
+  assert.ok(/not your Blue Vitality Health status/.test(lo), 'quotes the person\'s status and says it does not decide it');
+}
+// a typed figure (they have done both checks) is quoted, with no "goes up to"
+const typed25 = ot('healthyFood', { ...blackDiamond, rates: { healthyFoodHealthPct: 25 } });
+assert.ok(/gives 25% back on HealthyFood/.test(typed25) && !/goes up to/.test(typed25), typed25);
+// the gym: 50% unless 36 workouts; the status does not change it
+assert.ok(/^50% off Virgin Active/.test(ot('gym', blackDiamond)) && /75% off a one-gym membership/.test(ot('gym', blackDiamond)) && /not your Gold Vitality Health status/.test(ot('gym', blackDiamond)), ot('gym', blackDiamond));
+// fuel: the Drive limit grows with the Drive status only when Discovery insures the home
+assert.ok(ot('fuel', blackDiamond).includes('R 1 500 of fuel') && ot('fuel', blackDiamond).includes('goes up to R 2 250'), ot('fuel', blackDiamond));
+assert.ok(ot('fuel', { ...blackDiamond, status: { ...blackDiamond.status, drive: 'Diamond' } }).includes('goes up to R 3 000'));
+// spending Miles: 5% for each programme you have, double on Ð-Day
+const v2 = ot('milesPlus', { ...blackDiamond, vitality: { money: true, health: true, drive: false } });
+assert.ok(/two Vitality programmes/.test(v2) && /get 10% off at Discovery Miles partners/.test(v2) && /Ð-Day \(the 15th\) it is 20%/.test(v2), v2);
+assert.ok(/three Vitality programmes/.test(ot('milesPlus', { vitality: { money: true, health: true, drive: true } })));
+assert.strictEqual(ot('milesPlus', {}), R(B('milesPlus').offer), 'no programmes known: the general offer');
 assert.strictEqual(offerText(B('gameboard'), blackDiamond), B('gameboard').offer, 'no figures: the static offer');
 assert.ok(BENEFITS.every(b => offerText(b, {}) && !/undefined|NaN/.test(offerText(b, {}))), 'empty settings still read');
 assert.strictEqual(offerText('nope', {}), '');
 
+// no Vitality Money: no Miles-spending discount quoted, as the model counts none
+{
+  const bm = BENEFITS.find(x => x.id === 'milesPlus');
+  assert.ok(/need Vitality Money/.test(offerText(bm, { vitality: { money: false, health: true, drive: true }, status: {} })));
+  assert.ok(/10% off .* it is 20%/.test(offerText(bm, { vitality: { money: true, health: true }, status: {} })), 'two programmes: 10% everyday, 20% on Ð-Day');
+}
 console.log('benefits OK');

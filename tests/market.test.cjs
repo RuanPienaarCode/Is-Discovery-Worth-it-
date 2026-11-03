@@ -100,6 +100,60 @@ assert.strictEqual(rate({ rates: { ccFee: '99' }, suite: 'Gold' }, 'ccFee', {}),
 // status unknown: 0, not a crash
 assert.strictEqual(R('Gold', 'fuelMoneyPct', undefined, 30000), 0);
 
+// ── Vitality Health, Drive and Miles figures: what decides each one ───
+const H = (key, health, met) => rate({ rates: {} }, key, { money: 'Diamond', health, drive: 'Blue' }, { met });
+// HealthyFood, HealthyCare, flights and the gym do not change with the Vitality Health status
+for (const key of ['healthyFoodHealthPct', 'healthyFoodSecondaryPct', 'healthyCareHealthPct', 'travelHealthPct', 'gymDiscountPct', 'activeRewardsWithoutBank']) {
+  const at = STATUSES.map(st => H(key, st));
+  assert.ok(at.every(v => v === at[0]), `${key}: the same at every Vitality Health status`);
+  assert.ok(!RATES[key].byStatus && !RATES[key].on, `${key}: not keyed on a status`);
+}
+// the lower figure until the person says otherwise (the health checks, 36 workouts)
+assert.strictEqual(H('healthyFoodHealthPct', 'Diamond'), 10, 'HealthyFood: 10% before both health checks');
+assert.strictEqual(H('healthyFoodHealthPct', 'Blue', { assessed: true }), 25, 'HealthyFood: 25% after both');
+assert.strictEqual(H('healthyFoodSecondaryPct', 'Diamond'), 0, 'the other shop: nothing before the checks');
+assert.strictEqual(H('healthyFoodSecondaryPct', 'Blue', { assessed: true }), 10);
+assert.strictEqual(H('healthyCareHealthPct', 'Gold'), 10);
+assert.strictEqual(H('healthyCareHealthPct', 'Gold', { oneAssessment: true }), 15, 'HealthyCare: 15% after one check');
+assert.strictEqual(H('healthyCareHealthPct', 'Gold', { assessed: true, oneAssessment: true }), 25, 'both checks beat one');
+assert.strictEqual(H('travelHealthPct', 'Silver'), 10, 'flights: 10% straight away');
+assert.strictEqual(H('travelHealthPct', 'Silver', { assessed: true }), 25);
+assert.strictEqual(H('gymDiscountPct', 'Diamond'), 50, 'gym: 50% unless 36 workouts');
+assert.strictEqual(H('gymDiscountPct', 'Blue', { gym36: true }), 75);
+assert.strictEqual(H('activeRewardsWithoutBank', 'Diamond'), 100, 'still a guess');
+assert.ok(RATES.activeRewardsWithoutBank.unconfirmed && RATES.activeRewardsWithoutBank.unconfirmedWhy, 'says why it is a guess');
+// a typed figure beats a case
+assert.strictEqual(rate({ rates: { healthyFoodHealthPct: 18 } }, 'healthyFoodHealthPct', {}, { met: { assessed: true } }), 18);
+// every case says what it needs (the question the person would answer)
+for (const [k, d] of Object.entries(RATES)) {
+  for (const c of d.cases || []) assert.ok(c.when && c.label && (c.value !== undefined || c.byStatus), `${k}.${c.when} is complete`);
+}
+// Vitality Drive: fuel back by Drive status and plan; the fuel limit by status only with home cover
+const Dv = (key, drive, met) => rate({ rates: {} }, key, { money: 'Diamond', health: 'Blue', drive }, { met });
+assert.deepStrictEqual(STATUSES.map(st => Dv('fuelDrivePct', st)), [0, 5, 15, 30, 50], 'Classic and Purple plans');
+assert.deepStrictEqual(STATUSES.map(st => Dv('fuelDrivePct', st, { essentialPlan: true })), [0, 2.5, 7.5, 15, 25], 'Essential: half');
+assert.strictEqual(Dv('fuelDrivePct', 'Diamond', { corePlan: true }), 0, 'Core: no Drive fuel rewards');
+assert.deepStrictEqual(STATUSES.map(st => Dv('fuelCap', st)), [1500, 1500, 1500, 1500, 1500], 'no home cover: R1 500 at every status');
+assert.deepStrictEqual(STATUSES.map(st => Dv('fuelCap', st, { homeOne: true })), [1500, 1500, 1750, 2000, 2500], 'building or contents');
+assert.deepStrictEqual(STATUSES.map(st => Dv('fuelCap', st, { homeBoth: true })), [1500, 2000, 2250, 2500, 3000], 'building and contents');
+// Vitality Money status changes only the base Miles rate, not the limit, the rate above it or the plastic card
+for (const key of ['milesThreshold', 'milesAboveThreshold', 'milesPhysical']) {
+  const at = STATUSES.map(st => R('Black', key, st));
+  assert.ok(at.every(v => v === at[0]), `${key}: the same at every Vitality Money status`);
+}
+assert.deepStrictEqual(STATUSES.map(st => R('Black', 'milesRandPerMile', st)), [65, 50, 40, 30, 15], 'the base rate does change');
+// spending Miles: 5% per active Vitality programme, double on Ð-Day
+assert.strictEqual(rate({ rates: {} }, 'milesPartnerPct', {}), 5);
+assert.strictEqual(rate({ rates: {} }, 'milesDdayPct', {}), 10);
+assert.ok(RATES.milesPartnerPct.perProgramme && RATES.milesDdayPct.perProgramme && /per active Vitality programme/.test(RATES.milesPartnerPct.label));
+assert.ok(!/Miles\+/.test(RATES.milesPartnerPct.label + RATES.milesDdayPct.label + RATES.milesPartnerPct.source), 'Miles+ is where you earn, not spend');
+// new source codes read as plain sentences with the document after
+const { sourceText } = require('../src/rates');
+for (const k of ['healthyFoodHealthPct', 'healthyCareHealthPct', 'gymDiscountPct', 'fuelCap', 'milesPartnerPct', 'travelHealthPct']) {
+  assert.ok(/ Source: .*20\d\d/.test(sourceText(RATES[k].source)), `${k}: ${sourceText(RATES[k].source)}`);
+}
+assert.ok(/^Your own guess\. Without .* Source: Vitality Active Rewards/.test(sourceText(RATES.activeRewardsWithoutBank.source)), 'a guess says so first');
+
 // ── bank products: tier × kind ───────────────────────────────────────
 assert.deepStrictEqual(BANK_KINDS, ['suite', 'card', 'transaction', 'savings']);
 for (const p of BANK_PRODUCTS) {
@@ -155,4 +209,17 @@ for (const b of ALTERNATIVES) assert.ok(b.source && /20\d\d/.test(b.source), `${
   assert.ok(/20\d\d/.test(C.LIFE_BENCHMARK.source) && /20\d\d/.test(C.HOME_RANGE.source), 'ranges are dated');
 }
 
+// settings.conditions reach every rate() caller without ctx.met
+{
+  const { rate: rr, metOf } = require('../src/rates');
+  const st = { money: 'Gold', health: 'Silver', drive: 'Gold' };
+  assert.deepStrictEqual(Object.values(metOf({})).filter(Boolean), [], 'unanswered meets nothing');
+  assert.strictEqual(rr({ conditions: { checks: 'both' } }, 'healthyFoodHealthPct', st), 25);
+  assert.strictEqual(rr({}, 'healthyFoodHealthPct', st), 10);
+  assert.strictEqual(rr({ conditions: { checks: 'one' } }, 'healthyCareHealthPct', st), 15);
+  assert.strictEqual(rr({ conditions: { gym36: true } }, 'gymDiscountPct', st), 75);
+  assert.strictEqual(rr({ conditions: { insurePlan: 'essential' } }, 'fuelDrivePct', st), 15);
+  assert.strictEqual(rr({ conditions: { homeCover: 'both' } }, 'fuelCap', st), 2500);
+  assert.strictEqual(rr({ conditions: { checks: 'both' }, rates: { healthyFoodHealthPct: 12 } }, 'healthyFoodHealthPct', st), 12, 'a typed figure still wins');
+}
 console.log('market: ok');

@@ -49,8 +49,20 @@ function matches(rule, row, acct) {
    accounts:   { [label]: { institution, type } } from the account notes
    categories: { [name]: type } from the category notes
    opts:       { from, to, notCardSpend: [category names] }
-   →  { from, to, months, rowsSeen, figures: { [key]: { total, count, perMonth } }, lastSeen,
-        cardAccounts, excludedFromSpend: { [category]: amount } } */
+   →  { from, to, months, rowsSeen, figures: { [key]: { total, count, perMonth, accounts } }, lastSeen,
+        cardAccounts, excludedFromSpend: { [category]: amount },
+        accountMonths: { [account]: ['YYYY-MM'] } }
+
+   accounts on a figure names the accounts it came from ({ [label]: true });
+   accountMonths lists, per account, the window's months that hold any row
+   on it. Together they say over how many months a figure was really
+   measured (sourceMonths), so a short import of one bank is not read as
+   months of nothing beside a longer import of another.
+
+   Besides card spend tagged on the credit card (shop.*, fuel.* — Vitality
+   Money's extras), partner spend is kept as all.<tag> on any account and as
+   disc.<tag> on any Discovery Bank card, credit or debit (Vitality Drive's
+   fuel needs a Discovery Bank card, not the credit card). */
 function measure(rows, accounts, categories, opts) {
   const months = monthsBetween(opts.from, opts.to);
   const notSpend = new Set(opts.notCardSpend || []);
@@ -63,11 +75,13 @@ function measure(rows, accounts, categories, opts) {
   const keep = (key, row) => (rowsOf[key] = rowsOf[key] || []).push({ date: row.date, description: row.description, amount: row.amount, account: row.account });
   let rowsSeen = 0;
 
-  const add = (key, ym, value) => {
-    const f = figures[key] || (figures[key] = { total: 0, count: 0, perMonth: {} });
+  const accountMonths = {};
+  const add = (key, ym, value, account) => {
+    const f = figures[key] || (figures[key] = { total: 0, count: 0, perMonth: {}, accounts: {} });
     f.total += value;
     f.count++;
     f.perMonth[ym] = (f.perMonth[ym] || 0) + value;
+    f.accounts[account] = true;
   };
 
   const dataMonths = new Set();
@@ -102,6 +116,7 @@ function measure(rows, accounts, categories, opts) {
     if (ym < opts.from || ym > opts.to) continue;
     rowsSeen++;
     if (acct.discovery) dataMonths.add(ym);
+    (accountMonths[row.account] || (accountMonths[row.account] = new Set())).add(ym);
 
     const type = catType[String(row.category || '').trim().toLowerCase()] || '';
     /* A payment that would cost a pay-as-you-transact fee on a product
@@ -111,9 +126,9 @@ function measure(rows, accounts, categories, opts) {
        own accounts (transfer types, Discovery savings) are free. */
     const own = type === 'transfer' || /discovery/i.test(row.category || '') || /discovery bank account/i.test(row.description) || (row.amount < 0 && matched(row));
     const bankLine = rule && !/^product\./.test(rule.key);
-    if (acct.discovery && row.amount < 0 && !own && !bankLine && (acct.checking || (acct.card && (NOT_SPEND_TYPES.includes(type) || notSpend.has(row.category))))) add('payt.payments', ym, 1);
+    if (acct.discovery && row.amount < 0 && !own && !bankLine && (acct.checking || (acct.card && (NOT_SPEND_TYPES.includes(type) || notSpend.has(row.category))))) add('payt.payments', ym, 1, row.account);
     if (rule) {
-      add(rule.key, ym, rule.direction === 'income' ? row.amount : -row.amount);
+      add(rule.key, ym, rule.direction === 'income' ? row.amount : -row.amount, row.account);
       keep(rule.key, row);
       continue;
     }
@@ -121,15 +136,16 @@ function measure(rows, accounts, categories, opts) {
        HealthyFood, HealthyCare, the gym and flight discounts whichever
        bank's card paid. Only Vitality Money's extras need a Discovery card
        (the shop.* figures below). */
-    if (row.amount < 0 && !NOT_SPEND_TYPES.includes(type) && !notSpend.has(row.category)) {
-      const anyTag = SHOP_TAGS.find(t => t.desc.test(row.description) && !(t.not && t.not.test(row.description)));
-      if (anyTag) add('all.' + anyTag.key, ym, -row.amount);
-    }
+    const tag = SHOP_TAGS.find(t => t.desc.test(row.description) && !(t.not && t.not.test(row.description)));
+    if (tag && row.amount < 0 && !NOT_SPEND_TYPES.includes(type) && !notSpend.has(row.category)) add('all.' + tag.key, ym, -row.amount, row.account);
     /* Money out of a Discovery transaction account that is not a fee, a
        premium or a move between your own accounts: its debit card swipes,
        mixed with debit orders a statement cannot tell apart. Card spend for
        someone whose only Discovery card is the transaction account's. */
-    if (acct.discovery && acct.checking && row.amount < 0 && !own && !NOT_SPEND_TYPES.includes(type) && !notSpend.has(row.category)) add('spend.debit', ym, -row.amount);
+    if (acct.discovery && acct.checking && row.amount < 0 && !own && !NOT_SPEND_TYPES.includes(type) && !notSpend.has(row.category)) {
+      add('spend.debit', ym, -row.amount, row.account);
+      if (tag) add('disc.' + tag.key, ym, -row.amount, row.account);
+    }
     if (!(acct.discovery && acct.card)) continue;
     cardAccounts.add(row.account);
 
@@ -141,13 +157,14 @@ function measure(rows, accounts, categories, opts) {
        the card (a top-up from savings filed under what it paid for) is a
        transfer, and reading it as a refund would shrink card spend. */
     if (row.amount > 0 && !/refund|revers/i.test(row.description)) continue;
-    add('spend.card', ym, -row.amount);
-    const tag = SHOP_TAGS.find(t => t.desc.test(row.description) && !(t.not && t.not.test(row.description)));
-    if (tag) add(tag.key, ym, -row.amount);
+    add('spend.card', ym, -row.amount, row.account);
+    if (tag) { add(tag.key, ym, -row.amount, row.account); add('disc.' + tag.key, ym, -row.amount, row.account); }
     if (tag && tag.key === 'travel.vitality') keep(tag.key, row);
   }
 
-  return { from: opts.from, to: opts.to, months, dataMonths: months.filter(ym => dataMonths.has(ym)), rowsSeen, figures, lastSeen, firstSeen, rows: rowsOf, cardAccounts: [...cardAccounts], excludedFromSpend };
+  const acctMonths = {};
+  for (const [acc, set] of Object.entries(accountMonths)) acctMonths[acc] = months.filter(ym => set.has(ym));
+  return { from: opts.from, to: opts.to, months, dataMonths: months.filter(ym => dataMonths.has(ym)), rowsSeen, figures, lastSeen, firstSeen, rows: rowsOf, cardAccounts: [...cardAccounts], excludedFromSpend, accountMonths: acctMonths };
 }
 
 /* Total of a figure, 0 when it never appeared. */
@@ -155,4 +172,34 @@ function total(m, key) {
   return m.figures[key] ? m.figures[key].total : 0;
 }
 
-module.exports = { monthsBetween, trailingWindow, measure, total };
+/* How many of the window's months a figure was measured over: the months
+   holding any row on an account the figures came from. A figure fed by a
+   bank imported for twelve months is a twelve-month figure even when the
+   Discovery accounts are three months old. `except` leaves accounts out
+   (a Discovery card whose part is counted on its own). `fallback` (the
+   Discovery months, say) when nothing says: a figure never seen, or a
+   measured window built without account months. */
+function sourceMonths(m, keys, fallback, except) {
+  if (!m || !m.accountMonths || !m.figures) return fallback;
+  const skip = new Set(except || []);
+  const seen = new Set();
+  for (const k of keys) {
+    const f = m.figures[k];
+    if (!f || !f.accounts) continue;
+    for (const acc of Object.keys(f.accounts)) {
+      if (skip.has(acc)) continue;
+      for (const ym of m.accountMonths[acc] || []) seen.add(ym);
+    }
+  }
+  return seen.size || fallback;
+}
+
+/* A figure (or the sum of several) a year: total × 12 over the months it
+   was measured in (sourceMonths). */
+function annualOf(m, keys, fallback) {
+  const list = Array.isArray(keys) ? keys : [keys];
+  const sum = list.reduce((s, k) => s + total(m, k), 0);
+  return (sum * 12) / (sourceMonths(m, list, fallback) || 1);
+}
+
+module.exports = { monthsBetween, trailingWindow, measure, total, sourceMonths, annualOf };

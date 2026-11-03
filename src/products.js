@@ -9,7 +9,7 @@
    what they fetched, the Apple Watch, discounts). The flow draws both; the
    whole-bill total counts cash only, and says so. */
 
-const { total } = require('./measure');
+const { annualOf } = require('./measure');
 
 const num = v => v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v));
 
@@ -29,7 +29,10 @@ const DATES = [
    chosen out for all five. */
 function buildProducts(st, m, ms, settings, now, chosen) {
   const n = st.window.dataMonths || 1;
-  const yr = v => (v * 12) / n;
+  /* A premium or claim a year over the months its paying account holds
+     data: a Discovery Health debit on another bank imported for twelve
+     months is twelve months, whatever the Discovery Bank accounts hold. */
+  const yrOf = key => annualOf(m, [key], n);
   const L = key => { const l = st.lines.find(x => x.key === key); return l ? l.annual : 0; };
   const lineOf = key => st.lines.find(x => x.key === key) || null;
   const rows = key => ((m.rows && m.rows[key]) || []).map(r => ({ ...r, key }));
@@ -72,11 +75,11 @@ function buildProducts(st, m, ms, settings, now, chosen) {
   };
 
   /* ── Discovery Health (medical aid and Vitality Health) ──────────── */
-  const debitYear = yr(total(m, 'product.medical'));
+  const debitYear = yrOf('product.medical');
   const gapInDebit = gapMonthly * 12 * (debitYear > 0 ? 1 : 0);
   const vitalityYear = st.bill.vitalityMonthly !== null ? st.bill.vitalityMonthly * 12 : 0;
   const medicalYear = Math.max(0, debitYear - gapInDebit - vitalityYear);
-  const refunds = yr(total(m, 'product.medicalBack'));
+  const refunds = yrOf('product.medicalBack');
   /* What Vitality Health gives back is value, not cash, like the Drive
      estimate on Insure: without it the flow charged the premium and
      credited nothing. */
@@ -95,14 +98,20 @@ function buildProducts(st, m, ms, settings, now, chosen) {
     ],
     cashBack: refunds,
     debitYear, medicalYear, vitalityYear, refunds, vitValue,
+    /* false when nothing splits Vitality's premium out of the debit (no
+       medical aid amount typed and no priced plan): vitalityYear is then 0
+       because it is unknown, not because Vitality is free */
+    vitalityKnown: st.bill.vitalityMonthly !== null && st.bill.vitalityMonthly !== undefined,
+    /* today's medical aid a month (typed, or the plan's price), else null */
+    medicalMonthly: st.bill.medicalMonthly !== undefined ? st.bill.medicalMonthly : null,
     note: 'Claims paid back are cash. Vitality Health rewards are savings and Miles, not cash (the gym discount, HealthyFood, flights and exercise rewards).' + (debitYear && gapInDebit ? ' Gap cover is paid in the same debit order.' : ''),
     splitNote: splitNote(m, st),
     transactions: [...rows('product.medical').map(r => ({ ...r, note: gapMonthly ? `Includes gap cover R ${rand(gapMonthly)}` : '' })), ...rows('product.medicalBack')].concat(milesRows(ms, 'health')),
   };
 
   /* ── Gap cover ──────────────────────────────────────────────────── */
-  const gapOwn = yr(total(m, 'product.gap'));
-  const claims = yr(total(m, 'product.gapClaim'));
+  const gapOwn = yrOf('product.gap');
+  const claims = yrOf('product.gapClaim');
   const gap = {
     id: 'gap', name: 'Gap cover', short: 'Gap', icon: 'shield-check',
     figure: -(gapInDebit + gapOwn), figureLabel: 'What you pay',
@@ -114,8 +123,8 @@ function buildProducts(st, m, ms, settings, now, chosen) {
   };
 
   /* ── Discovery Insure (cars and Vitality Drive) ─────────────────── */
-  const insurePaid = yr(total(m, 'product.insure'));
-  const insureClaims = yr(total(m, 'product.insureClaim'));
+  const insurePaid = yrOf('product.insure');
+  const insureClaims = yrOf('product.insureClaim');
   const drive = lineOf('fuel.drive');
   const insureRows = rows('product.insure');
   const latestInsure = insureRows.length ? insureRows.slice().sort((a, b) => (a.date < b.date ? 1 : -1))[0] : null;
@@ -136,7 +145,7 @@ function buildProducts(st, m, ms, settings, now, chosen) {
   const lifeMonthly = num(life.monthly) ? Number(life.monthly) : 0;
   /* Miles Discovery Life paid (a quote reward, say), at the Mile value used */
   const lifeMiles = ms && ms.figures && ms.figures.life && st.milesStatement ? (ms.figures.life * st.mileValue * 12) / st.milesStatement.covered : 0;
-  const lifePaid = lifeMonthly * 12 + yr(total(m, 'product.life'));
+  const lifePaid = lifeMonthly * 12 + yrOf('product.life');
   const lifeP = {
     id: 'life', name: 'Discovery Life', short: 'Life', icon: 'umbrella',
     figure: -lifePaid, figureLabel: lifeMonthly ? 'Your share, off your salary,' : 'What you pay',
@@ -182,7 +191,7 @@ function splitNote(m, st) {
    the bank's (Vitality Money, base Miles, gameboard) or Vitality Health's. */
 const MILES_LABELS = {
   'money.healthyFood': 'Vitality Money · HealthyFood', 'money.healthyCare': 'Vitality Money · HealthyCare', 'money.fuel': 'Vitality Money · fuel',
-  'money.partners': 'Vitality Money · Miles+ partners', base: 'Base Miles · card spend', gameboard: 'Active Rewards gameboard', insure: 'Discovery Insure',
+  'money.partners': 'Vitality Money · partner shops', base: 'Base Miles · card spend', gameboard: 'Active Rewards gameboard', insure: 'Discovery Insure',
   'health.healthyFood': 'Vitality Health · HealthyFood', 'health.healthyCare': 'Vitality Health · HealthyCare', activeRewards: 'Vitality Active Rewards', 'health.other': 'Vitality Health · other',
 };
 function milesRows(ms, product) {

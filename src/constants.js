@@ -89,6 +89,25 @@ const DEFAULT_SETTINGS = {
      benefits (src/benefits.js). null = not answered: taken from the budget
      (src/detect.js resolveVitality). */
   vitality: { money: null, health: null, drive: null },
+  /* How you mostly spend your Discovery Miles, which sets what one is worth
+     when there is no Miles statement: 'dday' (Discovery Miles partners on
+     Ð-Day, the 15th), 'partners' (partners on other days), 'utilities'
+     (prepaid electricity, data or airtime in the app), 'none' (not spent).
+     '' = not answered: face value. */
+  milesUse: '',
+  /* What Discovery sets some benefits by, instead of your status. Each
+     unanswered one counts the LOWER published figure (rates.js cases,
+     model.js maps these to ctx.met):
+       checks      'both' | 'one' | 'none' — Vitality Age and a Vitality
+                   Health Check in the last 12 months (HealthyFood,
+                   HealthyCare and flight discounts: 10% → 25%)
+       gym36       true when you work out 36 times a year on a one-gym
+                   membership (gym discount 50% → 75%)
+       insurePlan  'core' | 'essential' | 'classic' | 'purple' — the Insure
+                   plan (Drive fuel: Essential half, Core none)
+       homeCover   'none' | 'one' | 'both' — Discovery Insure covers your
+                   building, contents or both (higher Drive fuel limit) */
+  conditions: { checks: '', gym36: null, insurePlan: '', homeCover: '' },
   /* Rate overrides keyed like rates.js entries; blank = the published default. */
   rates: {},
   /* What the Discovery app says you actually earned, in Miles, over the same

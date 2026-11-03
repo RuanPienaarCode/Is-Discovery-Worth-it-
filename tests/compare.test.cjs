@@ -176,4 +176,15 @@ assert.ok(INSURERS.length >= 6, 'at least six insurers');
   assert.strictEqual(healthPremium(own('dhExecutive'), { adults: 1, children: 4 }), 12338 + 3 * 2358, 'at most three children are charged');
 }
 
+// ── the medical aid split out by the plan's price ────────────────────
+{
+  const hp = compareHealth({ ...health, medicalMonthly: 5500, vitalityKnown: true }, { members: { adults: 2, children: 1 } }, plans);
+  near(hp.current.annual, 5500 * 12, 'today\'s priced contribution, not the window average');
+  assert.strictEqual(hp.vitalityKnown, true);
+  const typedWins = compareHealth({ ...health, medicalMonthly: 5500 }, { members: { adults: 2, children: 1 }, bill: { medical: 6500 } }, plans);
+  near(typedWins.current.annual, 6500 * 12, 'a typed amount still wins');
+  const unknown = compareHealth({ paid: 63000, medicalYear: 63000, vitalityYear: 0, vitValue: 3000, vitalityKnown: false }, { members: { adults: 1 } }, plans);
+  assert.strictEqual(unknown.vitalityKnown, false, 'unknown premium passed on');
+  assert.strictEqual(compareHealth(health, {}, plans).vitalityKnown, true, 'old callers: known');
+}
 console.log('compare: ok');

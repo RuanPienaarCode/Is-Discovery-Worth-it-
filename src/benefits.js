@@ -13,13 +13,26 @@
 
 const { total } = require('./measure');
 const { money, pct } = require('./format');
-const { FACE_VALUE, RATES, DIAMOND, rate, suiteOf } = require('./rates');
+const { FACE_VALUE, RATES, SUITES, SUITE_TABLES, rate, bankProductOf } = require('./rates');
 
 /* Headline figures for the offers, read from rates.js so they move with it:
-   the best a rate gets (Diamond, or the top spend band). */
+   the best a rate gets (Diamond, or the top spend band, on ANY tier — Purple
+   goes higher than Black). */
 const val = key => RATES[key].value;
 const best = key => Math.max(...Object.values(RATES[key].byStatus));
-const top = band => Math.max(...DIAMOND[band]);
+const top = band => Math.max(...Object.values(SUITE_TABLES).map(t => (t[band] ? Math.max(...t[band].Diamond) : 0)));
+/* the figure a rate's case gives (rates.js `cases`), when it is a single one */
+const caseVal = (key, when) => {
+  const c = (RATES[key].cases || []).find(x => x.when === when);
+  return c && c.value !== undefined ? c.value : null;
+};
+/* a case's figure for one status (fuel limits by Drive status) */
+const caseAt = (key, when, status) => {
+  const c = (RATES[key].cases || []).find(x => x.when === when);
+  return c && c.byStatus ? c.byStatus[status] : undefined;
+};
+const BEST_MILES = Math.min(...SUITES.map(x => x.baseMiles.Diamond));
+const THRESHOLDS = SUITES.map(x => x.milesThreshold);
 const R = n => money(n);
 
 const WITH_BANK = 'Discovery Bank with Vitality Money';
@@ -40,27 +53,27 @@ const GROUPS = [
 const BENEFITS = [
   { id: 'miles', products: ['bank'], label: 'Miles on card payments', question: 'Do you pay with your Discovery Bank card?', lineKeys: ['miles.card', 'miles.partners'],
     group: 'everyday', needs: WITH_BANK,
-    offer: `One Discovery Mile for every ${R(RATES.milesRandPerMile.byStatus.Diamond)} you pay with the virtual card at Diamond status, on up to ${R(val('milesThreshold'))} a month, then one for every ${R(val('milesAboveThreshold'))}. Partners take ${Math.round(1 / val('mileValue'))} Miles as ${R(1)}.`,
+    offer: `One Discovery Mile for as little as every ${R(BEST_MILES)} you pay with the virtual card, at Diamond status. That runs up to a monthly limit of ${R(Math.min(...THRESHOLDS))} to ${R(Math.max(...THRESHOLDS))}, depending on your account, then one Mile for every ${R(val('milesAboveThreshold'))}. Partners take ${Math.round(1 / val('mileValue'))} Miles as ${R(1)}.`,
     measuredBy: 'From your Discovery Bank card spend, or your Miles statement when you add one.' },
   { id: 'healthyFood', products: ['bank', 'health'], label: 'HealthyFood rewards', question: 'Do you buy groceries at Checkers, Woolworths or Pick n Pay?', lineKeys: ['miles.healthyFood', 'healthyFood.health'],
     group: 'everyday', needs: `Vitality Health, and ${WITH_BANK} for the extra`,
-    offer: `Vitality Health gives up to ${pct(val('healthyFoodHealthPct'))} back on HealthyFood at your main shop, on up to ${R(val('healthyFoodHealthCap'))} a month for the family. Discovery Bank adds up to ${pct(top('healthyFood'))} more on up to ${R(val('healthyFoodMoneyCap'))} a month, growing with your card spend.`,
+    offer: `Vitality Health gives ${pct(val('healthyFoodHealthPct'))} back on HealthyFood at your main shop, and ${pct(caseVal('healthyFoodHealthPct', 'assessed'))} once you have done your Vitality Age and a Vitality Health Check. That is on up to ${R(val('healthyFoodHealthCap'))} a month for the family. Discovery Bank adds up to ${pct(top('healthyFood'))} more on up to ${R(val('healthyFoodMoneyCap'))} a month, depending on your account, your status and your card spend.`,
     measuredBy: 'From what you spend at Checkers, Woolworths and Pick n Pay, or your Miles statement.' },
   { id: 'healthyCare', products: ['bank', 'health'], label: 'HealthyCare rewards', question: 'Do you shop at Clicks or Dis-Chem?', lineKeys: ['miles.healthyCare', 'healthyCare.health'],
     group: 'health', needs: `Vitality Health, and ${WITH_BANK} for the extra`,
-    offer: `Vitality Health gives up to ${pct(val('healthyCareHealthPct'))} back on HealthyCare at your main shop, on up to ${R(val('healthyCareCap'))} a month for the family. Discovery Bank adds up to ${pct(top('healthyCare'))} more on up to ${R(val('healthyCareMoneyCap'))} a month, growing with your card spend.`,
+    offer: `Vitality Health gives ${pct(val('healthyCareHealthPct'))} back on HealthyCare at your main shop, and ${pct(caseVal('healthyCareHealthPct', 'assessed'))} once you have done your Vitality Age and a Vitality Health Check. That is on up to ${R(val('healthyCareCap'))} a month for the family. Discovery Bank adds up to ${pct(top('healthyCare'))} more on up to ${R(val('healthyCareMoneyCap'))} a month, depending on your account, your status and your card spend.`,
     measuredBy: 'From what you spend at Clicks and Dis-Chem, or your Miles statement.' },
   { id: 'fuel', products: ['bank', 'insure'], label: 'Fuel rewards', question: 'Do you fill up at bp or Shell?', lineKeys: ['fuel.money', 'fuel.drive'],
     group: 'car', needs: `Discovery Insure with Vitality Drive, and ${WITH_BANK} for the extra`,
-    offer: `Vitality Drive gives up to ${pct(best('fuelDrivePct'))} back at bp and Shell, on up to ${R(val('fuelCap'))} of fuel a month per driver. Discovery Bank adds up to ${pct(top('fuel'))} more, growing with your card spend.`,
+    offer: `Vitality Drive gives up to ${pct(best('fuelDrivePct'))} back at bp and Shell on the Classic and Purple plans, and half that on Essential. That is on up to ${R(val('fuelCap'))} of fuel a month per driver, or up to ${R(caseAt('fuelCap', 'homeBoth', 'Diamond'))} when Discovery also insures your home. Discovery Bank adds up to ${pct(top('fuel'))} more, depending on your account, your status and your card spend.`,
     measuredBy: 'From what you spend on fuel at bp and Shell, and the Vitality Drive cash paid to you.' },
   { id: 'flights', products: ['bank', 'health'], label: 'Flight discount', question: 'Do you book flights through Vitality Travel?', lineKeys: ['travel.bank', 'travel.health'],
     group: 'travel', needs: `Vitality Health, and ${WITH_BANK} for the extra`,
-    offer: `Vitality Health gives up to ${pct(val('travelHealthPct'))} off flights booked through Vitality Travel. Discovery Bank adds up to ${pct(top('flightsLocal'))} more on local flights, for three return flights a year, growing with your card spend.`,
+    offer: `Vitality Health gives ${pct(val('travelHealthPct'))} off flights booked through Vitality Travel, and ${pct(caseVal('travelHealthPct', 'assessed'))} once you have done your Vitality Age and a Vitality Health Check. Discovery Bank adds up to ${pct(top('flightsLocal'))} more on local flights, for three return flights a year, depending on your account, your status and your card spend.`,
     measuredBy: 'From your payments to Vitality Travel, or the receipts you type in.' },
   { id: 'gameboard', products: ['bank', 'health'], label: 'Exercise rewards and the gameboard', question: 'Do you meet your weekly exercise goals and play the gameboard?', lineKeys: ['gameboard', 'activeRewards', 'activeRewards.basic'],
     group: 'health', needs: 'Vitality Health, and Discovery Bank for the gameboard',
-    offer: 'Miles for meeting your weekly exercise goals, played on the gameboard in the Discovery Bank app. Without the bank, Vitality Health still gives smaller weekly rewards.',
+    offer: 'Miles for meeting your weekly exercise goals, played on the gameboard in the Discovery Bank app. Without the bank, Vitality Health still gives a play for each goal, but those Miles can only be spent on Vitality Active Rewards.',
     measuredBy: 'Only from your Miles statement, since bank statements do not show it.' },
   { id: 'appleWatch', products: ['bank'], label: 'Apple Watch deal', question: 'Do you have an Apple Watch through Discovery?', lineKeys: ['appleWatch'],
     group: 'health', needs: 'The Discovery Bank Suite with a credit card',
@@ -68,15 +81,15 @@ const BENEFITS = [
     measuredBy: 'From the Apple Watch payments on your Discovery statements.' },
   { id: 'interest', products: ['bank'], label: 'Extra interest and cashback', question: 'Do you keep savings or money in your Discovery accounts?', lineKeys: ['interest.boost', 'interest.cashback'],
     group: 'money', needs: WITH_BANK,
-    offer: `Extra interest on your savings and on money left in the card, up to ${pct(best('savingsBoostPct'))} more at Diamond status.`,
+    offer: `Extra interest on your savings and on money left in the card, up to ${pct(best('savingsBoostPct'))} more at Diamond status on the Black Suite.`,
     measuredBy: 'From the extra interest and cashback on your Discovery statements.' },
-  { id: 'milesPlus', products: ['bank'], label: 'Miles worth more at partners', question: 'Do you spend your Miles at Miles+ partners or on discount days?', lineKeys: ['miles.uplift'],
+  { id: 'milesPlus', products: ['bank'], label: 'Spending your Miles', question: 'How do you spend your Miles: on Ð-Day, at Discovery Miles partners, or on electricity and data?', lineKeys: ['miles.uplift'],
     group: 'money', needs: WITH_BANK,
-    offer: `Your Miles buy more at Miles+ partners and on discount days than their face value of ${R(1)} for every ${Math.round(1 / FACE_VALUE)} Miles. That goes for Vitality Health's Miles too.`,
-    measuredBy: 'Only from your Miles statement, since bank statements do not show what your Miles bought.' },
+    offer: `Spend Miles at Discovery Miles partners and get ${pct(val('milesPartnerPct'))} off for each Vitality programme you have, so up to ${pct(val('milesPartnerPct') * 3)} with Vitality Money, Health and Drive. It is double on Ð-Day (the 15th), up to ${pct(val('milesDdayPct') * 3)}. Prepaid electricity, data and airtime in the app get the everyday discount, not the Ð-Day one. Anywhere else, ${Math.round(1 / FACE_VALUE)} Miles are worth ${R(1)}. That goes for Vitality Health's Miles too.`,
+    measuredBy: 'From your Miles statement, or from how you said you spend your Miles.' },
   { id: 'gym', products: ['health'], label: 'Gym discount', question: 'Do you go to Virgin Active or Planet Fitness?', lineKeys: [],
     group: 'health', needs: 'Vitality Health',
-    offer: `Up to ${pct(val('gymDiscountPct'))} off Virgin Active or Planet Fitness fees, for up to 36 visits a year, with Vitality Health.`,
+    offer: `${pct(val('gymDiscountPct'))} off Virgin Active or Planet Fitness fees with Vitality Health, and ${pct(caseVal('gymDiscountPct', 'gym36'))} off a one-gym membership when you work out there at least 36 times in 12 months.`,
     measuredBy: 'From your payments to Virgin Active or Planet Fitness.' },
 ];
 
@@ -100,8 +113,9 @@ const BENEFITS = [
        Vitality Money. Cashback on money left in the card needs the card.
      - The gameboard is in the Discovery Bank app for the main holder of any
        product with Vitality Money; Vitality Health is not needed for it.
-       UNCONFIRMED: who qualifies for Miles+ (the page's answer was cut off) —
-       taken here as anyone with Vitality Money.
+       Spending Miles at Discovery Miles partners at a discount needs
+       Discovery Bank with Vitality Money (Discovery Miles benefit guide,
+       1 Nov 2026). Miles+ is the network where you EARN Miles, not this.
      - The Apple Watch needs Vitality Health and a qualifying Discovery Bank
        credit card in a Suite.
      - Vitality Drive fuel rewards need Discovery Insure with Vitality Drive.
@@ -217,53 +231,76 @@ const STATUS = s => (s && typeof s === 'string' ? s : 'Blue');
 /* the most a band rate pays at this tier and status (the top spend band) */
 const TOP_SPEND = 1e9;
 
-/* benefit (an entry or an id), settings → one or two plain sentences with
-   the figures for this person's tier and Vitality statuses. Falls back to
-   the static `offer` for an unknown benefit. */
+/* benefit (an entry or an id), settings → a few plain sentences with the
+   figures for this person's own bank product and Vitality statuses. Where
+   Discovery sets a figure by something other than a status (the health
+   checks, 36 gym workouts), it says so, and says the status does not change
+   it. Falls back to the static `offer` for an unknown benefit. */
 function offerText(benefit, settings) {
   const b = typeof benefit === 'string' ? BENEFITS.find(x => x.id === benefit) : benefit;
   if (!b) return '';
   const s = settings || {};
   const st = s.status || {};
   const status = { money: STATUS(st.money), health: STATUS(st.health), drive: STATUS(st.drive) };
-  const suite = suiteOf(s);
-  const kind = bankKindOf(s);
-  const ccOnly = kind === 'card';
+  const prod = bankProductOf(s);
+  const ccOnly = bankKindOf(s) === 'card';
   const rt = (key, spend) => rate(s, key, status, { spend: spend || 0 });
-  const at = `at your ${status.money} status on the ${ccOnly && suite.creditCard ? suite.creditCard.label : suite.label}`;
+  const at = `at your ${status.money} Vitality Money status on the ${prod.label}`;
   const bankAdds = (key, cap) => {
     const p = rt(key, TOP_SPEND);
     return p > 0
       ? `Discovery Bank adds up to ${pct(p)} more ${at}${cap ? `, on up to ${R(rt(cap))} a month` : ''}, growing with your card spend.`
       : `Discovery Bank adds nothing more ${at}.`;
   };
+  /* the health checks raise it; the Vitality Health status does not */
+  const checks = (key, what) => {
+    const now = rt(key);
+    const up = caseVal(key, 'assessed');
+    const raise = up !== null && up > now ? ` It goes up to ${pct(up)} once you have done your Vitality Age and a Vitality Health Check in the last 12 months.` : '';
+    return `Vitality Health gives ${pct(now)} ${what}.${raise} The health checks set this, not your ${status.health} Vitality Health status.`;
+  };
   switch (b.id) {
     case 'miles': {
       const per = rt(ccOnly ? 'ccMilesRandPerMile' : 'milesRandPerMile');
-      if (!(per > 0)) return b.offer;
+      if (!(per > 0)) return `The ${prod.label} earns no Miles on card spend.`;
       return `One Discovery Mile for every ${R(per)} you pay with the virtual card ${at}, on up to ${R(rt('milesThreshold'))} a month, then one for every ${R(rt('milesAboveThreshold'))}. Partners take ${Math.round(1 / rt('mileValue'))} Miles as ${R(1)}.`;
     }
     case 'healthyFood':
-      return `Vitality Health gives up to ${pct(rt('healthyFoodHealthPct'))} back on HealthyFood at your main shop, on up to ${R(rt('healthyFoodHealthCap'))} a month for the family. ${bankAdds('healthyFoodMoneyPct', 'healthyFoodMoneyCap')}`;
+      return `${checks('healthyFoodHealthPct', `back on HealthyFood at your main shop, on up to ${R(rt('healthyFoodHealthCap'))} a month for the family`)} ${bankAdds('healthyFoodMoneyPct', 'healthyFoodMoneyCap')}`;
     case 'healthyCare':
-      return `Vitality Health gives up to ${pct(rt('healthyCareHealthPct'))} back on HealthyCare at your main shop, on up to ${R(rt('healthyCareCap'))} a month for the family. ${bankAdds('healthyCareMoneyPct', 'healthyCareMoneyCap')}`;
+      return `${checks('healthyCareHealthPct', `back on HealthyCare at your main shop, on up to ${R(rt('healthyCareCap'))} a month for the family`)} ${bankAdds('healthyCareMoneyPct', 'healthyCareMoneyCap')}`;
     case 'fuel': {
       const drive = rt('fuelDrivePct');
+      const cap = rt('fuelCap');
+      const home = caseAt('fuelCap', 'homeBoth', status.drive);
       const first = drive > 0
-        ? `Vitality Drive gives ${pct(drive)} back at bp and Shell at your ${status.drive} Drive status, on up to ${R(rt('fuelCap'))} of fuel a month per driver.`
+        ? `Vitality Drive gives ${pct(drive)} back at bp and Shell at your ${status.drive} Drive status on the Classic or Purple plan, and half that on Essential. That is on up to ${R(cap)} of fuel a month per driver.${home > cap ? ` If Discovery also insures your home, the limit at your status goes up to ${R(home)}.` : ''}`
         : `Vitality Drive gives nothing back at your ${status.drive} Drive status yet.`;
       return `${first} ${bankAdds('fuelMoneyPct')}`;
     }
     case 'flights':
-      return `Vitality Health gives up to ${pct(rt('travelHealthPct'))} off flights booked through Vitality Travel. ${bankAdds(ccOnly ? 'ccTravelMoneyPct' : 'travelMoneyPct').replace(' more ', ' more on local flights ')}`;
+      return `${checks('travelHealthPct', 'off flights booked through Vitality Travel')} ${bankAdds(ccOnly ? 'ccTravelMoneyPct' : 'travelMoneyPct').replace(' more ', ' more on local flights ')}`;
     case 'interest': {
       const boost = rt(ccOnly ? 'ccSavingsBoostPct' : 'savingsBoostPct');
       return boost > 0
         ? `Extra interest on your savings and on money left in the card, ${pct(boost)} more ${at}.`
         : `No extra interest ${at} yet. It grows as your status goes up.`;
     }
-    case 'gym':
-      return `Up to ${pct(rt('gymDiscountPct'))} off Virgin Active or Planet Fitness fees, for up to 36 visits a year, with Vitality Health.`;
+    case 'milesPlus': {
+      const v = s.vitality || {};
+      const n = ['money', 'health', 'drive'].filter(k => v[k] === true).length;
+      /* the discounts are for Discovery Bank clients with Vitality Money
+         (Discovery Miles bank benefit guide), as the model counts them */
+      if (v.money === false) return 'Discounts on spending your Miles need Vitality Money with Discovery Bank. Without it, a Mile buys its face value.';
+      if (!n) return b.offer;
+      const each = rt('milesPartnerPct'), dday = rt('milesDdayPct');
+      return `You have ${n === 1 ? 'one Vitality programme' : `${n === 2 ? 'two' : 'three'} Vitality programmes`}, so your Miles get ${pct(each * n)} off at Discovery Miles partners, at ${pct(each)} for each. On Ð-Day (the 15th) it is ${pct(dday * n)}. Prepaid electricity, data and airtime in the app get the everyday ${pct(each * n)}, not the Ð-Day figure.`;
+    }
+    case 'gym': {
+      const now = rt('gymDiscountPct');
+      const up = caseVal('gymDiscountPct', 'gym36');
+      return `${pct(now)} off Virgin Active or Planet Fitness fees with Vitality Health.${up !== null && up > now ? ` It is ${pct(up)} off a one-gym membership once you work out there at least 36 times in 12 months.` : ''} Your workouts set this, not your ${status.health} Vitality Health status.`;
+    }
     case 'appleWatch':
       return `An Apple Watch on a 24-month contract, for a once-off ${R(rt('appleWatchActivation'))} activation fee. You pay less, or nothing, in months you meet your weekly exercise goals.`;
     default:
@@ -372,8 +409,15 @@ function suggestBenefits(m, milesSummary, settings) {
   if (interest >= 0.5) put('interest', 'full', `Discovery Bank paid you ${money(interest)} of extra interest and cashback ${when}.`);
   else put('interest', 'none', `We found no extra interest or cashback from Discovery Bank ${when}.`);
 
-  // Miles spent at better than face value (Miles+ partners, discount days)
-  if (!ms) put('milesPlus', 'none', 'There is no Miles statement to show what your Miles bought, so each Mile counts at its face value.');
+  // Miles spent at better than face value (Discovery Miles partners, Ð-Day)
+  if (!ms) {
+    const use = s.milesUse;
+    if (use === 'dday') put('milesPlus', 'full', 'You said you spend your Miles on Ð-Day (the 15th) at Discovery Miles partners.');
+    else if (use === 'partners') put('milesPlus', 'full', 'You said you spend your Miles at Discovery Miles partners.');
+    else if (use === 'utilities') put('milesPlus', 'full', 'You said you spend your Miles on electricity, data or airtime in the app. They get the everyday discount there, but not the Ð-Day one.');
+    else if (use === 'none') put('milesPlus', 'none', 'You said you do not spend your Miles.');
+    else put('milesPlus', 'none', 'Tell us how you spend your Miles, or add your Miles statement, to count this.');
+  }
   else if (!(ms.spentMiles > 0)) put('milesPlus', 'none', `Your Miles statement shows no Miles spent ${when}.`);
   else {
     const face = ms.spentMiles * FACE_VALUE;

@@ -29,7 +29,7 @@ const rates = {
   healthyFoodShare: 50, healthyFoodMoneyCap: 2500, healthyFoodHealthPct: 25, healthyFoodSecondaryPct: 10, healthyFoodHealthCap: 5000, healthyMinSpend: 200,
   healthyCareShare: 20, healthyCareHealthPct: 25, healthyCareCap: 4000,
   fuelDrivePct: 5, fuelCap: 1500, fuelDrivers: 1, fuelWithoutBankPct: 0,
-  travelHealthPct: 25,
+  travelHealthPct: 25, gymDiscountPct: 75,
 };
 const settings = { status: { money: 'Diamond', health: 'Bronze', drive: 'Bronze' }, rates, actualMiles: {}, compareWith: 'gotyme' };
 
@@ -149,7 +149,7 @@ assert.ok(/since 13 Dec 2024/.test(D(old, 'fuel.drive').detail), 'says when Driv
 const mH = { ...m, figures: { ...m.figures, 'product.medical': fig({ '2026-08': 7000, '2026-09': 7500 }) } };
 const sH = buildStatement(mH, { ...settings, bill: { medical: 6600, gap: 300 } });
 assert.strictEqual(sH.bill.vitalityMonthly, 600);
-assert.ok(/R 7 500 in 2026-09 = R 6 600 medical aid \+ R 300 gap cover \+ R 600 Vitality and other/.test(sH.bill.items[0].note), sH.bill.items[0].note);
+assert.ok(/R 7 500 in Sep 2026: R 6 600 medical aid, R 300 gap cover and R 600 Vitality and other/.test(sH.bill.items[0].note), sH.bill.items[0].note);
 assert.strictEqual(buildStatement(mH, settings).bill.vitalityMonthly, null, 'no split without the medical figure');
 
 // Vitality Health: premium vs what it pays (gym at 75% off: paid 4 800 a year → saved 14 400)
@@ -445,5 +445,176 @@ assert.strictEqual(sGd.downgrade.label, 'Gold Credit Card Account');
   near(sT.cardSpend, 96000, 'debit spend becomes card spend');
   const withCard = buildStatement({ ...m, cardAccounts: ['Card'], figures: { ...m.figures, 'spend.debit': fig({ '2026-08': 99999 }) } }, { rates, status: { money: 'Diamond' } }, null);
   assert.strictEqual(withCard.cardSpendSource, 'transactions', 'a credit card holder keeps credit card spend');
+}
+// how you spend your Miles sets their worth without a statement. The
+// discount is PER ACTIVE VITALITY PROGRAMME (5% at Discovery Miles partners,
+// 10% on Ð-Day) and needs Vitality Money.
+{
+  const base = { rates: { ...rates }, status: { money: 'Diamond', health: 'Diamond' } };
+  delete base.rates.mileValue;
+  const face = buildStatement(m, base, null);
+  assert.strictEqual(face.mileSource, 'face');
+  near(face.mileValue, 0.1);
+  const dday = buildStatement(m, { ...base, milesUse: 'dday' }, null);
+  assert.strictEqual(dday.mileSource, 'use');
+  near(dday.mileValue, 0.1 / 0.7, 'Ð-Day, three programmes: 30% off');
+  near(buildStatement(m, { ...base, milesUse: 'partners' }, null).mileValue, 0.1 / 0.85, 'partners, three programmes: 15% off');
+  near(buildStatement(m, { ...base, milesUse: 'utilities' }, null).mileValue, 0.1 / 0.85, 'prepaid electricity and data: the everyday discount, not Ð-Day');
+  const lineOf = (st, k) => st.lines.find(l => l.key === k);
+  near(lineOf(dday, 'miles.card').full, lineOf(face, 'miles.card').full / 0.7, 'bank Miles worth more');
+  const hm = lineOf(dday, 'healthyFood.health').full + lineOf(dday, 'healthyCare.health').full;
+  near(lineOf(dday, 'miles.uplift').full, hm * (1 / 0.7 - 1), 'Vitality Health Miles uplift');
+  assert.strictEqual(dday.benefits.milesPlus.suggested, 'full');
+  assert.ok(!lineOf(face, 'miles.uplift'), 'no uplift at face value');
+  assert.strictEqual(buildStatement(m, { ...base, milesUse: 'dday', rates: { ...base.rates, mileValue: 0.2 } }, null).mileSource, 'entered', 'a typed value wins');
+  // the number of programmes sets the discount
+  const withV = (v, use) => buildStatement(m, { ...base, milesUse: use, vitality: v }, null, { products: { bank: true, health: true, insure: true }, vitality: v });
+  near(withV({ money: true, health: false, drive: false }, 'dday').mileValue, 0.1 / 0.9, 'Ð-Day, one programme: 10% off');
+  near(withV({ money: true, health: true, drive: false }, 'dday').mileValue, 0.1 / 0.8, 'Ð-Day, two programmes: 20% off');
+  near(withV({ money: true, health: false, drive: false }, 'partners').mileValue, 0.1 / 0.95, 'partners, one programme: 5% off');
+  near(withV({ money: true, health: true, drive: false }, 'utilities').mileValue, 0.1 / 0.9, 'prepaid, two programmes: 10% off');
+  const noMoney = withV({ money: false, health: true, drive: true }, 'dday');
+  assert.strictEqual(noMoney.mileSource, 'face', 'without Vitality Money there is no partner discount');
+  near(noMoney.mileValue, 0.1);
+  // the wording names Discovery Miles partners (Miles+ is where you earn)
+  const up = lineOf(withV({ money: true, health: true, drive: false }, 'partners'), 'miles.uplift');
+  assert.ok(/Discovery Miles partners/.test(up.detail) && !/Miles\+/.test(up.detail), up.detail);
+  assert.ok(/two Vitality programmes/.test(up.detail) && /10%/.test(up.detail), up.detail);
+}
+// Blocker: the no-statement uplift counts only the Vitality Health Miles as
+// COUNTED (weighted, available), never a line set "Not for me" or one the
+// setup cannot earn
+{
+  const base = { rates: { ...rates }, status: { money: 'Diamond', health: 'Diamond' }, milesUse: 'dday' };
+  delete base.rates.mileValue;
+  const U = st => st.lines.find(l => l.key === 'miles.uplift');
+  const notForMe = buildStatement(m, { ...base, benefits: { healthyFood: 'none', healthyCare: 'none' } }, null);
+  near(U(notForMe).full, 0, 'HealthyFood and HealthyCare set to Not for me: no uplift');
+  assert.strictEqual(U(notForMe).annual, 0);
+  const half = buildStatement(m, { ...base, benefits: { healthyFood: 'half', healthyCare: 'none' } }, null);
+  near(U(half).full, half.lines.find(l => l.key === 'healthyFood.health').full * 0.5 * (1 / 0.7 - 1), 'half HealthyFood: half the uplift');
+  const noHealth = buildStatement(m, { ...base, vitality: { money: true, health: false, drive: false } }, null,
+    { products: { bank: true, health: false, insure: false }, vitality: { money: true, health: false, drive: false } });
+  near(U(noHealth) ? U(noHealth).full : 0, 0, 'no Vitality Health: no uplift');
+  const milesPlusOff = buildStatement(m, { ...base, benefits: { milesPlus: 'none' } }, null);
+  assert.strictEqual(U(milesPlusOff).annual, 0, 'the uplift line is weighted itself');
+  assert.ok(U(milesPlusOff).full > 0);
+}
+// conditions (settings.conditions) reach every rate: health checks raise
+// Vitality Health's HealthyFood share, 36 gym visits the gym discount
+{
+  const loose = { ...rates };
+  for (const k of ['healthyFoodHealthPct', 'healthyFoodSecondaryPct', 'healthyCareHealthPct', 'gymDiscountPct']) delete loose[k];
+  const plain = buildStatement(mH, { ...settings, rates: loose, bill: { medical: 6600, gap: 300 } });
+  const met = buildStatement(mH, { ...settings, rates: loose, bill: { medical: 6600, gap: 300 }, conditions: { checks: 'both', gym36: true } });
+  const HF = st => st.lines.find(l => l.key === 'healthyFood.health').full;
+  assert.ok(HF(met) > HF(plain), `health checks raise HealthyFood ${HF(met)} > ${HF(plain)}`);
+  assert.ok(met.vitality.gymSavingFull > plain.vitality.gymSavingFull, '36 gym visits raise the gym saving');
+}
+
+// ── release review blockers ───────────────────────────────────────────
+const { measure } = require('../src/measure');
+const { monthsBetween: mb } = require('../src/measure');
+const months12 = mb('2025-11', '2026-10');
+const win12 = { from: '2025-11', to: '2026-10', notCardSpend: [] };
+const day = (ym, d) => ym + '-' + String(d).padStart(2, '0');
+const ACC = {
+  'Other Cheque': { institution: 'Other Bank', type: 'checking' },
+  'Disc Transact': { institution: 'Discovery Bank', type: 'checking' },
+  'Disc Card': { institution: 'Discovery Bank', type: 'credit_card' },
+};
+// Blocker 1: each figure is made into a year over the months ITS account
+// holds data. Another bank imported for 12 months, a Discovery Suite opened
+// three months ago: the Health debit and gym on the other bank stay at one
+// year's worth, the Suite's fees are three months made into a year.
+{
+  const rows = [];
+  for (const ym of months12) {
+    rows.push({ date: day(ym, 1), description: 'DISC PREM 1', amount: -4850, account: 'Other Cheque', category: 'Medical' });
+    rows.push({ date: day(ym, 5), description: 'CHECKERS SOMETOWN', amount: -3000, account: 'Other Cheque', category: 'Groceries' });
+    rows.push({ date: day(ym, 6), description: 'VIRGIN ACTIVE', amount: -150, account: 'Other Cheque', category: 'Gym' });
+    if (ym >= '2026-08') {
+      rows.push({ date: day(ym, 2), description: 'Monthly account fee', amount: -435, account: 'Disc Transact', category: 'Bank charges' });
+      rows.push({ date: day(ym, 10), description: 'SOME SHOP', amount: -8000, account: 'Disc Card', category: 'Shopping' });
+    }
+  }
+  const mm = measure(rows, ACC, {}, win12);
+  const sx = buildStatement(mm, { rates, status: { money: 'Blue', health: 'Blue' } }, null);
+  const Lx = k => sx.lines.find(l => l.key === k);
+  assert.strictEqual(sx.window.dataMonths, 3);
+  near(Lx('fee.account').annual, 435 * 12, 'bank fees: over the Discovery months');
+  near(Lx('gym').annual, 150 * 12, 'gym on the other bank: over its 12 months, not ×4');
+  near(sx.bill.items.find(i => i.key === 'product.medical').annual, -4850 * 12, 'Health debit on the other bank: one year, not four');
+  const hfOne = Lx('healthyFood.health').full;
+  // the same household with every row imported: the HealthyFood figure does not change
+  const all = measure(rows.concat(months12.filter(ym => ym < '2026-08').map(ym => ({ date: day(ym, 2), description: 'Monthly account fee', amount: -435, account: 'Disc Transact', category: 'Bank charges' }))), ACC, {}, win12);
+  near(buildStatement(all, { rates, status: { money: 'Blue', health: 'Blue' } }, null).lines.find(l => l.key === 'healthyFood.health').full, hfOne, 'HealthyFood on the other bank does not depend on how long Discovery is imported');
+  // only two months of the other bank imported: still one year of debit
+  const short = measure(rows.filter(r => r.date >= '2026-09' && r.account === 'Other Cheque'), ACC, {}, win12);
+  const ss = buildStatement(short, { rates, status: {} }, null, { products: { bank: false, health: true } });
+  near(ss.bill.items.find(i => i.key === 'product.medical').annual, -4850 * 12, 'two months of debits are R4 850 a month, not R9 700 a year');
+}
+// Blocker 2: Vitality Drive fuel counts bp and Shell paid with ANY
+// Discovery Bank card, the transaction account's debit card included;
+// Vitality Money's extra stays on the credit card
+{
+  const rows = [];
+  for (const ym of months12) rows.push({ date: day(ym, 3), description: 'BP SOMETOWN', amount: -1000, account: 'Disc Transact', category: 'Fuel' });
+  const mm = measure(rows, { 'Disc Transact': ACC['Disc Transact'] }, {}, win12);
+  const sx = buildStatement(mm, { rates: { ...rates, fuelMoneyPct: 10 }, status: { money: 'Blue', drive: 'Gold' }, bankKind: 'transaction' }, null);
+  near(sx.lines.find(l => l.key === 'fuel.drive').full, 1000 * 12 * 0.05, 'Drive: 5% of the debit-card fuel');
+  near(sx.lines.find(l => l.key === 'fuel.money').full, 0, 'no Vitality Money fuel extra off the credit card');
+  const card = measure(rows.map(r => ({ ...r, account: 'Disc Card' })), ACC, {}, win12);
+  const sc = buildStatement(card, { rates: { ...rates, fuelMoneyPct: 10 }, status: { money: 'Blue', drive: 'Gold' } }, null);
+  near(sc.lines.find(l => l.key === 'fuel.drive').full, 600, 'credit card fuel still counts for Drive');
+  near(sc.lines.find(l => l.key === 'fuel.money').full, 1200, 'and for Vitality Money');
+  assert.ok(!/ {2}/.test(sc.lines.find(l => l.key === 'fuel.drive').detail), 'no double space');
+}
+// Blocker 5: the Apple Watch activation fee is counted once
+{
+  const rows = [];
+  for (const ym of months12) rows.push({ date: day(ym, 2), description: 'Monthly account fee', amount: -435, account: 'Disc Transact', category: 'Bank charges' });
+  rows.push({ date: '2025-11-05', description: 'Apple Watch activation', amount: -1199, account: 'Disc Card', category: 'Bank charges' });
+  rows.push({ date: '2026-01-05', description: 'Apple Watch', amount: -500, account: 'Disc Card', category: 'Bank charges' });
+  rows.push({ date: '2026-02-05', description: 'Apple Watch', amount: -250, account: 'Disc Card', category: 'Bank charges' });
+  const mm = measure(rows, ACC, {}, win12);
+  const w = buildStatement(mm, { rates: { ...rates, appleWatchActivation: 1199 }, status: {} }, null).lines.find(l => l.key === 'appleWatch');
+  near(w.full, 500 * 12 - 750 - 1199 / 2, 'saving less instalments paid less half the activation');
+  assert.ok(/R 750 a year you did pay/.test(w.detail), w.detail);
+  // an activation and an instalment in the same month: still told apart
+  const same = measure(rows.map(r => (r.date === '2026-01-05' ? { ...r, date: '2025-11-20' } : r)), ACC, {}, win12);
+  near(buildStatement(same, { rates: { ...rates, appleWatchActivation: 1199 }, status: {} }, null).lines.find(l => l.key === 'appleWatch').full, 4650.5);
+}
+// Blocker 6: with the plan known and no amount typed, the medical aid is the
+// plan's published price and the rest of the latest debit is Vitality
+{
+  const mP = { ...m, figures: { ...m.figures, 'product.medical': fig({ '2026-08': 5250, '2026-09': 5250 }) } };
+  const sP = buildStatement(mP, { ...settings, health: { plan: 'dhClassicSaver' }, members: { adults: 1, children: 0 } });
+  assert.strictEqual(sP.bill.medicalMonthly, 4850);
+  assert.strictEqual(sP.bill.medicalSource, 'plan');
+  assert.strictEqual(sP.bill.vitalityMonthly, 400);
+  assert.ok(/Classic Saver's published price/.test(sP.bill.items[0].note), sP.bill.items[0].note);
+  const sG = buildStatement(mP, { ...settings, health: { plan: 'dhClassicSaver' }, members: { adults: 1, children: 0 }, bill: { gap: 171 } });
+  assert.strictEqual(sG.bill.vitalityMonthly, 229, 'typed gap cover comes out too');
+  // the plan's price is more than the debit: nothing is split
+  const sBig = buildStatement(mP, { ...settings, health: { plan: 'dhClassicSaver' }, members: { adults: 2, children: 0 } });
+  assert.strictEqual(sBig.bill.vitalityMonthly, null);
+  assert.ok(/cannot be split/.test(sBig.bill.items[0].note) && !/-/.test(sBig.bill.items[0].note.replace(/\d+-month/g, '')), sBig.bill.items[0].note);
+  assert.strictEqual(buildStatement(mP, settings).bill.vitalityMonthly, null, 'no plan, nothing typed: unknown');
+}
+// Blocker 7: plain words — typed parts above the debit, no minus, a month name
+{
+  const mP = { ...m, figures: { ...m.figures, 'product.medical': fig({ '2026-08': 4000, '2026-10': 4000 }) } };
+  const sT = buildStatement(mP, { ...settings, bill: { medical: 4500, gap: 300 } });
+  const note = sT.bill.items[0].note;
+  assert.ok(/Oct 2026/.test(note) && !/2026-10/.test(note), note);
+  assert.ok(!/-/.test(note) && /more than this debit/.test(note), note);
+  assert.strictEqual(sT.bill.vitalityMonthly, null);
+  // an account that earns no Miles says so
+  const none = buildStatement(m, { ...settings, rates: { ...rates, milesRandPerMile: 0, milesPhysical: 0 } }).lines.find(l => l.key === 'miles.card');
+  assert.ok(/earns no Miles on card spend/.test(none.detail) && !/R0 /.test(none.detail), none.detail);
+  // one Vitality Travel booking in a short window says it is a rough guess
+  const one = { ...m, figures: { ...m.figures, 'travel.vitality': { total: 3000, count: 1, perMonth: { '2026-09': 3000 } } } };
+  assert.ok(/one booking in 2 months/.test(buildStatement(one, settings).lines.find(l => l.key === 'travel.bank').detail));
 }
 console.log('model OK');

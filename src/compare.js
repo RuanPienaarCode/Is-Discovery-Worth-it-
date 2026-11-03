@@ -257,9 +257,15 @@ function compareHealth(health, settings, plans = HEALTH_PLANS) {
   /* Leaving Discovery Health ends Vitality Health: its premium stops (when
      it was split out of the debit) and its rewards go. */
   const vitalityNet = (health.vitValue || 0) - (health.vitalityYear || 0);
+  /* Whether Vitality's premium was split out of the debit: when it was not,
+     vitalityNet holds the rewards only (the premium stays inside the
+     medical aid figure), so nothing may say what Vitality costs. */
+  const vitalityKnown = health.vitalityKnown !== false;
   /* The others are priced at today's rates, so Discovery is too: the
-     contribution typed for the debit split, else the window's average. */
-  const typedMedical = num(((settings && settings.bill) || {}).medical) ? Number(settings.bill.medical) * 12 : null;
+     contribution typed for the debit split, else your plan's published
+     price the split used, else the window's average. */
+  const typedMedical = num(((settings && settings.bill) || {}).medical) ? Number(settings.bill.medical) * 12
+    : num(health.medicalMonthly) && health.medicalMonthly > 0 ? Number(health.medicalMonthly) * 12 : null;
   const medicalYear = typedMedical !== null ? typedMedical : health.medicalYear;
   const current = { annual: medicalYear, monthly: medicalYear / 12 };
   const needs = needsOf(settings);
@@ -285,7 +291,7 @@ function compareHealth(health, settings, plans = HEALTH_PLANS) {
   /* your own plan's grades, for the needs table */
   const ownId = settings && settings.health && settings.health.plan;
   const own = ownId ? plans.concat(HEALTH_OWN).find(p => p.id === ownId) || null : null;
-  return { current, vitalityNet, members, needs, own: own ? { ...own, cover: coverOf(own, settings) } : null, rows: byGain(rows) };
+  return { current, vitalityNet, vitalityKnown, members, needs, own: own ? { ...own, cover: coverOf(own, settings) } : null, rows: byGain(rows) };
 }
 
 /* gap: the Gap product — paid per year. */

@@ -78,4 +78,17 @@ assert.strictEqual(buildVerdicts(null, { life: life(250, [row(2000, { quoted: tr
   assert.strictEqual(home.home.tone, 'check', 'home contents is not a Discovery product, so it stays');
 }
 
+// ── only say what is true ─────────────────────────────────────────────
+{
+  const good = buildVerdicts({ verdict: 'stay', net: 1200, chosen: { name: 'Other Bank', gainIfSwitch: -3000 } }, {});
+  assert.ok(/worth more than its fees/.test(good.bank.why), good.bank.why);
+  const under = buildVerdicts({ verdict: 'stay', net: -1500, chosen: { name: 'Other Bank', gainIfSwitch: -400 } }, {});
+  assert.ok(!/worth more than its fees/.test(under.bank.why), 'fees above rewards: not "worth more than its fees"');
+  assert.ok(/fees cost more than its rewards/.test(under.bank.why), under.bank.why);
+  // Vitality's premium unknown (counted as nothing): no claim about what it costs
+  const vu = buildVerdicts(null, { health: cmp([row(5000)], { vitalityNet: 3000, vitalityKnown: false }) });
+  assert.ok(!/Vitality Health (gives|costs)/.test(vu.health.why), vu.health.why);
+  const vk = buildVerdicts(null, { health: cmp([row(5000)], { vitalityNet: -3000, vitalityKnown: true }) });
+  assert.ok(/Vitality Health costs more than it gives back/.test(vk.health.why), vk.health.why);
+}
 console.log('verdict: ok');

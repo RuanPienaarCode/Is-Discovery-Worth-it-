@@ -118,4 +118,34 @@ assert.strictEqual(total(mD, 'spend.debit'), 300);
 assert.deepStrictEqual(monthsBetween('2025-11', '2026-02'), ['2025-11', '2025-12', '2026-01', '2026-02']);
 assert.deepStrictEqual(trailingWindow(new Date(2026, 9, 21), 12), { from: '2025-10', to: '2026-09' });
 assert.deepStrictEqual(trailingWindow(new Date(2026, 0, 5), 3), { from: '2025-10', to: '2025-12' });
+// ── where each figure came from, for making it a year ────────────────
+{
+  const { sourceMonths, annualOf } = require('../src/measure');
+  const rowsS = [];
+  for (const ym of monthsBetween('2025-11', '2026-10')) {
+    rowsS.push(r(ym + '-01', 'Other Bank', 'DISC PREM 1', 'Medical', -4850));
+    rowsS.push(r(ym + '-05', 'Other Bank', 'CHECKERS SOMETOWN', 'Groceries', -3000));
+    if (ym >= '2026-08') {
+      rowsS.push(r(ym + '-02', 'Transaction Account', 'Monthly account fee', 'Bank charges', -435));
+      rowsS.push(r(ym + '-03', 'Transaction Account', 'BP SOMETOWN', 'Fuel', -800));
+      rowsS.push(r(ym + '-04', 'Credit Card', 'SHELL SOMETOWN', 'Fuel', -200));
+    }
+  }
+  const mS = measure(rowsS, accounts, categories, { from: '2025-11', to: '2026-10' });
+  assert.strictEqual(mS.accountMonths['Other Bank'].length, 12, 'months holding rows, per account');
+  assert.strictEqual(mS.accountMonths['Transaction Account'].length, 3);
+  assert.deepStrictEqual(Object.keys(mS.figures['product.medical'].accounts), ['Other Bank'], 'a figure names the accounts it came from');
+  assert.strictEqual(sourceMonths(mS, ['product.medical'], 3), 12, 'the debit on the other bank: twelve months');
+  assert.strictEqual(sourceMonths(mS, ['fee.account'], 99), 3, 'the Discovery fee: three months');
+  assert.strictEqual(annualOf(mS, 'product.medical', 3), 4850 * 12, 'one year, not four');
+  assert.strictEqual(annualOf(mS, ['all.shop.checkers'], 3), 3000 * 12);
+  assert.strictEqual(sourceMonths(mS, ['no.such'], 7), 7, 'never seen: the fallback');
+  assert.strictEqual(sourceMonths({ figures: {} }, ['product.medical'], 5), 5, 'no account months: the fallback');
+  assert.strictEqual(sourceMonths(mS, ['all.shop.checkers'], 4, ['Other Bank']), 4, 'leaving out the only account: the fallback');
+  // fuel paid with ANY Discovery Bank card (disc.*); fuel.* stays the credit card's
+  assert.strictEqual(total(mS, 'disc.fuel.bp'), 2400, 'the debit card counts for Drive');
+  assert.strictEqual(total(mS, 'disc.fuel.shell'), 600);
+  assert.strictEqual(total(mS, 'fuel.bp'), 0, 'Vitality Money fuel stays on the credit card');
+  assert.strictEqual(total(mS, 'fuel.shell'), 600);
+}
 console.log('measure OK');

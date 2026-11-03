@@ -106,6 +106,40 @@ const msL = { figures: { life: 1000 }, perMonth: {} };
 const stL = { ...st, mileValue: 0.1, milesStatement: { covered: 12 } };
 const lifeP = buildProducts(stL, m, msL, settings, new Date(2026, 9, 21)).products.find(p => p.id === 'life');
 near(lifeP.back[0].v, 1000 * 0.1, 'Life rewards at the Mile value');
+// ── a premium is a year over its own account's months ────────────────
+{
+  const { measure, monthsBetween } = require('../src/measure');
+  const acc = { 'Other Cheque': { institution: 'Other Bank', type: 'checking' }, 'Disc Transact': { institution: 'Discovery Bank', type: 'checking' } };
+  const rowsP = [];
+  for (const ym of monthsBetween('2025-11', '2026-10')) {
+    rowsP.push({ date: ym + '-01', description: 'DISC PREM 1', amount: -4850, account: 'Other Cheque', category: 'Medical' });
+    rowsP.push({ date: ym + '-04', description: 'DISCINSURE 1', amount: -1800, account: 'Other Cheque', category: 'Insurance' });
+    if (ym >= '2026-08') rowsP.push({ date: ym + '-02', description: 'Monthly account fee', amount: -435, account: 'Disc Transact', category: 'Bank charges' });
+  }
+  const mP = measure(rowsP, acc, {}, { from: '2025-11', to: '2026-10' });
+  const sP = buildStatement(mP, { status: {}, rates: { mileValue: 0.1 } });
+  assert.strictEqual(sP.window.dataMonths, 3, 'three Discovery months');
+  const pr = buildProducts(sP, mP, null, { status: {} }, new Date(2026, 10, 3));
+  near(pr.all.find(p => p.id === 'health').debitYear, 4850 * 12, 'Health debit on another bank: one year, not four');
+  near(pr.all.find(p => p.id === 'insure').paid, 1800 * 12, 'Insure premium likewise');
+  // two months imported, no Discovery account at all
+  const mS = measure(rowsP.filter(x => x.date >= '2026-09' && x.account === 'Other Cheque'), acc, {}, { from: '2025-11', to: '2026-10' });
+  const prS = buildProducts(buildStatement(mS, { status: {} }, null, { products: { bank: false, health: true } }), mS, null, { status: {} }, new Date(2026, 10, 3));
+  near(prS.all.find(p => p.id === 'health').paid, 4850 * 12, 'two months of debits are a year of R4 850');
+}
+// ── what is known about the split ────────────────────────────────────
+{
+  near(P('health').medicalMonthly, 5000, 'today\'s medical aid, typed');
+  assert.strictEqual(P('health').vitalityKnown, true);
+  const unsplit = buildProducts(buildStatement(m, { ...settings, bill: {} }), m, null, { ...settings, bill: {} }, new Date(2026, 9, 21)).all.find(p => p.id === 'health');
+  assert.strictEqual(unsplit.vitalityKnown, false, 'nothing typed, no plan: Vitality\'s premium is unknown');
+  assert.strictEqual(unsplit.medicalMonthly, null);
+  const s2 = { ...settings, bill: {}, health: { plan: 'dhClassicSaver' }, members: { adults: 1, children: 0 } };
+  const priced = buildProducts(buildStatement(m, s2), m, null, s2, new Date(2026, 9, 21)).all.find(p => p.id === 'health');
+  near(priced.medicalMonthly, 4850, 'the plan\'s published price');
+  near(priced.vitalityYear, (6000 - 4850) * 12, 'the rest of the debit is Vitality');
+  assert.strictEqual(priced.vitalityKnown, true);
+}
 console.log('products OK');
 
 /* ── only the products you chose ─────────────────────────────────────── */

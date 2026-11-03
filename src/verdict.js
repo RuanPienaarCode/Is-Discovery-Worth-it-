@@ -46,13 +46,19 @@ function buildVerdicts(st, cmp, products) {
 
   const alt = has(products, 'bank') && st && st.chosen;
   if (alt) {
+    /* "worth more than its fees" only when they are */
+    const stayWhy = st.net >= 0
+      ? 'Its rewards are worth more than its fees, and more than the other bank would give you.'
+      : 'Its fees cost more than its rewards give back, but the other bank would leave you worse off.';
     out.bank = st.verdict === 'stay'
-      ? { id: 'bank', tone: 'good', word: 'Worth it', amount: -alt.gainIfSwitch, vs: alt.name, why: 'Its rewards are worth more than its fees, and more than the other bank would give you.' }
+      ? { id: 'bank', tone: 'good', word: 'Worth it', amount: -alt.gainIfSwitch, vs: alt.name, why: stayWhy }
       : { id: 'bank', tone: 'over', word: 'Overpaying', amount: alt.gainIfSwitch, vs: alt.name, why: 'Its rewards are not worth enough to make up the difference.' };
   }
 
   const vit = c.health && c.health.vitalityNet;
-  const vitText = Number.isFinite(vit) && Math.abs(vit) >= 0.5 ? (vit > 0 ? ' Vitality Health gives back more than it costs.' : ' Vitality Health costs more than it gives back.') : '';
+  /* Nothing about what Vitality costs when its premium is unknown (not
+     split out of the debit): it was counted as nothing, not as free. */
+  const vitText = c.health && c.health.vitalityKnown !== false && Number.isFinite(vit) && Math.abs(vit) >= 0.5 ? (vit > 0 ? ' Vitality Health gives back more than it costs.' : ' Vitality Health costs more than it gives back.') : '';
   out.health = fromMarket('health', c.health, r => r.scheme + ' ' + r.plan, {
     good: 'No other medical aid that covers what your family needs costs less, once you count the Vitality rewards you would lose.' + vitText,
     check: 'A cheaper plan covers what your family needs, but some of its limits are lower. Compare them before you switch.' + vitText,
