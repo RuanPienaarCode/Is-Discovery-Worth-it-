@@ -1,4 +1,5 @@
 'use strict';
+const { STATUSES } = require('./constants');
 /* Every rate the estimates use, with where it came from. A rate the user
    edited on the page (settings.rates[key]) always wins over these.
 
@@ -423,18 +424,18 @@ const FUEL = ['fuel.bp', 'fuel.shell', 'fuel.other'];
    null is unpublished: it earns nothing here, and the page shows the rate
    that would match Discovery instead. */
 const ALTERNATIVES = [
-  { id: 'gotyme', name: 'GoTyme (TymeBank)', fee: 0, backPct: 0, capMonthly: 0, likeForLike: false,
+  { id: 'gotyme', name: 'GoTyme (TymeBank)', fee: 0, backPct: 0, capMonthly: 0, likeForLike: false, kinds: ['transaction', 'savings'],
     note: 'No monthly fee and no rewards, but also no credit card, so it is not a like-for-like swap.', source: 'gotyme.co.za: "Open a bank account for free" (no fee schedule published), fetched 21 Oct 2026' },
-  { id: 'capitec', name: 'Capitec Global One', fee: 57.5, backPct: 1, capMonthly: 0,
+  { id: 'capitec', name: 'Capitec Global One', fee: 57.5, backPct: 1, capMonthly: 0, kinds: ['suite', 'card'],
     note: 'R7,50 for the account and R50 for the credit card. Live Better pays 1% back on credit card spend, with no levels. We could not read Capitec\'s own website, so check before you decide.', source: 'The Citizen 6 Feb 2026 (fees); Currency News, Mar 2026 (1% Live Better cash back on credit card spend; Capitec\'s own page not readable)', unconfirmed: true },
-  { id: 'fnbAspire', name: 'FNB Fusion Aspire', rewardKind: 'points', fee: 125, backPct: 0.5, capMonthly: 0, guess: true,
+  { id: 'fnbAspire', name: 'FNB Fusion Aspire', rewardKind: 'points', fee: 125, backPct: 0.5, capMonthly: 0, guess: true, kinds: ['suite', 'card'],
     note: 'eBucks rewards are mostly at Pick n Pay, Clicks and Engen, where you spend little. FNB does not publish a general rewards rate, so the 0,5% here is a guess.', source: 'FNB Aspire pricing guide 2026/27 (fee); rewards rate is a guess' },
-  { id: 'fnbPremier', name: 'FNB Fusion Premier', rewardKind: 'points', fee: 260, backPct: 1, capMonthly: 0, guess: true,
+  { id: 'fnbPremier', name: 'FNB Fusion Premier', rewardKind: 'points', fee: 260, backPct: 1, capMonthly: 0, guess: true, kinds: ['suite', 'card'],
     note: 'Up to 30% back in eBucks at Pick n Pay online (20% in store) and up to R8 a litre at Engen, but only on up to 20% of your card spend. FNB does not publish a general rewards rate, so the 1% here is a guess.', source: 'FNB Premier pricing guide 2026/27 (fee); rewards rate is a guess' },
-  { id: 'sbPrestige', name: 'Standard Bank Prestige', rewardKind: 'points', app: 'UCount', fee: 285, backPct: 1, capMonthly: 0,
+  { id: 'sbPrestige', name: 'Standard Bank Prestige', rewardKind: 'points', app: 'UCount', fee: 285, backPct: 1, capMonthly: 0, kinds: ['suite', 'card'], unconfirmed: true,
     partners: [{ label: 'UCount at Checkers and Shoprite', keys: ['shop.checkers'], pct: null, capMonthly: 3000 }],
     note: 'R260 (with a credit card) and R25 for UCount. Up to 1% back on card spend, plus up to 40% in UCount points at Checkers. That rate and the R3 000 limit come from 2025 articles and are not confirmed.', source: 'Standard Bank Prestige pricing guide 2026; UCount Checkers terms unconfirmed' },
-  { id: 'absaPremium', name: 'Absa Premium', app: 'Absa banking', fee: 265, backPct: 0.5, capMonthly: 0, guess: true,
+  { id: 'absaPremium', name: 'Absa Premium', app: 'Absa banking', fee: 265, backPct: 0.5, capMonthly: 0, guess: true, kinds: ['suite', 'card'],
     partners: [
       { label: 'Grocery partners (Checkers, Woolworths, Pick n Pay)', keys: GROCERY, pct: null, capMonthly: 3000, shareOfSpend: 20 },
       { label: 'Fuel at Shell or Sasol (if you moved from bp)', keys: FUEL, pct: null, capMonthly: 3000, shareOfSpend: 20 },
@@ -445,26 +446,98 @@ const ALTERNATIVES = [
 /* Whether a rival bank's figures can be leaned on: not `unconfirmed`, not
    a `guess`. Works on an ALTERNATIVES row or a model.js result (which
    carries the id), looking the flags up by id. */
+const altDef = a => (a && ALTERNATIVES.find(x => x.id === a.id)) || a || {};
 function altConfirmed(a) {
-  const def = (a && ALTERNATIVES.find(x => x.id === a.id)) || a || {};
+  const def = altDef(a);
   return !(a && (a.unconfirmed || a.guess)) && !def.unconfirmed && !def.guess;
 }
-const altLikeForLike = a => ((a && ALTERNATIVES.find(x => x.id === a.id)) || a || {}).likeForLike !== false;
+/* How far a rival's figures can be leaned on: 0 confirmed, 1 published
+   somewhere but not confirmed (`unconfirmed`), 2 our own guess. */
+function altTrust(a) {
+  const def = altDef(a);
+  if (altConfirmed(a)) return 0;
+  return (a && a.guess) || def.guess ? 2 : 1;
+}
+/* The kinds of Discovery Bank product (BANK_KINDS) a rival is a
+   like-for-like swap for: an account with a credit card stands in for a
+   Suite or a Credit Card Account; an account with no credit card for a
+   Transaction Account or savings. A row without `kinds` falls back on
+   likeForLike (false = no credit card). */
+function altKinds(a) {
+  const def = altDef(a);
+  if (Array.isArray(def.kinds)) return def.kinds;
+  return def.likeForLike === false ? ['transaction', 'savings'] : ['suite', 'card'];
+}
+/* Like-for-like for this kind of Discovery Bank product (a Suite when left
+   out). */
+const altLikeForLike = (a, bankKind) => altKinds(a).includes(BANK_KINDS.includes(bankKind) ? bankKind : 'suite');
 
 /* The rival bank Discovery Bank is weighed against. compareWith (settings)
    names one, and that wins. Otherwise ('' or an id that is gone) the best
-   — highest net — of the banks whose figures are confirmed and that are a
-   like-for-like swap; failing that the best confirmed one; failing that the
-   best of all. alternatives: model.js results ({ id, net, … }).
+   — highest net — of the banks that are a like-for-like swap for the
+   product you hold (opts.bankKind: a Suite or Credit Card Account is
+   weighed against an account with a credit card, a Transaction Account or
+   savings against one without), the confirmed ones first, then those whose
+   figures were published but not confirmed, then our guesses; failing any
+   like-for-like bank, the best confirmed one; failing that the best of all.
+   A no-card account is never put against a credit card while a bank with a
+   card is there, even one whose figures need checking: the page says when
+   they do. alternatives: model.js results ({ id, net, … }).
    → one of them, or null */
-function chooseAlternative(alternatives, compareWith) {
+function chooseAlternative(alternatives, compareWith, opts) {
   const list = Array.isArray(alternatives) ? alternatives.filter(Boolean) : [];
   if (compareWith) {
     const named = list.find(a => a.id === compareWith);
     if (named) return named;
   }
+  const kind = opts && opts.bankKind;
   const best = xs => xs.slice().sort((x, y) => (y.net || 0) - (x.net || 0))[0] || null;
-  return best(list.filter(a => altConfirmed(a) && altLikeForLike(a))) || best(list.filter(altConfirmed)) || best(list);
+  const like = list.filter(a => altLikeForLike(a, kind));
+  for (const trust of [0, 1, 2]) {
+    const hit = best(like.filter(a => altTrust(a) === trust));
+    if (hit) return hit;
+  }
+  return best(list.filter(altConfirmed)) || best(list);
+}
+
+/* Vitality statuses (constants.STATUSES). A status saved by an older build
+   or typed by hand that is not one of them ("Platinum") would read no
+   figure at all and so earn R0 without a word: it is read as Blue, the
+   lowest, and statusIssues() names it so the page can ask. Case and spaces
+   do not matter ("gold " is Gold); a missing one is Blue, the default. */
+function normStatus(value) {
+  const t = String(value === undefined || value === null ? '' : value).trim().toLowerCase();
+  return STATUSES.find(x => x.toLowerCase() === t) || STATUSES[0];
+}
+const PROGRAMMES = ['money', 'health', 'drive'];
+function normStatuses(status) {
+  const s = status || {};
+  const out = Object.assign({}, s);
+  for (const k of PROGRAMMES) out[k] = normStatus(s[k]);
+  return out;
+}
+const STATUS_WORDS = { money: 'bank score (Vitality Money status)', health: 'health score (Vitality Health status)', drive: 'car score (Vitality Drive status)' };
+/* settings → the saved statuses that are not Vitality statuses, as a list
+   of { key: 'money', saved: 'Platinum', used: 'Blue', text: plain sentence }
+   (empty when every saved status is one we know, or left blank). The list
+   also carries statusUnknown: the keys alone (['money']), and saved:
+   { money: 'Platinum' }. */
+function statusIssues(settings) {
+  const s = (settings && settings.status) || {};
+  const out = [];
+  out.statusUnknown = [];
+  out.saved = {};
+  for (const k of PROGRAMMES) {
+    const v = s[k];
+    if (v === undefined || v === null || String(v).trim() === '') continue;
+    const t = String(v).trim().toLowerCase();
+    if (STATUSES.some(x => x.toLowerCase() === t)) continue;
+    out.statusUnknown.push(k);
+    out.saved[k] = String(v);
+    out.push({ key: k, saved: String(v), used: STATUSES[0],
+      text: `Your ${STATUS_WORDS[k]} is saved as "${String(v)}", which is not a Vitality status, so it is counted as ${STATUSES[0]}. Pick yours from Blue, Bronze, Silver, Gold or Diamond.` });
+  }
+  return out;
 }
 
 /* settings.conditions (constants.js) → the `cases` they meet. Unanswered
@@ -491,7 +564,7 @@ function rate(settings, key, status, ctx) {
   if (o !== undefined && o !== null && o !== '' && Number.isFinite(Number(o))) return Number(o);
   const def = RATES[key] || altRate(key);
   if (!def) return 0;
-  const s = status || {};
+  const s = normStatuses(status);
   const suite = suiteOf((ctx && ctx.suite) || settings);
   const prod = bankProductOf(settings, ctx);
   /* the product's own figure first, then the Suite's, then RATES */
@@ -538,4 +611,4 @@ function altRate(key) {
   return a ? { value: a[m[2]] || 0 } : null;
 }
 
-module.exports = { metOf, sourceText, chooseAlternative, altConfirmed, FACE_VALUE: 0.1, RATES, ALTERNATIVES, BANDS, FLIGHT_BANDS, SHORT_BANDS, DIAMOND, SUITES, SUITE_TABLES, DEFAULT_SUITE, suiteOf, BANK_PRODUCTS, BANK_KINDS, bankProductOf, bandTable, bandPct, rate };
+module.exports = { metOf, sourceText, chooseAlternative, altConfirmed, altTrust, altKinds, altLikeForLike, normStatus, normStatuses, statusIssues, FACE_VALUE: 0.1, RATES, ALTERNATIVES, BANDS, FLIGHT_BANDS, SHORT_BANDS, DIAMOND, SUITES, SUITE_TABLES, DEFAULT_SUITE, suiteOf, BANK_PRODUCTS, BANK_KINDS, bankProductOf, bandTable, bandPct, rate };

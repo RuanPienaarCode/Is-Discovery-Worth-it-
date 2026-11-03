@@ -394,6 +394,8 @@
 .dc-pcard { gap: 6px; padding: 0; transition: transform 220ms var(--dc-ease), border-color 200ms ease; }
 .dc-page button.dc-pcard-main { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 10px; width: 100%; padding: 18px 20px 14px; border-radius: var(--dc-radius); color: var(--dc-text); }
 .dc-pcard-main .dc-card-title { font-size: 17px; font-weight: 700; }
+/* the line stays clear of the arrow in the corner */
+.dc-pcard-main .dc-card-line { padding-right: 30px; }
 .dc-pcard-chev { position: absolute; right: 16px; bottom: 16px; color: var(--dc-muted); }
 .dc-pcard > .dc-more { margin: -4px 0 14px 12px; }
 .dc-pcard > .dc-more-body { margin: 0 20px 16px; }
@@ -547,14 +549,13 @@
 .dc-cmp-h { min-height: 34px; font-family: var(--dc-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dc-muted); border-bottom-color: rgba(var(--dc-accent-rgb), 0.55); }
 .dc-cmp-r.is-you { background: rgba(var(--p-rgb, var(--dc-accent-rgb)), 0.08); font-weight: 600; }
 .dc-page button.dc-cmp-r[aria-pressed="true"] { box-shadow: inset 3px 0 0 var(--dc-pink); background: rgba(var(--dc-pink-rgb), 0.06); }
-.dc-cmp.is-market .dc-cmp-r { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); }
-.dc-cmp.is-market.is-3 .dc-cmp-r { grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); }
+.dc-cmp.is-market .dc-cmp-r { grid-template-columns: minmax(0, 2fr) repeat(var(--c, 3), minmax(0, 1fr)); }
 .dc-cmp-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; word-break: break-word; overflow-wrap: anywhere; }
 .dc-cmp-sub { color: var(--dc-muted); font-size: 11.5px; font-weight: 400; line-height: 1.35; }
 .dc-cmp-r .dc-amt.is-words { white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.3; }
 .dc-page.is-phone .dc-cmp-r, .dc-page.is-phone button.dc-cmp-r { grid-template-columns: minmax(0, 1fr) auto auto; padding: 7px 10px; }
 .dc-page.is-phone .dc-cmp-r > .c-fees, .dc-page.is-phone .dc-cmp-r > .c-rew, .dc-page.is-phone .dc-cmp-r > .c-lost { display: none; }
-.dc-page.is-phone .dc-cmp.is-market .dc-cmp-r { grid-template-columns: minmax(0, 1fr) auto auto; }
+.dc-page.is-phone .dc-cmp.is-market .dc-cmp-r { grid-template-columns: minmax(0, 1fr) repeat(var(--pc, 2), auto); }
 
 /* cover for what the family needs */
 .dc-needs { display: flex; flex-direction: column; border: 1px solid var(--dc-line); border-radius: 12px; overflow: hidden; }
@@ -592,7 +593,7 @@
 .dc-rv-name { font-weight: 700; overflow-wrap: anywhere; word-break: break-word; }
 .dc-rv-what { font-size: 12px; color: var(--dc-muted); line-height: 1.4; }
 .dc-rv-what.is-miss { color: var(--dc-amber); }
-.dc-rv-cmp { font-weight: 700; text-align: right; white-space: nowrap; }
+.dc-rv-cmp { max-width: 230px; font-weight: 700; text-align: right; line-height: 1.3; overflow-wrap: break-word; }
 .dc-rv-cmp.is-cheaper { color: var(--dc-pos); }
 .dc-rv-cmp.is-dearer { color: var(--dc-neg); }
 .dc-rv-cmp.is-zero { color: var(--dc-muted); font-weight: 600; }
@@ -656,8 +657,8 @@
 .dc-fl-t { font-size: 12px; fill: var(--dc-text); font-variant-numeric: tabular-nums; }
 .dc-fl-t.b { font-weight: 700; }
 .dc-fl-t.m { fill: var(--dc-muted); }
+.dc-fl-t.amt { font-weight: 600; }
 .dc-fl-t.pos { fill: var(--dc-pos); font-weight: 600; }
-.dc-fl-t.neg { fill: var(--dc-neg); font-weight: 600; }
 .dc-fl-t.h { font-size: 10px; fill: var(--dc-muted); font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
 .dc-fl-halo { paint-order: stroke; stroke: var(--dc-surface); stroke-width: 4px; stroke-linejoin: round; }
 .dc-fl-bx { fill: rgba(var(--p-rgb, 138, 147, 163), 0.12); stroke: rgba(var(--p-rgb, 138, 147, 163), 0.5); stroke-width: 1; }
@@ -972,9 +973,8 @@
 /* The Benefits page (src/ui-benefits.js), in the page's look (tokens from
    src/styles.css). Every rule sits under .dc-ben. Short by default: each
    card is a big heading, one line, the answer and two figures; everything
-   else waits behind "More". The page's own head (src/bottom-line.js) gives
-   the title and its one line, so the module's own heading and lead are not
-   shown twice. The narrow layout hangs on the page's .is-narrow / .is-phone
+   else waits behind "How this works". The page's own head (src/bottom-line.js)
+   gives the title and its one line, so this module draws neither. The narrow layout hangs on the page's .is-narrow / .is-phone
    classes: container queries and color-mix() need iOS 16, and the floor here
    is iOS 15. No :has(): the chosen answer is an .is-on class the script sets.
    Tap targets are 44px or more. */
@@ -982,7 +982,6 @@
 .dc-ben { display: flex; flex-direction: column; gap: 24px; min-width: 0; color: var(--dc-text); }
 .dc-ben *, .dc-ben *::before, .dc-ben *::after { box-sizing: border-box; }
 .dc-ben [hidden] { display: none; }
-.dc-ben .dc-ben-h, .dc-ben .dc-ben-lead { display: none; }
 .dc-ben .dc-ben-empty { padding: 12px 14px; border: 1px dashed var(--dc-line-2); border-radius: var(--dc-radius-sm); color: var(--dc-text-2); font-size: 13px; }
 
 /* ── the two figures, as KPI tiles ───────────────────── */
@@ -1038,8 +1037,11 @@
 }
 .dc-ben .dc-ben-mark .dc-art { width: 22px; height: 22px; }
 .dc-ben .dc-ben-card-h { margin: 0; min-width: 0; font-size: 17px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; }
-/* the one line: never more than one, cut with an ellipsis if it must be */
-.dc-ben .dc-ben-one { margin: -6px 0 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--dc-muted); font-size: 13.5px; line-height: 1.4; }
+/* the one line under the title; it wraps rather than being cut (the
+   gameboard's says what the gameboard is) */
+.dc-ben .dc-ben-one { margin: -6px 0 0; color: var(--dc-muted); font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; word-break: break-word; }
+/* why a card counts R0 */
+.dc-ben .dc-ben-zero { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--dc-surface-2); box-shadow: inset 3px 0 0 var(--dc-line-2); font-size: 13px; line-height: 1.45; color: var(--dc-text-2); }
 
 /* ── the three answers: real radios in labels ────────── */
 .dc-ben .dc-ben-seg { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--dc-line); border-radius: 12px; background: var(--dc-surface-2); }
@@ -1049,7 +1051,7 @@
 .dc-ben input.dc-ben-in { position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .dc-ben .dc-ben-opt-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 6px 4px; border-radius: 9px; text-align: center; line-height: 1.2; transition: background 160ms ease, color 160ms ease; }
 .dc-ben .dc-ben-opt-l { font-size: 12.5px; font-weight: 700; }
-.dc-ben .dc-ben-sug { font-size: 10.5px; font-weight: 600; color: var(--dc-muted); }
+.dc-ben .dc-ben-sug { font-size: 10.5px; font-weight: 600; line-height: 1.2; color: var(--dc-muted); }
 .dc-ben .dc-ben-opt.is-on .dc-ben-opt-t { background: linear-gradient(180deg, var(--dc-navy-2), var(--dc-navy)); color: #ffffff; box-shadow: 0 6px 16px -8px rgba(17, 75, 138, 0.9); }
 .dc-ben .dc-ben-opt.is-on .dc-ben-sug { color: rgba(255, 255, 255, 0.85); }
 @media (hover: hover) {
@@ -1077,13 +1079,15 @@
 /* ── the two amounts: big figures, tiny labels ───────── */
 .dc-ben .dc-ben-worth { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .dc-ben .dc-ben-amt { min-width: 0; display: flex; flex-direction: column; }
-.dc-ben .dc-ben-amt-l { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--dc-muted); }
-.dc-ben .dc-ben-amt-n { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; line-height: 1.2; }
+.dc-ben .dc-ben-amt-l { font-size: 12px; font-weight: 700; line-height: 1.3; color: var(--dc-muted); }
+.dc-ben .dc-ben-amt-n { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+.dc-ben .dc-ben-amt-r { white-space: nowrap; }
+.dc-ben .dc-ben-amt-per { font-size: 12px; font-weight: 600; letter-spacing: 0; color: var(--dc-muted); white-space: nowrap; }
 .dc-ben .dc-ben-amt.is-full .dc-ben-amt-n { color: var(--dc-text-2); }
 .dc-ben .dc-ben-amt.is-got .dc-ben-amt-n { color: var(--dc-pos); }
 .dc-ben .dc-ben-amt.is-got.is-zero .dc-ben-amt-n { color: var(--dc-muted); }
 
-/* ── More: the rest of the words ─────────────────────── */
+/* ── How this works: the rest of the words ─────────────────────── */
 .dc-ben button.dc-ben-more {
   align-self: flex-start;
   display: inline-flex;
@@ -1163,7 +1167,7 @@
 .dc-onb [hidden] { display: none; }
 .dc-onb *, .dc-onb *::before, .dc-onb *::after { box-sizing: border-box; }
 
-/* ── top: step count, dots, skip ─────────────────────── */
+/* ── top: question number, skip ──────────────────────── */
 .dc-onb-top {
   display: flex;
   flex-wrap: wrap;
@@ -1174,24 +1178,13 @@
 }
 .dc-onb-progress { min-width: 0; }
 .dc-onb .dc-onb-stepno {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 600;
   color: var(--dc-muted);
 }
-.dc-onb .dc-onb-dots { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.dc-onb .dc-onb-dot {
-  width: 10px;
-  height: 10px;
-  margin: 0;
-  padding: 0;
-  border-radius: 50%;
-  background: var(--dc-line-2);
-}
-.dc-onb .dc-onb-dot.is-done { background: var(--dc-muted); }
-.dc-onb .dc-onb-dot.is-now { width: 24px; border-radius: 5px; background: var(--dc-accent); }
 
 .dc-onb button.dc-onb-skip {
   display: inline-flex;
@@ -1246,6 +1239,8 @@
 .dc-onb .dc-onb-group:last-child { margin-bottom: 0; }
 .dc-onb .dc-onb-legend { padding: 0; margin: 0 0 6px; font-weight: 600; line-height: 1.35; }
 .dc-onb .dc-onb-opts { display: grid; gap: 8px; }
+.dc-onb .dc-onb-opts-h { grid-column: 1 / -1; margin: 10px 0 0; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dc-text-2); }
+.dc-onb .dc-onb-opts-h:first-child { margin-top: 0; }
 .dc-onb .dc-onb-opts.is-compact { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
 .dc-onb .dc-onb-products { display: grid; gap: 8px; }
 
@@ -1337,6 +1332,7 @@
   color: #ffffff;
 }
 .dc-onb button.dc-onb-btn.is-quiet { background: none; }
+.dc-onb button.dc-onb-skip[hidden] { display: none; }
 .dc-onb button.dc-onb-btn:disabled,
 .dc-onb button.dc-onb-skip:disabled { opacity: 0.5; cursor: default; }
 
@@ -1352,7 +1348,6 @@
 /* ── motion: only for people who have not asked for less ─ */
 @media (prefers-reduced-motion: no-preference) {
   .dc-onb-card.is-animated { animation: dc-onb-in 220ms ease-out; }
-  .dc-onb .dc-onb-dot { transition: width 180ms ease-out, background-color 180ms ease-out; }
 }
 @keyframes dc-onb-in {
   from { opacity: 0; transform: translateY(6px); }
@@ -1367,8 +1362,6 @@
 /* ── the page's look: Learning Hub's card and type, Discovery's colours ── */
 .dc-onb { font-family: var(--dc-font); }
 .dc-onb .dc-onb-stepno { font-size: 10px; font-weight: 700; letter-spacing: 0.25em; color: var(--dc-accent-ink); }
-.dc-onb .dc-onb-dot.is-now { background: var(--dc-pink); }
-.dc-onb .dc-onb-dot.is-done { background: var(--dc-accent); }
 .dc-onb-card { border-color: var(--dc-line); border-radius: var(--dc-radius); box-shadow: var(--dc-shadow); }
 .dc-onb .dc-onb-h { font-size: 24px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.2; }
 .dc-onb .dc-onb-lead { font-size: 15px; }
@@ -1446,3 +1439,17 @@
 .dc-radio-l { min-width: 0; }
 .dc-radio input.dc-radio-in:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
 @supports not selector(:focus-visible) { .dc-radio input.dc-radio-in:focus { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; } }
+
+/* ── amounts with their direction in words ───────────── */
+/* "R 1 197" over "better off": the word sits under the number, small */
+.dc-amt .dc-amt-w { display: block; font-size: 11px; font-weight: 500; line-height: 1.25; color: var(--dc-muted); white-space: normal; }
+.dc-tot .dc-amt { text-align: right; }
+/* the one-line definition under a page's cards ("After rewards means ...") */
+.dc-small.dc-def { margin: 8px 2px 0; }
+/* what a section card's figure is: "R 7 189 you pay a year" */
+.dc-head-fig-wrap { display: inline-flex; align-items: baseline; gap: 4px; margin-left: auto; white-space: nowrap; }
+@media (max-width: 420px) { .dc-head-fig-wrap { flex-basis: 100%; margin-left: 0; } }
+/* a need's name in the cover grid wraps instead of being cut off */
+.dc-needs-r.dc-cmp-h > span:not(:first-child) { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; word-break: break-word; line-height: 1.15; }
+.dc-page.is-phone .dc-needs-r.dc-cmp-h { letter-spacing: 0; font-size: 9px; }
+.dc-page.is-phone .dc-needs-r.dc-cmp-h > span:not(:first-child) { letter-spacing: 0; }

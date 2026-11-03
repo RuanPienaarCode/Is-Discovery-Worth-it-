@@ -6,8 +6,8 @@
    st.benefits[id] = { level, suggested, why, full, counted, available,
    reason, note }, in rands a year. This page only shows it and lets the
    person change a level. An answer the person gives is stored even when it
-   equals the suggestion, so a confirmed "I use it" never flips when a later
-   budget suggests something else; "Use the suggestion" removes it again.
+   equals the suggestion, so a confirmed "I use it" never flips when later
+   statements suggest something else; "Use our suggestion" removes it again.
 
    Every node is built with dom.js el() and art.js drawMark (createElementNS);
    no innerHTML. CSS lives in src/css/benefits.css under .dc-ben. */
@@ -15,6 +15,7 @@
 const { el } = require('./dom');
 const { money } = require('./format');
 const { drawMark } = require('./art');
+const { FACE_VALUE } = require('./rates');
 const { BENEFITS, GROUPS, levelOf, offerText } = require('./benefits');
 
 /* The three answers, in the order they are shown. */
@@ -27,7 +28,7 @@ const LEVELS = [
 /* How you spend your Miles (settings.milesUse), for the "Spending your
    Miles" card: one line each. */
 const MILES_USE = [
-  { value: 'dday', label: 'On Ð-Day (the 15th)' },
+  { value: 'dday', label: 'On Ð-Day (the 15th of each month)' },
   { value: 'partners', label: 'At Discovery Miles partners' },
   { value: 'utilities', label: 'Electricity, data or airtime' },
   { value: 'none', label: 'I don\'t spend them' },
@@ -117,17 +118,17 @@ const upTo = (p, rest, fallback) => (p ? `Up to ${p} ${rest}` : fallback);
 const SHORT = {
   miles: () => 'Earned on every card payment',
   healthyFood: p => upTo(p, 'back on healthy food', 'Cash back on healthy food'),
-  healthyCare: p => upTo(p, 'back at Clicks, Dis-Chem', 'Cash back at Clicks, Dis-Chem'),
+  healthyCare: p => upTo(p, 'back at Clicks and Dis-Chem', 'Cash back at Clicks and Dis-Chem'),
   fuel: p => upTo(p, 'back on bp and Shell fuel', 'Cash back on bp and Shell fuel'),
   flights: p => upTo(p, 'off flights', 'Money off flights'),
-  gameboard: () => 'Miles for weekly exercise goals',
-  appleWatch: () => 'A watch that exercise pays off',
+  gameboard: () => 'Miles for your weekly exercise goals, won on the gameboard (the weekly game in the Discovery Bank app)',
+  appleWatch: () => 'A watch you pay off by exercising',
   interest: p => upTo(p, 'extra interest', 'Extra interest on your money'),
   milesPlus: () => 'Miles buy more at partner shops',
   gym: p => upTo(p, 'off gym fees', 'Money off gym fees'),
 };
-/* benefit, settings → one short line (38 characters at most, so it fits
-   one line on a 320px phone) */
+/* benefit, settings → one short line (the gameboard's is longer: it says what
+   the gameboard is; the card line wraps) */
 function oneLiner(b, s) {
   const text = offerText(b, s) || b.offer || '';
   if (SHORT[b.id]) return SHORT[b.id](firstPct(text));
@@ -135,10 +136,45 @@ function oneLiner(b, s) {
   return first.length > 38 ? first.slice(0, 37).replace(/\s+\S*$/, '') + '…' : first;
 }
 
+/* ── plain words for text that comes from benefits.js ─────────────────
+   The offer, needs and reason sentences are written there; this puts the
+   page's glossary on them (no "face value", no "Suite" as a question, the
+   health checks said in words, "Ð-Day" with its date) without changing the
+   figures in them. Text that already reads plainly passes through. */
+const CENTS = `${Math.round(FACE_VALUE * 100)}c`;
+function plainWords(text) {
+  return String(text || '')
+    .replace(/Partners take (\d+) Miles as (R[\s\u00a0\u2009]?\d+)/g, 'At partners, $1 Miles pay for $2 of shopping')
+    .replace(/a Mile buys its face value/g, `a Mile is worth only ${CENTS}`)
+    .replace(/no more than their face value/g, `no more than ${CENTS} a Mile would have bought`)
+    .replace(/than their face value/g, `than ${CENTS} a Mile would have bought`)
+    .replace(/Vitality Age and a Vitality Health Check/g, 'Vitality Age (an online health-age test) and a Vitality Health Check (a screening at a clinic or pharmacy)')
+    .replace(/The Discovery Bank Suite with a credit card/g, 'The all-in-one package (account and credit card)')
+    .replace(/Ð-Day \(the 15th\)/g, 'Ð-Day (the 15th of each month)');
+}
+
 /* a reason cut to its first idea: "It needs Vitality Health, which you do
    not have." → "It needs Vitality Health" */
 function shortReason(reason) {
   return String(reason || '').split('. ')[0].split(', ')[0].replace(/\.$/, '');
+}
+
+/* One plain sentence for a card that counts R0, or '' when there is nothing
+   to add. The model's own reason (st.benefits[id].zeroWhy) comes first; when
+   it has none, your own "Not for me" or the suggestion from the statements
+   is said. s = settings. */
+function zeroReason(s, b, x, level) {
+  const why = x && typeof x.zeroWhy === 'string' ? x.zeroWhy : '';
+  if (why) return why;
+  if (b.id === 'milesPlus') {
+    return s && s.milesUse === 'none' ? 'You said you do not spend your Miles, so this counts as ' + money(0) + '.' : '';
+  }
+  if (level === 'none') {
+    return hasAnswer(s, b.id)
+      ? 'You said Not for me, so this counts as ' + money(0) + '.'
+      : 'We suggest Not for me from your statements, so this counts as ' + money(0) + '.';
+  }
+  return '';
 }
 
 /* ── the page ─────────────────────────────────────────────────────────── */
@@ -148,9 +184,9 @@ let uid = 0;
 let offOpen = false;
 const moreOpen = new Set();
 
-/* A "More" button that shows and hides `region` without a redraw; its open
-   state is kept by key in moreOpen. */
-function moreToggle(parent, key, regionId) {
+/* A button that shows and hides `region` without a redraw, and says what it
+   opens ("How this works"); its open state is kept by key in moreOpen. */
+function moreToggle(parent, key, regionId, name) {
   const btn = el(parent, 'button', 'dc-ben-more');
   btn.type = 'button';
   btn.setAttribute('aria-controls', regionId);
@@ -159,7 +195,7 @@ function moreToggle(parent, key, regionId) {
   const sync = () => {
     const open = moreOpen.has(key);
     btn.setAttribute('aria-expanded', String(open));
-    btn.textContent = open ? 'Less' : 'More';
+    btn.textContent = open ? 'Hide: ' + name : name;
     region.hidden = !open;
   };
   btn.addEventListener('click', e => {
@@ -181,12 +217,11 @@ function renderBenefits(panel, ctx) {
   const root = el(panel, 'section', 'dc-ben');
   const t = benefitTotals(st);
 
-  el(root, 'h2', 'dc-ben-h', 'Your benefits');
-
+  /* the page's own head (bottom-line.js) gives the title and its one line, so
+     none is drawn here */
   if (!t.available.length) {
     el(root, 'p', 'dc-ben-empty', 'Your setup has none of these benefits. Change your products or Vitality on the Inputs tab.');
   } else {
-    el(root, 'p', 'dc-ben-lead', 'Pick the ones you use. Only those count.');
     const figs = el(root, 'div', 'dc-ben-figs');
     const fig = (title, n, cls, sub) => {
       const f = el(figs, 'div', 'dc-ben-fig ' + cls + (amount(n) < 0.5 ? ' is-zero' : ''));
@@ -233,19 +268,27 @@ function renderBenefits(panel, ctx) {
     const worth = el(c, 'div', 'dc-ben-worth');
     const big = (text, n, cls) => {
       const w = el(worth, 'div', 'dc-ben-amt ' + cls + (amount(n) < 0.5 ? ' is-zero' : ''));
-      el(w, 'span', 'dc-ben-amt-l', `${text} ${label}`);
-      el(w, 'span', 'dc-ben-amt-n', money(per(amount(n))));
+      el(w, 'span', 'dc-ben-amt-l', text);
+      const nn = el(w, 'span', 'dc-ben-amt-n');
+      el(nn, 'span', 'dc-ben-amt-r', money(per(amount(n))));
+      el(nn, 'span', 'dc-ben-amt-per', label);
     };
-    big('Full use', x.full, 'is-full');
-    big('You get', x.counted, 'is-got');
+    big('If you use it fully', x.full, 'is-full');
+    big('What we count', x.counted, 'is-got');
 
-    const more = moreToggle(c, 'card:' + b.id, `dc-ben-${run}-${b.id}-more`);
+    /* why a card counts R0: your answer, or what H2's model found */
+    if (amount(x.counted) < 0.5) {
+      const why = zeroReason(s, b, x, level);
+      if (why) el(c, 'p', 'dc-ben-zero', why);
+    }
+
+    const more = moreToggle(c, 'card:' + b.id, `dc-ben-${run}-${b.id}-more`, 'How this works');
     c.appendChild(more);
-    el(more, 'p', 'dc-ben-offer', offerText(b, s) || b.offer || '');
-    if (b.needs) el(more, 'p', 'dc-ben-small', 'Needs: ' + b.needs);
-    if (x.why) el(more, 'p', 'dc-ben-why', 'From your statements: ' + x.why);
-    if (x.note) el(more, 'p', 'dc-ben-small', 'Part of this does not count for you. ' + x.note);
-    if (b.measuredBy) el(more, 'p', 'dc-ben-small', 'How we see it: ' + b.measuredBy);
+    el(more, 'p', 'dc-ben-offer', plainWords(offerText(b, s) || b.offer || ''));
+    if (b.needs) el(more, 'p', 'dc-ben-small', 'What you need: ' + plainWords(b.needs));
+    if (x.why) el(more, 'p', 'dc-ben-why', 'From your statements: ' + plainWords(x.why));
+    if (x.note) el(more, 'p', 'dc-ben-small', 'Part of this does not count for you. ' + plainWords(x.note));
+    if (b.measuredBy) el(more, 'p', 'dc-ben-small', 'How we find out: ' + plainWords(b.measuredBy));
   }
 
   /* I use it / Sometimes / Not for me, as real radios */
@@ -265,7 +308,7 @@ function renderBenefits(panel, ctx) {
       input.setAttribute('data-ben', b.id);
       const txt = el(lab, 'span', 'dc-ben-opt-t');
       el(txt, 'span', 'dc-ben-opt-l', o.label);
-      if (o.value === suggested) el(txt, 'span', 'dc-ben-sug', 'suggested');
+      if (o.value === suggested) el(txt, 'span', 'dc-ben-sug', 'we suggest this');
       opts.push({ lab, input });
       input.addEventListener('change', () => { if (input.checked) choose(b.id, o.value, opts, panel); });
       /* a tap on the answer already showing, with nothing stored yet, confirms
@@ -278,10 +321,10 @@ function renderBenefits(panel, ctx) {
     /* an answer of yours is kept; a way back to what the statements suggest */
     if (hasAnswer(s, b.id)) {
       const names = { full: 'I use it', half: 'Sometimes', none: 'Not for me' };
-      const back = el(c, 'button', 'dc-ben-reset', 'Use the suggestion');
+      const back = el(c, 'button', 'dc-ben-reset', `Use our suggestion: ${names[suggested]}`);
       back.type = 'button';
       back.setAttribute('data-ben-reset', b.id);
-      back.setAttribute('aria-label', `Use the suggestion for ${b.label}: ${names[suggested]}`);
+      back.setAttribute('aria-label', `Use our suggestion for ${b.label}: ${names[suggested]}`);
       back.addEventListener('click', e => { e.preventDefault(); reset(b.id, back, panel); });
     }
   }
@@ -330,11 +373,11 @@ function renderBenefits(panel, ctx) {
     for (const { b, x } of rows) {
       const li = el(list, 'li', 'dc-ben-off-item');
       el(li, 'p', 'dc-ben-off-h', b.label);
-      if (x.reason) el(li, 'p', 'dc-ben-one', shortReason(x.reason));
-      const more = moreToggle(li, 'off:' + b.id, `dc-ben-${run}-${b.id}-offmore`);
+      if (x.reason) el(li, 'p', 'dc-ben-one', plainWords(shortReason(x.reason)));
+      const more = moreToggle(li, 'off:' + b.id, `dc-ben-${run}-${b.id}-offmore`, 'Why it is not available');
       li.appendChild(more);
-      if (b.offer) el(more, 'p', 'dc-ben-offer', b.offer);
-      if (x.reason) el(more, 'p', 'dc-ben-small', 'Why not: ' + x.reason);
+      if (b.offer) el(more, 'p', 'dc-ben-offer', plainWords(b.offer));
+      if (x.reason) el(more, 'p', 'dc-ben-small', 'Why not: ' + plainWords(x.reason));
     }
   }
 
@@ -372,7 +415,13 @@ function renderBenefits(panel, ctx) {
   }
 }
 
-/* After a redraw, put focus back on the same benefit's chosen answer. */
+/* After a redraw, put focus back on the same benefit's chosen answer. The
+   one retry is kept in refocusTimer so cancelRefocus() (view.js, on close)
+   can stop it; it also does nothing once the page has gone. */
+let refocusTimer = null;
+function cancelRefocus() {
+  if (refocusTimer !== null) { clearTimeout(refocusTimer); refocusTimer = null; }
+}
 function refocus(scope, id) {
   if (typeof document === 'undefined') return;
   const sel = `input[data-ben="${id}"]:checked`;
@@ -381,7 +430,8 @@ function refocus(scope, id) {
     return inScope || document.querySelector(sel);
   };
   const go = () => { const n = find(); if (n && document.activeElement !== n) n.focus(); return !!n; };
-  if (!go()) setTimeout(go, 0);
+  cancelRefocus();
+  if (!go()) refocusTimer = setTimeout(() => { refocusTimer = null; go(); }, 0);
 }
 
-module.exports = { renderBenefits, benefitTotals, setLevel, clearLevel, hasAnswer, shareLine, oneLiner, shortReason, LEVELS, MARK_OF, MILES_USE };
+module.exports = { renderBenefits, benefitTotals, setLevel, clearLevel, hasAnswer, shareLine, oneLiner, shortReason, plainWords, zeroReason, cancelRefocus, LEVELS, MARK_OF, MILES_USE };

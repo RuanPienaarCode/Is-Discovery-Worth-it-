@@ -193,4 +193,30 @@ console.log('products OK');
   assert.deepStrictEqual(milesRows(ms, 'insure').map(r => r.key), ['miles.insure']);
   assert.deepStrictEqual(milesRows(ms, 'bank').map(r => r.key), ['miles.base']);
 }
+
+// ── round 2 (lane H2) ─────────────────────────────────────────────────
+{
+  const { premiumBasis, premiumYear } = require('../src/products');
+  const mm = {
+    from: '2025-11', to: '2026-10', months: [], dataMonths: [],
+    figures: { 'product.medical': { total: 12000, count: 2, perMonth: { '2026-09': 6000, '2026-10': 6000 }, accounts: { Other: true } } },
+    accountMonths: { Other: ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10'] },
+    rows: { 'product.medical': [{ date: '2026-09-02', amount: -6000, account: 'Other' }, { date: '2026-10-02', amount: -6000, account: 'Other' }] },
+  };
+  const b = premiumBasis(mm, 'product.medical');
+  assert.deepStrictEqual([b.months, b.paidMonths, b.ended, b.lastPaid], [2, 2, false, '2026-10-02'], 'joined two months ago: two months');
+  near(premiumYear(mm, 'product.medical', 12), 72000, 'R6 000 a month is R72 000 a year, not R12 000');
+  const left = { ...mm, figures: { 'product.medical': { total: 12000, count: 2, perMonth: { '2025-11': 6000, '2025-12': 6000 }, accounts: { Other: true } } }, rows: {} };
+  const bl = premiumBasis(left, 'product.medical');
+  assert.ok(bl.ended && bl.months === 12, 'left after December with statements to October');
+  assert.strictEqual(premiumBasis(mm, 'product.gap'), null);
+  // labels in the glossary's words
+  for (const p of products.concat(buildProducts(st, m, null, settings, new Date(2026, 9, 21)).all)) {
+    const words = [p.figureLabel, p.outLabel, ...p.back.map(x => x.label)].join(' | ');
+    assert.ok(!/minus|\bnet\b|Back minus paid|real cost|,$/.test(words), words);
+    for (const x of p.back) if (/^Claims/.test(x.label)) assert.strictEqual(x.label, 'Claims paid to you');
+  }
+  assert.strictEqual(P('bank').figureLabel, 'After rewards');
+  assert.strictEqual(typeof P('health').ended, 'boolean');
+}
 console.log('products fix wave OK');

@@ -1,9 +1,8 @@
 /* The Benefits page (src/ui-benefits.js), in the page's look (tokens from
    src/styles.css). Every rule sits under .dc-ben. Short by default: each
    card is a big heading, one line, the answer and two figures; everything
-   else waits behind "More". The page's own head (src/bottom-line.js) gives
-   the title and its one line, so the module's own heading and lead are not
-   shown twice. The narrow layout hangs on the page's .is-narrow / .is-phone
+   else waits behind "How this works". The page's own head (src/bottom-line.js)
+   gives the title and its one line, so this module draws neither. The narrow layout hangs on the page's .is-narrow / .is-phone
    classes: container queries and color-mix() need iOS 16, and the floor here
    is iOS 15. No :has(): the chosen answer is an .is-on class the script sets.
    Tap targets are 44px or more. */
@@ -11,7 +10,6 @@
 .dc-ben { display: flex; flex-direction: column; gap: 24px; min-width: 0; color: var(--dc-text); }
 .dc-ben *, .dc-ben *::before, .dc-ben *::after { box-sizing: border-box; }
 .dc-ben [hidden] { display: none; }
-.dc-ben .dc-ben-h, .dc-ben .dc-ben-lead { display: none; }
 .dc-ben .dc-ben-empty { padding: 12px 14px; border: 1px dashed var(--dc-line-2); border-radius: var(--dc-radius-sm); color: var(--dc-text-2); font-size: 13px; }
 
 /* ── the two figures, as KPI tiles ───────────────────── */
@@ -67,8 +65,11 @@
 }
 .dc-ben .dc-ben-mark .dc-art { width: 22px; height: 22px; }
 .dc-ben .dc-ben-card-h { margin: 0; min-width: 0; font-size: 17px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; }
-/* the one line: never more than one, cut with an ellipsis if it must be */
-.dc-ben .dc-ben-one { margin: -6px 0 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--dc-muted); font-size: 13.5px; line-height: 1.4; }
+/* the one line under the title; it wraps rather than being cut (the
+   gameboard's says what the gameboard is) */
+.dc-ben .dc-ben-one { margin: -6px 0 0; color: var(--dc-muted); font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; word-break: break-word; }
+/* why a card counts R0 */
+.dc-ben .dc-ben-zero { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--dc-surface-2); box-shadow: inset 3px 0 0 var(--dc-line-2); font-size: 13px; line-height: 1.45; color: var(--dc-text-2); }
 
 /* ── the three answers: real radios in labels ────────── */
 .dc-ben .dc-ben-seg { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--dc-line); border-radius: 12px; background: var(--dc-surface-2); }
@@ -78,7 +79,7 @@
 .dc-ben input.dc-ben-in { position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .dc-ben .dc-ben-opt-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 6px 4px; border-radius: 9px; text-align: center; line-height: 1.2; transition: background 160ms ease, color 160ms ease; }
 .dc-ben .dc-ben-opt-l { font-size: 12.5px; font-weight: 700; }
-.dc-ben .dc-ben-sug { font-size: 10.5px; font-weight: 600; color: var(--dc-muted); }
+.dc-ben .dc-ben-sug { font-size: 10.5px; font-weight: 600; line-height: 1.2; color: var(--dc-muted); }
 .dc-ben .dc-ben-opt.is-on .dc-ben-opt-t { background: linear-gradient(180deg, var(--dc-navy-2), var(--dc-navy)); color: #ffffff; box-shadow: 0 6px 16px -8px rgba(17, 75, 138, 0.9); }
 .dc-ben .dc-ben-opt.is-on .dc-ben-sug { color: rgba(255, 255, 255, 0.85); }
 @media (hover: hover) {
@@ -106,13 +107,15 @@
 /* ── the two amounts: big figures, tiny labels ───────── */
 .dc-ben .dc-ben-worth { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .dc-ben .dc-ben-amt { min-width: 0; display: flex; flex-direction: column; }
-.dc-ben .dc-ben-amt-l { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--dc-muted); }
-.dc-ben .dc-ben-amt-n { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; line-height: 1.2; }
+.dc-ben .dc-ben-amt-l { font-size: 12px; font-weight: 700; line-height: 1.3; color: var(--dc-muted); }
+.dc-ben .dc-ben-amt-n { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+.dc-ben .dc-ben-amt-r { white-space: nowrap; }
+.dc-ben .dc-ben-amt-per { font-size: 12px; font-weight: 600; letter-spacing: 0; color: var(--dc-muted); white-space: nowrap; }
 .dc-ben .dc-ben-amt.is-full .dc-ben-amt-n { color: var(--dc-text-2); }
 .dc-ben .dc-ben-amt.is-got .dc-ben-amt-n { color: var(--dc-pos); }
 .dc-ben .dc-ben-amt.is-got.is-zero .dc-ben-amt-n { color: var(--dc-muted); }
 
-/* ── More: the rest of the words ─────────────────────── */
+/* ── How this works: the rest of the words ─────────────────────── */
 .dc-ben button.dc-ben-more {
   align-self: flex-start;
   display: inline-flex;

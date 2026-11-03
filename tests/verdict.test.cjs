@@ -127,8 +127,13 @@ assert.strictEqual(buildVerdicts(null, { life: life(250, [row(2000, { quoted: tr
   assert.ok(/Capitec Global One's figures are not confirmed/.test(capitec.bank.why), capitec.bank.why);
   const guess = buildVerdicts({ net: 0, chosen: { id: 'fnbPremier', name: 'FNB Fusion Premier', gainIfSwitch: -5000 } }, {});
   assert.ok(/not confirmed/.test(guess.bank.why), 'a guessed rewards rate is not confirmed either');
-  const sure = buildVerdicts({ net: 0, chosen: { id: 'sbPrestige', name: 'Standard Bank Prestige', gainIfSwitch: 2000 } }, {});
-  assert.ok(!/not confirmed/.test(sure.bank.why), sure.bank.why);
+  /* any rival whose figures rates.js marks confirmed (the list changes) */
+  const { ALTERNATIVES, altConfirmed } = require('../src/rates');
+  const ok = ALTERNATIVES.find(a => altConfirmed(a));
+  if (ok) {
+    const sure = buildVerdicts({ net: 0, chosen: { id: ok.id, name: ok.name, gainIfSwitch: 2000 } }, {});
+    assert.ok(!/not confirmed/.test(sure.bank.why), sure.bank.why);
+  }
   const u = buildVerdicts(null, { health: cmp([row(3000, { unconfirmed: true })]) });
   assert.ok(/Scheme Plan's price is not confirmed/.test(u.health.why), u.health.why);
   const uq = buildVerdicts(null, { gap: cmp([row(3000, { unconfirmed: true, quoted: true })]) });
@@ -221,5 +226,35 @@ assert.strictEqual(buildVerdicts(null, { life: life(250, [row(2000, { quoted: tr
   const vh = bv({ lines: [], alternatives: [], chosen: null, bill: { priceStale: false } }, { health }, { health: true });
   assert.strictEqual(vh.health.word, 'Get quotes');
   assert.strictEqual(vh.health.amount, null);
+}
+
+// ── round 2 (lane H2) ─────────────────────────────────────────────────
+{
+  // B5: "rewards worth more than its fees" only when they are; nothing against nothing says so
+  const zero = buildVerdicts({ net: 0, chosen: { id: 'x', name: 'Other Bank', gainIfSwitch: -MATERIAL - 100 } }, {});
+  assert.strictEqual(zero.bank.word, 'Worth it');
+  assert.ok(!/worth more than its fees/.test(zero.bank.why) && /about the same/.test(zero.bank.why), zero.bank.why);
+  assert.ok(/worth more than its fees/.test(buildVerdicts({ net: 300, chosen: { id: 'x', name: 'Other Bank', gainIfSwitch: -2000 } }, {}).bank.why));
+  assert.ok(/fees cost more/.test(buildVerdicts({ net: -300, chosen: { id: 'x', name: 'Other Bank', gainIfSwitch: -2000 } }, {}).bank.why));
+  // B8: "Check first" only on a saving verdict, never on "Get quotes"
+  const needs = { needs: [{ id: 'hospital', label: 'Your hospital' }], vitalityKnown: false };
+  const gq = buildVerdicts({ bill: { priceStale: false } }, { health: cmp([row(5000, { likeForLike: true, unsure: ['hospital'] })], needs) });
+  assert.strictEqual(gq.health.word, 'Get quotes');
+  assert.ok(!/Check first/.test(gq.health.why), gq.health.why);
+  // B3: a product whose payments stopped: "Ended", no figure, says when
+  const e = buildVerdicts({ confidence: { ended: { health: '2026-02-02' }, productMonths: { health: 4 } } }, { health: cmp([row(5000)]) }, { health: true });
+  assert.deepStrictEqual([e.health.word, e.health.tone, e.health.amount, e.health.ended], ['Ended', 'unknown', null, true]);
+  assert.ok(/2 Feb 2026/.test(e.health.why) && /Inputs tab/.test(e.health.why), e.health.why);
+  assert.strictEqual(buildVerdicts({ confidence: { ended: { health: '2026-02-02' } } }, {}, { health: false }).health, undefined, 'switched off: no verdict');
+  // B1 with opts.now: other medical aids' prices out of date → "Get quotes", as Compare
+  const { PERIODS } = require('../src/market');
+  const rows = [row(5000, { id: 'rival' }), row(-3000, { id: 'dh', discovery: true })];
+  const fresh = buildVerdicts({}, { health: cmp(rows) }, { health: true }, { now: PERIODS.schemes.from });
+  assert.strictEqual(fresh.health.word, 'Could save');
+  const old = buildVerdicts({}, { health: cmp([row(5000, { id: 'rival' })]) }, { health: true }, { now: PERIODS.schemes.changes });
+  assert.strictEqual(old.health.word, 'Get quotes');
+  assert.ok(/out of date/.test(old.health.why), old.health.why);
+  const typed = buildVerdicts({}, { health: cmp([row(5000, { id: 'rival', quoted: true })]) }, { health: true }, { now: PERIODS.schemes.changes });
+  assert.strictEqual(typed.health.word, 'Could cost less elsewhere', 'a typed quote is current');
 }
 console.log('verdict: ok');

@@ -1,12 +1,13 @@
 'use strict';
-/* The first-run questions. One question per screen, Back and Next, a row
-   of step dots, and "Skip for now". Everything is built node by node (no
-   innerHTML) and works down to 320px wide.
+/* The first-run questions. One question per screen, Back and Next, a plain
+   "Question N" (the total moves as you tick products, so none is shown), and
+   "Skip the questions". Everything is built node by node (no innerHTML) and
+   works down to 320px wide.
 
    Screens, one question each, in this order. A screen shows only when it
    applies to what has been ticked and answered so far:
-     hello · products ·
-     bank:   bankKind · tier (not savings) · vmQ · vmStatus (bank score) ·
+     hello (only when the welcome screen was not shown) · products ·
+     bank:   bankKind · tier (the package; not savings) · vmQ · vmStatus (bank score) ·
                milesUse (with Vitality Money, unless a Miles statement says)
      health: household · plan · vhQ · vhStatus (health score)
                (who is on the aid first, so the plan guess prices the right family)
@@ -24,7 +25,9 @@
      statement, save, onDone }) → the root element. */
 
 const { el, icon, button, checkRow } = require('./dom');
-const { money, parseTyped, showTyped } = require('./format');
+const { money, parseTyped, showTyped, monthLabel } = require('./format');
+const { plainWords } = require('./ui-benefits');
+const { welcomeWasShown } = require('./welcome');
 const { STATUSES } = require('./constants');
 const { healthPremium, HEALTH_PLANS, HEALTH_OWN } = require('./compare');
 const { PRODUCT_NAMES, detectProducts, detectBanking, resolveProducts, resolveVitality, guessHealthPlan, resolveSuite } = require('./detect');
@@ -32,6 +35,10 @@ const { PRODUCT_NAMES, detectProducts, detectBanking, resolveProducts, resolveVi
 const IDS = ['bank', 'health', 'gap', 'insure', 'life'];
 const ICONS = { bank: 'landmark', health: 'heart-pulse', gap: 'shield-check', insure: 'car', life: 'umbrella' };
 const FALLBACK_SUITES = [{ id: 'Black', label: 'Black Suite' }];
+/* the Discovery Health plan families, in the order they are listed: a plan
+   belongs to the family named by the first word of its name */
+const PLAN_FAMILIES = ['Essential', 'Classic', 'Coastal', 'KeyCare', 'Active', 'Executive'];
+const planFamily = p => { const w = String(p.plan || '').split(/[\s(]/)[0]; return w || 'Other plans'; };
 const LEVELS = [
   { value: 'full', label: 'I use it' },
   { value: 'half', label: 'Sometimes' },
@@ -59,22 +66,26 @@ function benefitsFor(products, settings, vitality) {
 }
 /* how you spend your Miles (settings.milesUse) */
 const MILES_USE = [
-  { value: 'dday', label: 'On Ð-Day (the 15th)' },
+  { value: 'dday', label: 'On Ð-Day (the 15th of each month)' },
   { value: 'partners', label: 'At Discovery Miles partners' },
   { value: 'utilities', label: 'Electricity, data or airtime' },
   { value: 'none', label: 'I don\'t spend them' },
 ];
 /* settings.conditions: what Discovery sets some rewards by (health checks,
    gym visits, the Insure plan, home cover); '' or null = not answered */
-const CHECKS = [{ value: 'both', label: 'Both' }, { value: 'one', label: 'One of them' }, { value: 'none', label: 'Neither' }];
+const CHECKS = [{ value: 'both', label: 'Both' }, { value: 'one', label: 'Only one of them' }, { value: 'none', label: 'Neither' }];
 const INSURE_PLANS = [{ value: 'core', label: 'Core' }, { value: 'essential', label: 'Essential' }, { value: 'classic', label: 'Classic' }, { value: 'purple', label: 'Purple' }, { value: '', label: 'Not sure' }];
-const HOME_COVER = [{ value: 'both', label: 'Building and contents' }, { value: 'one', label: 'One of them' }, { value: 'none', label: 'No' }];
+const HOME_COVER = [{ value: 'both', label: 'Building and contents' }, { value: 'one', label: 'Only the building, or only the contents' }, { value: 'none', label: 'No' }];
 const BANK_KINDS = [
-  { value: 'suite', label: 'A banking Suite (account + credit card)' },
+  { value: 'suite', label: 'The all-in-one package (account and credit card)' },
   { value: 'card', label: 'A credit card on its own' },
   { value: 'transaction', label: 'Only a transaction account' },
   { value: 'savings', label: 'Only savings' },
 ];
+/* the same four, said inside a sentence on the last screen */
+const BANK_KIND_WORDS = { suite: 'the all-in-one package (account and credit card)', card: 'a credit card on its own', transaction: 'a transaction account only', savings: 'savings only' };
+/* where each score lives in the Discovery app */
+const WHERE = { money: 'Vitality Money', health: 'Vitality Health', drive: 'Vitality Drive' };
 
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 let uid = 0;
@@ -87,7 +98,7 @@ function radioGroup(parent, o) {
   const box = el(parent, 'fieldset', 'dc-onb-group' + (o.cls ? ' ' + o.cls : ''));
   el(box, 'legend', 'dc-onb-legend', o.legend);
   if (o.hint) el(box, 'p', 'dc-onb-hint', o.hint);
-  /* the longer reason waits behind More */
+  /* the longer reason waits behind a button that says what it opens */
   if (o.more) {
     const id = `dc-onb-more-${uid}`;
     const btn = el(box, 'button', 'dc-onb-more');
@@ -98,7 +109,7 @@ function radioGroup(parent, o) {
     const sync = () => {
       const on = !!(o.opened && o.opened.has(o.moreKey));
       btn.setAttribute('aria-expanded', String(on));
-      btn.textContent = on ? 'Less' : 'Why';
+      btn.textContent = on ? 'Hide: ' + (o.moreLabel || 'Why we suggest this') : (o.moreLabel || 'Why we suggest this');
       body.hidden = !on;
     };
     btn.addEventListener('click', e => {
@@ -111,7 +122,10 @@ function radioGroup(parent, o) {
   const list = el(box, 'div', 'dc-onb-opts' + (o.compact ? ' is-compact' : ''));
   const rows = [];
   const paint = v => rows.forEach(r => r.label.classList.toggle('is-on', r.value === v));
+  let lastGroup = null;
   for (const opt of o.options) {
+    /* a header before the first option of each group (the plan families) */
+    if (opt.group && opt.group !== lastGroup) { el(list, 'p', 'dc-onb-opts-h', opt.group); lastGroup = opt.group; }
     const label = el(list, 'label', 'dc-onb-opt');
     const input = el(label, 'input', 'dc-onb-in');
     input.type = 'radio';
@@ -139,6 +153,19 @@ function renderOnboarding(parent, ctx) {
 
   /* ── what has been answered so far (written to settings on each Next) ── */
   const picked = resolveProducts(settings, detected);
+  /* a product you stopped paying for is not ticked for you (you can still tick
+     it); an answer you gave before is left as it was. detectProducts says
+     `ended` (and `lastPaid`) for a product whose payments stopped. */
+  const endedMonth = d => {
+    const e = d && d.ended;
+    if (!e) return null;
+    const src = typeof e === 'string' ? e : d.lastPaid || d.last || '';
+    return /^\d{4}-\d{2}/.test(String(src)) ? monthLabel(String(src).slice(0, 7)) : '';
+  };
+  for (const id of IDS) {
+    const d = detected[id];
+    if (d && d.ended && typeof (settings.products || {})[id] !== 'boolean') picked[id] = false;
+  }
   const banking = detectBanking(budget);
   const vit = resolveVitality(settings, detected, banking);
   /* the tier the page will count with if you skip: detect.resolveSuite when
@@ -170,7 +197,8 @@ function renderOnboarding(parent, ctx) {
     cond: Object.assign({ checks: '', gym36: null, insurePlan: '', homeCover: '' }, settings.conditions || {}),
     busy: false,
   };
-  /* which "Why" notes are open, across redraws */
+  const showHello = !welcomeWasShown();
+  /* which "Why we suggest this" notes are open, across redraws */
   const opened = new Set();
   /* a Miles statement already says what your Miles bought */
   const milesKnown = () => !!(statement && statement.mileSource === 'statement');
@@ -181,9 +209,7 @@ function renderOnboarding(parent, ctx) {
   const top = el(root, 'div', 'dc-onb-top');
   const progress = el(top, 'div', 'dc-onb-progress');
   const stepText = el(progress, 'p', 'dc-onb-stepno');
-  const dots = el(progress, 'ol', 'dc-onb-dots');
-  dots.setAttribute('aria-hidden', 'true');
-  const skip = button(top, 'dc-onb-skip', 'Skip for now', () => finish(true));
+  const skip = button(top, 'dc-onb-skip', 'Skip the questions', () => finish(true));
 
   const card = el(root, 'div', 'dc-onb-card');
   const nav = el(root, 'div', 'dc-onb-nav');
@@ -195,7 +221,9 @@ function renderOnboarding(parent, ctx) {
      again as "do you use it" */
   const benefitRows = () => benefitsFor(picked, settings, vitNow()).filter(b => b.id !== 'milesPlus');
   const stepIds = () => {
-    const ids = ['hello', 'products'];
+    /* the welcome screen already said what this is; the intro only shows when
+       it was not on screen */
+    const ids = showHello ? ['hello', 'products'] : ['products'];
     if (picked.bank) {
       ids.push('bankKind');
       if (st.bankKind !== 'savings') ids.push('tier');
@@ -373,7 +401,7 @@ function renderOnboarding(parent, ctx) {
 
     products(h, lead, body) {
       h.textContent = 'Which Discovery products do you have?';
-      lead.textContent = 'We ticked what your budget shows. Fix anything wrong.';
+      lead.textContent = 'We ticked what your statements show. Fix anything wrong.';
       const list = el(body, 'div', 'dc-onb-products');
       for (const id of IDS) {
         const d = detected[id] || {};
@@ -388,17 +416,21 @@ function renderOnboarding(parent, ctx) {
         const name = el(text, 'span', 'dc-onb-opt-label');
         icon(name, ICONS[id], 'dc-onb-prod-icon');
         el(name, 'span', null, PRODUCT_NAMES[id]);
-        if (d.why) el(text, 'span', 'dc-onb-opt-hint', d.why);
+        const gone = endedMonth(d);
+        if (gone !== null) {
+          const stop = gone ? `You stopped paying in ${gone}, so we did not tick it.` : 'You seem to have stopped paying, so we did not tick it.';
+          el(text, 'span', 'dc-onb-opt-hint', stop);
+        } else if (d.why) el(text, 'span', 'dc-onb-opt-hint', d.why);
       }
       el(body, 'p', 'dc-onb-hint', 'Only ticked products get a page.');
     },
 
     bankKind(h, lead, body) {
-      h.textContent = 'Which Discovery Bank product do you have?';
+      h.textContent = 'What do you have at Discovery Bank?';
       lead.textContent = 'It decides your fees and rewards.';
       radioGroup(body, {
         legend: 'Your Discovery Bank product',
-        hint: banking.kind ? banking.why : 'Your budget does not say which one it is, so choose.',
+        hint: banking.kind ? banking.why : 'Your statements do not say which one it is, so choose.',
         options: BANK_KINDS,
         value: st.bankKind,
         onChange: v => { st.bankKind = v; drawProgress(); },
@@ -409,11 +441,11 @@ function renderOnboarding(parent, ctx) {
       const isCard = st.bankKind === 'card';
       const opts = tiers();
       if (!opts.some(o => o.value === st.tier)) st.tier = opts.some(o => o.value === 'Black') ? 'Black' : opts[0].value;
-      h.textContent = isCard ? 'Which tier is your credit card?' : 'Which tier is your Discovery Bank account?';
-      lead.textContent = 'It sets your fees and your Miles.';
+      h.textContent = isCard ? 'Which package is your credit card?' : 'Which Discovery Bank package?';
+      lead.textContent = 'The package sets your fees and your Miles.';
       radioGroup(body, {
-        legend: isCard ? 'Your credit card tier' : 'Your tier',
-        hint: banking.tier ? 'Your monthly fees match the tier that is ticked. Change it if that is wrong.' : 'Your fees do not clearly match one tier, so check yours.',
+        legend: isCard ? 'Your credit card package' : 'Your package',
+        hint: banking.tier ? 'Your monthly fees match the package that is ticked. Change it if that is wrong.' : 'Your fees do not clearly match one package, so check yours.',
         options: opts,
         value: st.tier,
         onChange: v => { st.tier = v; },
@@ -423,14 +455,14 @@ function renderOnboarding(parent, ctx) {
     vmQ(h, lead, body) {
       const fee = vmFee();
       h.textContent = 'Do you have Vitality Money?';
-      lead.textContent = `The monthly add-on${fee === null ? '' : ` (${money(fee)} on your tier)`} for the bank's extra rewards.`;
-      yesNo(body, 'Vitality Money', st.vm, banking.vitalityMoney ? 'We saw Vitality Money premiums in your budget.' : 'We saw no Vitality Money premium in your budget.', v => { st.vm = v; drawProgress(); });
+      lead.textContent = `The monthly add-on${fee === null ? '' : ` (${money(fee)} a month on your package)`} for the bank's extra rewards.`;
+      yesNo(body, 'Vitality Money', st.vm, banking.vitalityMoney ? 'We saw Vitality Money payments in your statements.' : 'We saw no Vitality Money payment in your statements.', v => { st.vm = v; drawProgress(); });
     },
 
     vmStatus(h, lead, body) {
       h.textContent = 'Your bank score';
-      lead.textContent = 'Vitality Money status, Blue to Diamond.';
-      statusGroup(body, 'money', 'Your Vitality Money status');
+      lead.textContent = 'Your bank score is your Vitality Money status, from Blue (the lowest) to Diamond.';
+      statusGroup(body, 'money', 'Your bank score (Vitality Money status)');
     },
 
     milesUse(h, lead, body) {
@@ -453,17 +485,23 @@ function renderOnboarding(parent, ctx) {
       const who = m.error ? '' : `for ${m.adults === 1 ? '1 adult' : m.adults + ' adults'}${m.children ? ' and ' + (m.children === 1 ? '1 child' : m.children + ' children') : ''}`;
       const all = discoveryPlans();
       const first = guess ? [] : candidates.map(id => all.find(p => p.id === id)).filter(Boolean);
-      const ordered = first.concat(all.filter(p => !first.includes(p)));
-      const options = ordered.map(p => {
+      const option = (p, group) => {
         const price = m.error ? null : healthPremium(p, m);
         const text = price === null ? 'Price not listed' : `${money(price)} a month ${who}`;
-        return { value: p.id, label: p.plan, hint: first.includes(p) ? `Could be yours. ${text}` : text };
-      });
-      options.push({ value: '', label: 'I am not sure', hint: 'You can set it later on the Inputs page.' });
+        return { value: p.id, label: p.plan, group, hint: first.includes(p) ? `Could be yours. ${text}` : text };
+      };
+      /* the plans that could fit come first, then every plan under its family */
+      const options = first.map(p => option(p, 'Plans that could be yours'));
+      const rest = all.filter(p => !first.includes(p));
+      const fams = PLAN_FAMILIES.filter(f => rest.some(p => planFamily(p) === f))
+        .concat([...new Set(rest.map(planFamily))].filter(f => !PLAN_FAMILIES.includes(f)));
+      for (const f of fams) for (const p of rest.filter(x => planFamily(x) === f)) options.push(option(p, `${f} plans`));
+      options.push({ value: '', label: 'I am not sure', hint: 'You can set it later on the Inputs tab.' });
       radioGroup(body, {
         legend: 'Your Discovery Health plan',
         hint: guess ? guess.why : `We could not tell which plan; pick yours.${first.length ? ' The ones that could fit are first.' : ''}`,
         more: guess ? '' : why,
+        moreLabel: 'Why we could not tell',
         moreKey: 'plan.why',
         opened,
         options,
@@ -474,7 +512,7 @@ function renderOnboarding(parent, ctx) {
 
     household(h, lead, body) {
       h.textContent = 'Who is on the medical aid?';
-      lead.textContent = 'Plan prices depend on who is covered.';
+      lead.textContent = 'Plan prices depend on who is covered. Count yourself as one adult.';
       const who = el(body, 'fieldset', 'dc-onb-group');
       el(who, 'legend', 'dc-onb-legend', 'People on the medical aid');
       const fields = el(who, 'div', 'dc-onb-fields');
@@ -497,8 +535,9 @@ function renderOnboarding(parent, ctx) {
         if (st.error && ((key === 'adults' && /adults/.test(st.error)) || (key === 'children' && /children/.test(st.error)))) input.setAttribute('aria-invalid', 'true');
         return input;
       };
-      num('Adults', 'adults');
-      num('Children', 'children');
+      num('Adults on the plan', 'adults');
+      num('Children on the plan', 'children');
+      el(body, 'p', 'dc-onb-hint', 'We start you at 1 adult and 0 children. Change them if that is not you.');
       refresh();
     },
 
@@ -519,7 +558,7 @@ function renderOnboarding(parent, ctx) {
       input.value = st.gapAge;
       if (st.error) input.setAttribute('aria-invalid', 'true');
       input.addEventListener('input', () => { st.gapAge = input.value; input.removeAttribute('aria-invalid'); });
-      el(body, 'p', 'dc-onb-hint', 'Not sure? Leave it blank. The other providers\' prices shown are for under 45s.');
+      el(body, 'p', 'dc-onb-hint', 'Not sure? Leave it blank. The prices we show for other providers are for people under 45.');
     },
 
     vhQ(h, lead, body) {
@@ -530,14 +569,14 @@ function renderOnboarding(parent, ctx) {
 
     vhStatus(h, lead, body) {
       h.textContent = 'Your health score';
-      lead.textContent = 'Vitality Health status, Blue to Diamond.';
-      statusGroup(body, 'health', 'Your Vitality Health status');
+      lead.textContent = 'Your health score is your Vitality Health status, from Blue (the lowest) to Diamond.';
+      statusGroup(body, 'health', 'Your health score (Vitality Health status)');
     },
 
     checks(h, lead, body) {
       h.textContent = 'Have you done your Vitality Age and a Vitality Health Check in the last 12 months?';
-      lead.textContent = 'Some rewards need them.';
-      radioGroup(body, { legend: 'In the last 12 months', options: CHECKS, value: st.cond.checks, compact: true, onChange: v => { st.cond.checks = v; } });
+      lead.textContent = 'Some rewards need them. Vitality Age is an online health-age test. A Vitality Health Check is a screening at a clinic or pharmacy.';
+      radioGroup(body, { legend: 'In the last 12 months', hint: 'Not sure? Pick Neither (this lowers the estimate).', options: CHECKS, value: st.cond.checks, compact: true, onChange: v => { st.cond.checks = v; } });
     },
 
     gym36(h, lead, body) {
@@ -549,13 +588,13 @@ function renderOnboarding(parent, ctx) {
     insurePlan(h, lead, body) {
       h.textContent = 'Which Discovery Insure plan are you on?';
       lead.textContent = 'The plan sets your Drive rewards.';
-      radioGroup(body, { legend: 'Your Discovery Insure plan', options: INSURE_PLANS, value: st.cond.insurePlan, compact: true, onChange: v => { st.cond.insurePlan = v; } });
+      radioGroup(body, { legend: 'Your Discovery Insure plan', hint: 'Where to look: your Discovery Insure policy schedule, or the Discovery app under Insure.', options: INSURE_PLANS, value: st.cond.insurePlan, compact: true, onChange: v => { st.cond.insurePlan = v; } });
     },
 
     homeCover(h, lead, body) {
       h.textContent = 'Does Discovery Insure also cover your home?';
       lead.textContent = 'Home cover can raise your rewards.';
-      radioGroup(body, { legend: 'Home cover with Discovery Insure', options: HOME_COVER, value: st.cond.homeCover, onChange: v => { st.cond.homeCover = v; } });
+      radioGroup(body, { legend: 'Home cover with Discovery Insure', hint: 'The building is the walls and roof. The contents are your furniture and belongings.', options: HOME_COVER, value: st.cond.homeCover, onChange: v => { st.cond.homeCover = v; } });
     },
 
     vdQ(h, lead, body) {
@@ -566,8 +605,8 @@ function renderOnboarding(parent, ctx) {
 
     vdStatus(h, lead, body) {
       h.textContent = 'Your car score';
-      lead.textContent = 'Vitality Drive status, Blue to Diamond.';
-      statusGroup(body, 'drive', 'Your Vitality Drive status');
+      lead.textContent = 'Your car score is your Vitality Drive status, from Blue (the lowest) to Diamond.';
+      statusGroup(body, 'drive', 'Your car score (Vitality Drive status)');
     },
 
     benefits(h, lead, body) {
@@ -577,8 +616,10 @@ function renderOnboarding(parent, ctx) {
         const s = statement && statement.benefits && statement.benefits[b.id];
         const g = radioGroup(body, {
           legend: b.label,
-          hint: b.question || '',
-          more: s && s.why ? 'From your budget: ' + s.why : '',
+          /* worded for this person's setup (the gameboard needs the bank) */
+          hint: plainWords((() => { try { const q = require('./benefits').questionText; return q ? q(b, settings) : b.question; } catch (e) { return b.question; } })() || ''),
+          more: s && s.why ? 'From your statements: ' + plainWords(s.why) : '',
+          moreLabel: 'Why we suggest this',
           moreKey: 'why.' + b.id,
           opened,
           options: LEVELS,
@@ -593,21 +634,43 @@ function renderOnboarding(parent, ctx) {
 
     done(h, lead, body) {
       h.textContent = 'You are all set';
-      lead.textContent = 'Change any answer later on Inputs.';
+      lead.textContent = 'You can change any answer later on the Inputs tab, under Ask me the questions again.';
       const names = IDS.filter(p => picked[p]).map(p => PRODUCT_NAMES[p]);
       const list = el(body, 'ul', 'dc-onb-points');
-      el(list, 'li', null, names.length ? 'Your products: ' + names.join(', ') + '.' : 'You ticked no Discovery products, so there is nothing to work out yet. Go back and tick the ones you have.');
-      if (picked.bank && st.bankKind) el(list, 'li', null, 'Your bank: ' + (BANK_KINDS.find(k => k.value === st.bankKind) || {}).label + (st.bankKind === 'savings' ? '.' : `, ${st.tier} tier.`));
+      el(list, 'li', null, names.length ? `You have ${joinWords(names)}.` : 'You ticked no Discovery products, so there is nothing to work out yet. Go back and tick the ones you have.');
+      if (picked.bank && st.bankKind) {
+        const pkg = (tiers().find(o => o.value === st.tier) || {}).label || st.tier;
+        el(list, 'li', null, `At Discovery Bank you have ${BANK_KIND_WORDS[st.bankKind]}${st.bankKind === 'savings' ? '' : `, the ${pkg}`}.`);
+      }
       const v = vitNow();
-      const vn = [v.money && 'Money', v.health && 'Health', v.drive && 'Drive'].filter(Boolean);
-      if (picked.bank || picked.health || picked.insure) el(list, 'li', null, vn.length ? 'Your Vitality: ' + vn.join(', ') + '.' : 'You have no Vitality programme, so no Vitality rewards are counted.');
+      const vn = [v.money && 'Vitality Money', v.health && 'Vitality Health', v.drive && 'Vitality Drive'].filter(Boolean);
+      if (picked.bank || picked.health || picked.insure) el(list, 'li', null, vn.length ? `You have ${joinWords(vn)}.` : 'You have no Vitality programme, so no Vitality rewards are counted.');
+      const sc = [v.money && `your bank score is ${st.status.money}`, v.health && `your health score is ${st.status.health}`, v.drive && `your car score is ${st.status.drive}`].filter(Boolean);
+      if (sc.length) el(list, 'li', null, `${sc.join(', ').replace(/^./, c => c.toUpperCase())}.`);
       const rows = benefitRows();
       if (rows.length) {
         const n = lv => rows.filter(b => levelOf(b) === lv).length;
-        el(list, 'li', null, `Benefits you use: ${n('full')}. Sometimes: ${n('half')}. Not for you: ${n('none')}.`);
+        el(list, 'li', null, `You said you use ${n('full')} of the benefits in full, ${n('half')} some of the time, and ${n('none')} not at all.`);
       }
+      for (const t of statusProblems()) el(list, 'li', null, t);
     },
   };
+
+  /* "A", "A and B", "A, B and C" */
+  function joinWords(list) {
+    return list.length <= 1 ? list.join('') : list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
+  }
+
+  /* rates.js statusIssues(settings), when it is there: answers that do not fit
+     together, each said as a plain sentence */
+  function statusProblems() {
+    try {
+      const f = require('./rates').statusIssues;
+      if (typeof f !== 'function') return [];
+      const r = f(Object.assign({}, settings, { status: st.status, vitality: Object.assign({}, settings.vitality, vitNow()) }));
+      return (Array.isArray(r) ? r : []).map(x => (typeof x === 'string' ? x : x && x.text)).filter(Boolean);
+    } catch (e) { return []; }
+  }
 
   function yesNo(body, legend, value, hint, onChange) {
     radioGroup(body, {
@@ -623,7 +686,7 @@ function renderOnboarding(parent, ctx) {
   function statusGroup(body, key, legend) {
     radioGroup(body, {
       legend,
-      hint: 'Not sure? Leave it on Blue.',
+      hint: `Where to find it: the Discovery app, then ${WHERE[key]}. If you are unsure, pick Blue (this lowers the estimate).`,
       options: STATUSES.map(s => ({ value: s, label: s })),
       value: st.status[key],
       compact: true,
@@ -632,13 +695,11 @@ function renderOnboarding(parent, ctx) {
   }
 
   /* ── drawing ── */
-  /* "Step 2 of 5" and the dots; a tick on the products screen changes
-     how many steps there are without redrawing the screen under the finger */
+  /* "Question 2": no total, because a tick on the products screen changes how
+     many questions there are without redrawing the screen under the finger */
   function drawProgress() {
     const ids = stepIds();
-    stepText.textContent = `Step ${st.step + 1} of ${ids.length}`;
-    while (dots.firstChild) dots.removeChild(dots.firstChild);
-    ids.forEach((_, i) => el(dots, 'li', 'dc-onb-dot' + (i < st.step ? ' is-done' : i === st.step ? ' is-now' : '')));
+    stepText.textContent = ids[st.step] === 'done' ? 'All done' : `Question ${st.step + 1}`;
     skip.hidden = ids[st.step] === 'done';
   }
 

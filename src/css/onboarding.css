@@ -21,7 +21,7 @@
 .dc-onb [hidden] { display: none; }
 .dc-onb *, .dc-onb *::before, .dc-onb *::after { box-sizing: border-box; }
 
-/* ── top: step count, dots, skip ─────────────────────── */
+/* ── top: question number, skip ──────────────────────── */
 .dc-onb-top {
   display: flex;
   flex-wrap: wrap;
@@ -32,24 +32,13 @@
 }
 .dc-onb-progress { min-width: 0; }
 .dc-onb .dc-onb-stepno {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 600;
   color: var(--dc-muted);
 }
-.dc-onb .dc-onb-dots { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.dc-onb .dc-onb-dot {
-  width: 10px;
-  height: 10px;
-  margin: 0;
-  padding: 0;
-  border-radius: 50%;
-  background: var(--dc-line-2);
-}
-.dc-onb .dc-onb-dot.is-done { background: var(--dc-muted); }
-.dc-onb .dc-onb-dot.is-now { width: 24px; border-radius: 5px; background: var(--dc-accent); }
 
 .dc-onb button.dc-onb-skip {
   display: inline-flex;
@@ -104,6 +93,8 @@
 .dc-onb .dc-onb-group:last-child { margin-bottom: 0; }
 .dc-onb .dc-onb-legend { padding: 0; margin: 0 0 6px; font-weight: 600; line-height: 1.35; }
 .dc-onb .dc-onb-opts { display: grid; gap: 8px; }
+.dc-onb .dc-onb-opts-h { grid-column: 1 / -1; margin: 10px 0 0; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dc-text-2); }
+.dc-onb .dc-onb-opts-h:first-child { margin-top: 0; }
 .dc-onb .dc-onb-opts.is-compact { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
 .dc-onb .dc-onb-products { display: grid; gap: 8px; }
 
@@ -195,6 +186,7 @@
   color: #ffffff;
 }
 .dc-onb button.dc-onb-btn.is-quiet { background: none; }
+.dc-onb button.dc-onb-skip[hidden] { display: none; }
 .dc-onb button.dc-onb-btn:disabled,
 .dc-onb button.dc-onb-skip:disabled { opacity: 0.5; cursor: default; }
 
@@ -210,7 +202,6 @@
 /* ── motion: only for people who have not asked for less ─ */
 @media (prefers-reduced-motion: no-preference) {
   .dc-onb-card.is-animated { animation: dc-onb-in 220ms ease-out; }
-  .dc-onb .dc-onb-dot { transition: width 180ms ease-out, background-color 180ms ease-out; }
 }
 @keyframes dc-onb-in {
   from { opacity: 0; transform: translateY(6px); }
@@ -225,8 +216,6 @@
 /* ── the page's look: Learning Hub's card and type, Discovery's colours ── */
 .dc-onb { font-family: var(--dc-font); }
 .dc-onb .dc-onb-stepno { font-size: 10px; font-weight: 700; letter-spacing: 0.25em; color: var(--dc-accent-ink); }
-.dc-onb .dc-onb-dot.is-now { background: var(--dc-pink); }
-.dc-onb .dc-onb-dot.is-done { background: var(--dc-accent); }
 .dc-onb-card { border-color: var(--dc-line); border-radius: var(--dc-radius); box-shadow: var(--dc-shadow); }
 .dc-onb .dc-onb-h { font-size: 24px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.2; }
 .dc-onb .dc-onb-lead { font-size: 15px; }

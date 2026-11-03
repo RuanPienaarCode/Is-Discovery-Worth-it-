@@ -9,7 +9,7 @@
    what they fetched, the Apple Watch, discounts). The flow draws both; the
    whole-bill total counts cash only, and says so. */
 
-const { annualOf } = require('./measure');
+const { annualOf, total } = require('./measure');
 
 const num = v => v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v));
 
@@ -29,10 +29,13 @@ const DATES = [
    chosen out for all five. */
 function buildProducts(st, m, ms, settings, now, chosen) {
   const n = st.window.dataMonths || 1;
-  /* A premium or claim a year over the months its paying account holds
-     data: a Discovery Health debit on another bank imported for twelve
-     months is twelve months, whatever the Discovery Bank accounts hold. */
-  const yrOf = key => annualOf(m, [key], n);
+  /* A claim a year over the months its paying account holds data: a
+     Discovery Health debit on another bank imported for twelve months is
+     twelve months, whatever the Discovery Bank accounts hold. A premium a
+     year over its OWN months (premiumBasis): joined two months ago is two
+     months of premiums, not twelve. */
+  const yrOf = key => (PREMIUMS.includes(key) ? premiumYear(m, key, n) : annualOf(m, [key], n));
+  const basisOf = key => premiumBasis(m, key);
   const L = key => { const l = st.lines.find(x => x.key === key); return l ? l.annual : 0; };
   /* Cash that actually arrived is cash whatever the benefit is worth to
      you: the line's whole value (`full`), never the weighted one. */
@@ -73,7 +76,7 @@ function buildProducts(st, m, ms, settings, now, chosen) {
   ];
   const bank = {
     id: 'bank', name: 'Discovery Bank', short: 'Bank', icon: 'landmark',
-    figure: st.net, figureLabel: 'Rewards minus fees',
+    figure: st.net, figureLabel: 'After rewards',
     paid: st.cost + bankElsewhere.reduce((s, l) => s + l.annual, 0) - bankMinus.reduce((s, p) => s + p[1], 0), outLabel: 'Fees and charges',
     outParts: st.lines.filter(l => l.group === 'cost' && Math.abs(l.annual) >= 0.5).concat(bankElsewhere).map(l => [l.label, -l.annual]).concat(bankMinus),
     /* interest (boost, cashback and base) is paid in cash; the rest is value */
@@ -102,10 +105,10 @@ function buildProducts(st, m, ms, settings, now, chosen) {
   const health = {
     id: 'health', name: 'Discovery Health', short: 'Health', icon: 'heart-pulse',
     figure: -(medicalYear + vitalityYear), figureLabel: 'Medical aid and Vitality Health',
-    paid: medicalYear + vitalityYear, outLabel: 'Medical aid and Vitality',
+    paid: medicalYear + vitalityYear, outLabel: 'Medical aid and Vitality Health',
     outParts: vitalityYear ? [['Medical aid', -medicalYear], ['Vitality Health', -vitalityYear]] : [['Discovery Health debit', -medicalYear]],
     back: [
-      ...(refunds >= 0.5 ? [{ label: 'Claims paid back', v: refunds }] : []),
+      ...(refunds >= 0.5 ? [{ label: 'Claims paid to you', v: refunds }] : []),
       ...(vitValue >= 0.5 ? [{ label: 'Vitality Health rewards', v: vitValue, parts: vitParts }] : []),
     ],
     cashBack: refunds,
@@ -116,7 +119,7 @@ function buildProducts(st, m, ms, settings, now, chosen) {
     vitalityKnown: st.bill.vitalityMonthly !== null && st.bill.vitalityMonthly !== undefined,
     /* today's medical aid a month (typed, or the plan's price), else null */
     medicalMonthly: st.bill.medicalMonthly !== undefined ? st.bill.medicalMonthly : null,
-    note: 'Claims paid back are cash. Vitality Health rewards are savings and Miles, not cash (the gym discount, HealthyFood, flights and exercise rewards).' + (debitYear && gapInDebit ? ' Gap cover is paid in the same debit order.' : ''),
+    note: 'Claims paid to you are cash. Vitality Health rewards are savings and Miles, not cash (the gym discount, HealthyFood, flights and exercise rewards).' + (debitYear && gapInDebit ? ' Gap cover is paid in the same debit order.' : ''),
     splitNote: splitNote(m, st),
     transactions: [...rows('product.medical').map(r => ({ ...r, note: gapMonthly ? `Includes gap cover R ${rand(gapMonthly)}` : '' })), ...rows('product.medicalBack')].concat(milesRows(ms, 'health')),
   };
@@ -128,7 +131,7 @@ function buildProducts(st, m, ms, settings, now, chosen) {
     id: 'gap', name: 'Gap cover', short: 'Gap', icon: 'shield-check',
     figure: -(gapInDebit + gapOwn), figureLabel: 'What you pay',
     paid: gapInDebit + gapOwn, outLabel: 'Premium',
-    back: claims >= 0.5 ? [{ label: 'Claims paid', v: claims }] : [], cashBack: claims,
+    back: claims >= 0.5 ? [{ label: 'Claims paid to you', v: claims }] : [], cashBack: claims,
     inDebit: gapInDebit, own: gapOwn, claims,
     note: gapInDebit ? `R ${rand(gapMonthly)} a month, paid as part of the Discovery Health debit order.` : '',
     transactions: [...rows('product.gapClaim'), ...rows('product.gap')],
@@ -146,7 +149,7 @@ function buildProducts(st, m, ms, settings, now, chosen) {
     paid: insurePaid, outLabel: 'Premiums',
     back: [
       ...(drive && drive.annual >= 0.5 ? [{ label: drive.source === 'estimated' ? 'Drive fuel (estimate)' : drive.source === 'statement' ? 'Drive fuel (Miles)' : 'Drive fuel', v: drive.annual }] : []),
-      ...(insureClaims >= 0.5 ? [{ label: 'Claims paid', v: insureClaims }] : []),
+      ...(insureClaims >= 0.5 ? [{ label: 'Claims paid to you', v: insureClaims }] : []),
     ],
     /* claims and INSURECASH that reached the account, unweighted */
     cashBack: insureClaims + (drive ? driveCashOf(drive) : 0),
@@ -161,11 +164,27 @@ function buildProducts(st, m, ms, settings, now, chosen) {
   const lifePaid = lifeMonthly * 12 + yrOf('product.life');
   const lifeP = {
     id: 'life', name: 'Discovery Life', short: 'Life', icon: 'umbrella',
-    figure: -lifePaid, figureLabel: lifeMonthly ? 'Your share, off your salary,' : 'What you pay',
+    figure: -lifePaid, figureLabel: lifeMonthly ? 'Your share, paid through your payslip' : 'What you pay',
     paid: lifePaid, outLabel: lifeMonthly ? 'Through your payslip' : 'Premiums', via: lifeMonthly > 0,
     back: lifeMiles >= 0.5 ? [{ label: 'Discovery Life rewards (Miles)', v: lifeMiles }] : [], cashBack: 0, cover: num(life.cover) ? Number(life.cover) : null, monthly: lifeMonthly,
     transactions: rows('product.life'),
   };
+
+  /* A product whose premiums stopped more than two months before the
+     statements that paid them end looks ended (premiumBasis): it says so,
+     and Compare and the verdicts leave it out. Gap cover paid inside the
+     Health debit ends with it; life cover through the payslip never does
+     here (there are no debits to go by). */
+  const ends = { health: basisOf('product.medical'), insure: basisOf('product.insure'), life: lifeMonthly ? null : basisOf('product.life') };
+  ends.gap = basisOf('product.gap') || (gapInDebit ? ends.health : null);
+  for (const p of [health, gap, insure, lifeP]) {
+    const b = ends[p.id];
+    p.ended = !!(b && b.ended);
+    p.lastPaid = b ? b.lastPaid : null;
+    /* the months of its own premiums (fewer than six: not enough data) */
+    p.premiumMonths = b ? b.paidMonths : 0;
+  }
+  bank.ended = false; bank.lastPaid = null;
 
   const all = [bank, health, gap, insure, lifeP];
   for (const p of all) {
@@ -185,6 +204,49 @@ function buildProducts(st, m, ms, settings, now, chosen) {
   const ahead = dates.filter(d => d.date >= today).sort((a, b) => (a.date < b.date ? -1 : 1));
 
   return { products, all, totals: { paid, cash, value, cashNet: cash - paid, flowNet: value - paid }, dates: ahead };
+}
+
+/* The premium keys: monthly payments for cover, annualised over their own
+   months, never over the months their paying account happens to hold. */
+const PREMIUMS = ['product.medical', 'product.gap', 'product.insure', 'product.life'];
+
+/* Whole months from 'YYYY-MM' a to 'YYYY-MM' b (0 when b is a). */
+function monthGap(a, b) {
+  const [ay, am] = a.split('-').map(Number);
+  const [by, bm] = b.split('-').map(Number);
+  return (by - ay) * 12 + (bm - am);
+}
+
+/* What a premium rests on (round 2): the months from the first month it
+   was paid in the window to the last month the accounts that paid it hold
+   statements (or the window's end, for a window built without account
+   months). Joined two months ago is two months; left in February with
+   statements to October is the whole window, and ended.
+   → { months, paidMonths, first, last, lastPaid: 'YYYY-MM-DD', ended } or
+   null when the premium never appears. ended: the last payment is more
+   than two months before those statements end. */
+function premiumBasis(m, key) {
+  const f = m && m.figures && m.figures[key];
+  if (!f || !f.perMonth) return null;
+  const paid = Object.keys(f.perMonth).filter(ym => f.perMonth[ym] > 0.5).sort();
+  if (!paid.length) return null;
+  const first = paid[0], last = paid[paid.length - 1];
+  let end = null;
+  if (m.accountMonths && f.accounts) {
+    for (const acc of Object.keys(f.accounts)) for (const ym of m.accountMonths[acc] || []) if (!end || ym > end) end = ym;
+  }
+  if (!end) end = m.to && m.to > last ? m.to : last;
+  if (end < last) end = last;
+  const dates = ((m.rows && m.rows[key]) || []).map(r => r.date).filter(Boolean).sort();
+  const lastPaid = dates.length ? dates[dates.length - 1] : last + '-01';
+  return { months: monthGap(first, end) + 1, paidMonths: paid.length, first, last, lastPaid, ended: monthGap(last, end) > 2 };
+}
+
+/* A premium a year over its own months (premiumBasis); `fallback` months
+   when it never appears. */
+function premiumYear(m, key, fallback) {
+  const b = premiumBasis(m, key);
+  return (total(m, key) * 12) / ((b && b.months) || fallback || 1);
 }
 
 /* The Health debit is split with today's figures; say so when earlier
@@ -239,4 +301,4 @@ function rand(v) {
   return d === '00' ? g : g + ',' + d;
 }
 
-module.exports = { buildProducts, milesRows, DATES };
+module.exports = { buildProducts, milesRows, premiumBasis, premiumYear, DATES };

@@ -272,7 +272,8 @@ function byGain(rows) {
 /* health: the Health product (products.js) — paid, medicalYear,
    vitalityYear, vitValue, all per year. */
 function compareHealth(health, settings, plans = HEALTH_PLANS) {
-  if (!health || !(health.paid > 0)) return null;
+  /* a product you no longer pay for (products.js ended) has nothing to compare */
+  if (!health || !(health.paid > 0) || health.ended) return null;
   const members = (settings && settings.members) || {};
   /* Leaving Discovery Health ends Vitality Health: its premium stops (when
      it was split out of the debit) and its rewards go. */
@@ -320,7 +321,7 @@ function compareHealth(health, settings, plans = HEALTH_PLANS) {
    published price is shown but claims no saving (gainIfSwitch null,
    ageLimited true): only a quote you typed is compared. */
 function compareGap(gap, settings, plans = GAP_PLANS) {
-  if (!gap || !(gap.paid > 0)) return null;
+  if (!gap || !(gap.paid > 0) || gap.ended) return null;
   const age = Number(((settings && settings.members) || {}).oldestAge);
   const oldestAge = Number.isFinite(age) && age > 0 ? age : null;
   const pricedForAge = oldestAge !== null && oldestAge < GAP_PRICED_UNDER;
@@ -343,7 +344,7 @@ function compareGap(gap, settings, plans = GAP_PLANS) {
    breakEven is the monthly quote at which that insurer, after its own
    rewards, matches Discovery less the Drive rewards. */
 function compareInsure(insure, settings, insurers = INSURERS) {
-  if (!insure || !(insure.paid > 0)) return null;
+  if (!insure || !(insure.paid > 0) || insure.ended) return null;
   const driveValue = insure.drive && insure.drive.annual > 0 ? insure.drive.annual : 0;
   /* today's debit (cars, Drive, SASRIA), else the window's average */
   const paid = insure.latestMonthly > 0 ? insure.latestMonthly * 12 : insure.paid;
@@ -367,7 +368,7 @@ function compareInsure(insure, settings, insurers = INSURERS) {
    than your share alone to win. Nothing is priced until a quote is typed
    unless the insurer publishes an example close to your cover. */
 function compareLife(life, settings, offers = LIFE_OFFERS, benchmark = LIFE_BENCHMARK) {
-  if (!life || !(life.monthly > 0)) return null;
+  if (!life || !(life.monthly > 0) || life.ended) return null;
   const typed = (settings && settings.life) || {};
   const share = life.monthly;
   const total = num(typed.total) && Number(typed.total) > share ? Number(typed.total) : share;

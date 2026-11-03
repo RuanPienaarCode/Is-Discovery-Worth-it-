@@ -92,7 +92,7 @@ assert.ok(/R 12 000 by Discovery Bank card/.test(R(card.miles.why)) && /every ca
 const ms = extra => ({ months: [months[10], months[11]], figures: {}, spentMiles: 10000, spentRand: 1500, ...extra });
 const up = suggestBenefits(win({}), ms(), {});
 assert.strictEqual(up.milesPlus.suggested, 'full');
-assert.ok(/R 1 500 of goods/.test(R(up.milesPlus.why)) && /R 500 more than their face value/.test(R(up.milesPlus.why)));
+assert.ok(/R 1 500 of goods/.test(R(up.milesPlus.why)) && /R 500 more than they would at 10c a Mile/.test(R(up.milesPlus.why)));
 assert.strictEqual(suggestBenefits(win({}), ms({ spentRand: 1000 }), {}).milesPlus.suggested, 'none', 'at face value');
 assert.strictEqual(suggestBenefits(win({}), ms({ spentMiles: 0, spentRand: 0 }), {}).milesPlus.suggested, 'none', 'nothing spent');
 assert.strictEqual(empty.milesPlus.suggested, 'none', 'no statement');
@@ -202,7 +202,7 @@ const tx = av({ bankKind: 'transaction' }, ALL, V(true, true, true));
 ['miles.healthyFood', 'miles.healthyCare', 'fuel.money', 'interest.cashback', 'appleWatch'].forEach(k => assert.ok(!tx.lines.has(k), k));
 assert.ok(tx.benefits.healthyFood.available && /credit card/.test(tx.benefits.healthyFood.note), 'the Vitality Health part stays, the note says what is missing');
 assert.strictEqual(tx.benefits.appleWatch.available, false);
-assert.ok(/Suite/.test(tx.benefits.appleWatch.reason));
+assert.ok(/all-in-one Discovery Bank package \(account and credit card\)/.test(tx.benefits.appleWatch.reason), tx.benefits.appleWatch.reason);
 // a transaction account without Vitality Money: no Vitality Money extras at all
 const txNo = av({ bankKind: 'transaction' }, ALL, V(false, true, true));
 ['miles.card', 'miles.partners', 'interest.boost', 'miles.uplift', 'gameboard', 'miles.healthyFood', 'fuel.money', 'travel.bank'].forEach(k => assert.ok(!txNo.lines.has(k), k));
@@ -252,18 +252,18 @@ const ot = (id, settings) => R(offerText(id, settings));
 const blackDiamond = { suite: 'Black', status: { money: 'Diamond', health: 'Gold', drive: 'Silver' } };
 assert.ok(BENEFITS.every(b => !/Miles\+/.test(offerText(b, blackDiamond))), 'no Miles+ in what you spend');
 const goldBlue = { suite: 'Gold', status: { money: 'Blue', health: 'Blue', drive: 'Blue' } };
-assert.ok(ot('miles', blackDiamond).includes('every R 15 you pay') && ot('miles', blackDiamond).includes('Diamond Vitality Money status on the Black Suite'), ot('miles', blackDiamond));
+assert.ok(ot('miles', blackDiamond).includes('every R 15 you pay') && ot('miles', blackDiamond).includes('bank score at Diamond (Vitality Money status) on the Black Suite'), ot('miles', blackDiamond));
 assert.ok(ot('miles', goldBlue).includes('every R 100 you pay') && ot('miles', goldBlue).includes('R 10 000 a month'), ot('miles', goldBlue));
 assert.notStrictEqual(ot('healthyFood', blackDiamond), ot('healthyFood', { ...blackDiamond, status: { ...blackDiamond.status, money: 'Gold' } }), 'changes with the bank status');
 assert.ok(ot('healthyFood', blackDiamond).includes(`${Math.max(...DIAMOND.healthyFood)}% more`));
-assert.ok(ot('fuel', blackDiamond).includes(`${RATES.fuelDrivePct.byStatus.Silver}% back at bp and Shell at your Silver Drive status`), ot('fuel', blackDiamond));
-assert.ok(/nothing back at your Blue Drive status/.test(ot('fuel', goldBlue)));
-assert.ok(/No extra interest at your Blue Vitality Money status on the Gold Suite/.test(ot('interest', goldBlue)));
+assert.ok(ot('fuel', blackDiamond).includes(`${RATES.fuelDrivePct.byStatus.Silver}% back at bp and Shell with your car score at Silver (Vitality Drive status)`), ot('fuel', blackDiamond));
+assert.ok(/nothing back with your car score at Blue/.test(ot('fuel', goldBlue)));
+assert.ok(/No extra interest with your bank score at Blue \(Vitality Money status\) on the Gold Suite/.test(ot('interest', goldBlue)));
 assert.ok(ot('interest', blackDiamond).includes('1,5% more'));
 assert.ok(/Credit Card Account/.test(ot('miles', { ...blackDiamond, bankKind: 'card' })), 'a card on its own is named as such');
 // the person's actual product, not the Suite of its tier
 const goldTx = { suite: 'Gold', bankKind: 'transaction', status: { money: 'Blue', health: 'Blue', drive: 'Blue' } };
-assert.ok(ot('miles', goldTx).includes('Blue Vitality Money status on the Gold Transaction Account (bundled fees)') && !/Gold Suite/.test(ot('miles', goldTx)), ot('miles', goldTx));
+assert.ok(ot('miles', goldTx).includes('bank score at Blue (Vitality Money status) on the Gold Transaction Account (bundled fees)') && !/Gold Suite/.test(ot('miles', goldTx)), ot('miles', goldTx));
 assert.ok(/Gold Transaction Account/.test(ot('interest', goldTx)) && !/Gold Suite/.test(ot('healthyFood', goldTx)), ot('healthyFood', goldTx));
 // no base Miles (pay-as-you-transact, savings only): says so, never the Black Diamond sentence
 const payt = { ...goldTx, bankFees: 'payt' };
@@ -274,20 +274,20 @@ for (const id of ['healthyFood', 'healthyCare', 'flights']) {
   const lo = ot(id, { ...blackDiamond, status: { ...blackDiamond.status, health: 'Blue' } });
   const hi = ot(id, { ...blackDiamond, status: { ...blackDiamond.status, health: 'Diamond' } });
   assert.ok(/gives 10% /.test(lo) && /up to 25% once you have done your Vitality Age/.test(lo), lo);
-  assert.strictEqual(lo.replace('Blue Vitality Health', 'X'), hi.replace('Diamond Vitality Health', 'X'), `${id}: only the status name changes`);
-  assert.ok(/not your Blue Vitality Health status/.test(lo), 'quotes the person\'s status and says it does not decide it');
+  assert.strictEqual(lo.replace('Vitality Health status, Blue', 'X'), hi.replace('Vitality Health status, Diamond', 'X'), `${id}: only the status name changes`);
+  assert.ok(/not your health score \(Vitality Health status, Blue\)/.test(lo), 'quotes the person\'s status and says it does not decide it');
 }
 // a typed figure (they have done both checks) is quoted, with no "goes up to"
 const typed25 = ot('healthyFood', { ...blackDiamond, rates: { healthyFoodHealthPct: 25 } });
 assert.ok(/gives 25% back on HealthyFood/.test(typed25) && !/goes up to/.test(typed25), typed25);
 // the gym: 50% unless 36 workouts; the status does not change it
-assert.ok(/^50% off Virgin Active/.test(ot('gym', blackDiamond)) && /75% off a one-gym membership/.test(ot('gym', blackDiamond)) && /not your Gold Vitality Health status/.test(ot('gym', blackDiamond)), ot('gym', blackDiamond));
+assert.ok(/^50% off Virgin Active/.test(ot('gym', blackDiamond)) && /75% off a one-gym membership/.test(ot('gym', blackDiamond)) && /not your health score \(Vitality Health status, Gold\)/.test(ot('gym', blackDiamond)), ot('gym', blackDiamond));
 // fuel: the Drive limit grows with the Drive status only when Discovery insures the home
 assert.ok(ot('fuel', blackDiamond).includes('R 1 500 of fuel') && ot('fuel', blackDiamond).includes('goes up to R 2 250'), ot('fuel', blackDiamond));
 assert.ok(ot('fuel', { ...blackDiamond, status: { ...blackDiamond.status, drive: 'Diamond' } }).includes('goes up to R 3 000'));
 // spending Miles: 5% for each programme you have, double on Ð-Day
 const v2 = ot('milesPlus', { ...blackDiamond, vitality: { money: true, health: true, drive: false } });
-assert.ok(/two Vitality programmes/.test(v2) && /get 10% off at Discovery Miles partners/.test(v2) && /Ð-Day \(the 15th\) it is 20%/.test(v2), v2);
+assert.ok(/two Vitality programmes/.test(v2) && /get 10% off at Discovery Miles partners/.test(v2) && /Ð-Day \(the 15th of each month\) it is 20%/.test(v2), v2);
 assert.ok(/three Vitality programmes/.test(ot('milesPlus', { vitality: { money: true, health: true, drive: true } })));
 assert.strictEqual(ot('milesPlus', {}), R(B('milesPlus').offer), 'no programmes known: the general offer');
 assert.strictEqual(offerText(B('gameboard'), blackDiamond), B('gameboard').offer, 'no figures: the static offer');
@@ -299,5 +299,39 @@ assert.strictEqual(offerText('nope', {}), '');
   const bm = BENEFITS.find(x => x.id === 'milesPlus');
   assert.ok(/need Vitality Money/.test(offerText(bm, { vitality: { money: false, health: true, drive: true }, status: {} })));
   assert.ok(/10% off .* it is 20%/.test(offerText(bm, { vitality: { money: true, health: true }, status: {} })), 'two programmes: 10% everyday, 20% on Ð-Day');
+}
+
+// ── round 2 (lane H2) ─────────────────────────────────────────────────
+{
+  // B7: a measured boost proves Vitality Money, even with only a savings account in the budget
+  const sav = availableFor({ bankKind: 'savings' }, { bank: true }, { money: true });
+  assert.ok(!sav.lines.has('interest.boost'), 'savings alone: no Vitality Money');
+  const proven = availableFor({ bankKind: 'savings' }, { bank: true }, { money: true }, { moneyProven: true });
+  assert.ok(proven.lines.has('interest.boost') && proven.benefits.interest.available, 'the boost itself proves it');
+  assert.ok(!proven.lines.has('miles.card'), 'still no card to earn Miles on');
+  // B7: the sentences use the model's figures: card spend a year, and the bank's Mile value
+  const ctx = suggestBenefits(win({ 'spend.card': fig({ [months[0]]: 99999 }) }), null, {}, { cardSpendYear: 375000, cardSpendSource: 'statement', mileValue: 0.25 });
+  assert.ok(/about R 375 000 a year by Discovery Bank card \(as counted on your Miles statement\)/.test(R(ctx.miles.why)), ctx.miles.why);
+  const gb2 = suggestBenefits(win({}), ms({ figures: { gameboard: 2000 } }), {}, { mileValue: 0.25 });
+  assert.ok(/worth R 500/.test(R(gb2.gameboard.why)) && /the weekly game in the Discovery Bank app/.test(gb2.gameboard.why), gb2.gameboard.why);
+  // an unknown saved status ("Platinum", from an older build) reads Blue
+  assert.strictEqual(R(offerText('fuel', { status: { drive: 'Platinum' } })), R(offerText('fuel', { status: { drive: 'Blue' } })));
+  // glossary: no face value, Ð-Day says its date
+  for (const b of BENEFITS) assert.ok(!/face value/.test(b.offer + b.question) && (!/Ð-Day/.test(b.question) || /15th of each month/.test(b.question)), b.id);
+}
+// H3b asks: jargon fixed at source, and the gameboard worded for someone without the bank
+{
+  const { questionText } = require('../src/benefits');
+  for (const b of BENEFITS) {
+    const t = [b.offer, b.needs, b.question, offerText(b, { status: {} })].join(' ');
+    assert.ok(!/face value|Partners take|Suite with a credit card|Ð-Day \(the 15th\)/.test(t), b.id + ': ' + t);
+    assert.ok(!/Vitality Age and a Vitality Health Check/.test(t), b.id + ': Vitality Age explained');
+  }
+  const noBank = { products: { bank: false, health: true }, status: {} };
+  assert.ok(!/Discovery Bank app\)?\?$/.test(questionText('gameboard', noBank)) && /exercise goals with Vitality Health/.test(questionText('gameboard', noBank)));
+  assert.ok(/needs Discovery Bank, so it is not part of your setup/.test(offerText('gameboard', noBank)));
+  assert.ok(/Without Discovery Bank there is no gameboard/.test(suggestBenefits(win({}), null, noBank).gameboard.why));
+  assert.ok(/play the gameboard \(the weekly game in the Discovery Bank app\)/.test(questionText('gameboard', { products: { bank: true } })));
+  assert.strictEqual(questionText('gym', {}), B('gym').question);
 }
 console.log('benefits OK');

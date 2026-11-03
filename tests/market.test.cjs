@@ -127,8 +127,26 @@ for (const s of SUITES) assert.strictEqual(R(s.id, 'milesAboveThreshold'), 100);
 // ctx.suite beats settings.suite; a typed figure beats both
 assert.strictEqual(rate({ rates: {}, suite: 'Black' }, 'ccFee', {}, { suite: 'Gold' }), 125);
 assert.strictEqual(rate({ rates: { ccFee: '99' }, suite: 'Gold' }, 'ccFee', {}), 99);
-// status unknown: 0, not a crash
-assert.strictEqual(R('Gold', 'fuelMoneyPct', undefined, 30000), 0);
+// status missing or unknown (an older build's "Platinum"): read as Blue, never a silent 0 (rt3 item 8)
+assert.strictEqual(R('Gold', 'fuelMoneyPct', undefined, 30000), R('Gold', 'fuelMoneyPct', 'Blue', 30000));
+assert.ok(R('Gold', 'fuelMoneyPct', 'Blue', 30000) > 0, 'Blue earns something here, so the test can tell');
+assert.strictEqual(R('Gold', 'fuelMoneyPct', 'Platinum', 30000), R('Gold', 'fuelMoneyPct', 'Blue', 30000));
+assert.strictEqual(rate({ rates: {} }, 'milesRandPerMile', { money: 'Platinum' }), 65, 'Platinum is no status: Blue, one Mile per R65');
+assert.strictEqual(rate({ rates: {} }, 'milesRandPerMile', { money: ' gold ' }), 30, 'case and spaces do not matter');
+{
+  const { statusIssues, normStatus } = require('../src/rates');
+  assert.strictEqual(normStatus('Platinum'), 'Blue');
+  assert.strictEqual(normStatus('diamond'), 'Diamond');
+  const si = statusIssues({ status: { money: 'Platinum', health: 'Gold', drive: '' } });
+  assert.deepStrictEqual(si.statusUnknown, ['money'], 'only the status we do not know; a blank one is just unanswered');
+  assert.deepStrictEqual(si.saved, { money: 'Platinum' });
+  assert.strictEqual(si.length, 1, 'a list of notes the page can show');
+  assert.deepStrictEqual({ key: si[0].key, saved: si[0].saved, used: si[0].used }, { key: 'money', saved: 'Platinum', used: 'Blue' });
+  assert.ok(/bank score \(Vitality Money status\)/.test(si[0].text) && /counted as Blue/.test(si[0].text), si[0].text);
+  assert.deepStrictEqual(statusIssues({ status: { money: 'Gold', health: 'blue', drive: 'Silver' } }).statusUnknown, []);
+  assert.deepStrictEqual(statusIssues(null).statusUnknown, []);
+  assert.strictEqual(statusIssues(null).length, 0);
+}
 
 // ── Vitality Health, Drive and Miles figures: what decides each one ───
 const H = (key, health, met) => rate({ rates: {} }, key, { money: 'Diamond', health, drive: 'Blue' }, { met });
@@ -231,6 +249,31 @@ assert.strictEqual(K('Black', null, 'travelMoneyPct', 'Diamond', 50000), 50);
 // ── every rate and rival bank names where it came from ────────────────
 for (const [k, d] of Object.entries(RATES)) assert.ok(typeof d.source === 'string' && d.source.length > 3, `${k} has a source`);
 for (const b of ALTERNATIVES) assert.ok(b.source && /20\d\d/.test(b.source), `${b.id} source is dated`);
+// ── the rival bank: like-for-like by the kind of Discovery Bank product (rt3 item 7) ──
+{
+  const { chooseAlternative, altConfirmed, altKinds } = require('../src/rates');
+  const sb = ALTERNATIVES.find(a => a.id === 'sbPrestige');
+  assert.strictEqual(sb.unconfirmed, true, 'its note says not confirmed, so it is marked');
+  assert.strictEqual(altConfirmed(sb), false);
+  for (const a of ALTERNATIVES) for (const k of altKinds(a)) assert.ok(BANK_KINDS.includes(k), `${a.id} kind ${k}`);
+  for (const k of BANK_KINDS) assert.ok(ALTERNATIVES.some(a => altKinds(a).includes(k)), `some bank stands in for ${k}`);
+  // model.js results: highest net first, so GoTyme (no fees, no card) would always win on net
+  const res = ALTERNATIVES.map(a => ({ id: a.id, name: a.name, net: a.id === 'gotyme' ? 0 : a.id === 'capitec' ? -700 : a.id === 'sbPrestige' ? -3400 : -3000 }));
+  assert.strictEqual(chooseAlternative(res, '', { bankKind: 'transaction' }).id, 'gotyme', 'a Transaction Account is weighed against an account with no card');
+  assert.strictEqual(chooseAlternative(res, '', { bankKind: 'savings' }).id, 'gotyme');
+  for (const k of ['suite', 'card']) {
+    const c = chooseAlternative(res, '', { bankKind: k });
+    assert.ok(altKinds(c).includes(k) && c.id !== 'gotyme', `${k}: a bank with a credit card, got ${c.id}`);
+    assert.strictEqual(c.id, 'capitec', 'published (not a guess) beats a guess; then the highest net');
+  }
+  assert.strictEqual(chooseAlternative(res, '').id, 'capitec', 'the two-argument call still means a Suite');
+  assert.strictEqual(chooseAlternative(res, 'absaPremium', { bankKind: 'transaction' }).id, 'absaPremium', 'your own pick wins');
+  assert.strictEqual(chooseAlternative(res, 'gone', { bankKind: 'transaction' }).id, 'gotyme', 'a pick that is gone falls back');
+  assert.strictEqual(chooseAlternative([], ''), null);
+  // a confirmed like-for-like bank beats a cheaper unconfirmed one
+  const withSure = res.concat([{ id: 'sureBank', name: 'Sure Bank', net: -5000, kinds: ['suite', 'card'] }]);
+  assert.strictEqual(chooseAlternative(withSure, '', { bankKind: 'suite' }).id, 'sureBank');
+}
 {
   const C = require('../src/compare');
   for (const name of ['HEALTH_PLANS', 'HEALTH_OWN', 'GAP_PLANS', 'INSURERS', 'LIFE_OFFERS', 'HOME_INSURERS']) {

@@ -12,17 +12,37 @@
    so it can never tip the total by itself.
 
    All amounts are per year and positive; `kind` says which way they count.
-     buildSwitch(st, { health, gap, insure, life }, products?)
-       → { rows: [{ key, label, kind, stay, go, goName, goNote, assumed }],
+     buildSwitch(st, { health, gap, insure, life }, products?, opts?)
+       → { rows: [{ key, label, kind, stay, go, goName, goNote, assumed,
+                    assumedWhy }],
            groups: [{ id, label, stay, go, saving, assumed, rows }] — one per
              product, stay/go = what it really costs (paid − got back) and
              saving = stay − go (above 0: moving is cheaper),
            stay: { cost, benefit, net, real }, go: { … },
            gain: go.net − stay.net, assumed: [labels] }
    products: the resolveProducts() map ({ bank, health, gap, insure, life });
-   a product set to false is left out entirely. Leave it out for all. */
+   a product set to false is left out entirely. Leave it out for all.
+   opts: { now } — a Date or 'YYYY-MM-DD'. With it, a price table that is
+   not for that day (market.js priceValidFor: other medical aids' prices
+   after 1 January, say) is not compared; without it, every table is taken
+   as current.
+
+   assumedWhy (round 2) says why a row is taken as costing the same:
+     'noQuote'  nothing priced for you yet (car, life, a family no plan prices)
+     'age'      gap cover prices are for families under 45
+     'unsplit'  the Discovery Health debit could not be split, so the medical
+                aid's own price is not known (the Health verdict says "Get
+                quotes" for the same reason)
+     'stale'    the prices are out of date: your plan's price changed since
+                the table (st.bill.priceStale), or the rivals' table is not
+                for today (opts.now) */
 
 const { money, pct } = require('./format');
+const { priceValidFor } = require('./market');
+const { altConfirmed } = require('./rates');
+/* the chosen rival bank's figures are not confirmed (rates.js): say so wherever it is named */
+const altUnsure = a => !!a && typeof altConfirmed === 'function' && !altConfirmed(a);
+const unsureNote = a => `${a.name}'s figures are not confirmed, so check them first.`;
 
 /* products[id] === false leaves that product out; no map = everything */
 const has = (products, id) => !products || products[id] !== false;
@@ -92,6 +112,56 @@ function only(cmp, products) {
   return c;
 }
 
+/* What an assumed row says, in plain words (the glossary's). */
+const ASSUMED_NOTE = {
+  noQuote: 'No quote yet, so we used today\'s price.',
+  age: 'No fair comparison yet: rival prices are for people under 45.',
+  unsplit: 'We could not tell how much of your Discovery Health debit order is the medical aid itself, so we used today\'s price. Pick your plan, or type its amount, on the Inputs tab.',
+  stalePlan: 'Your plan\'s price has changed since the prices we have, so we used today\'s price. Type your medical aid amount on the Inputs tab.',
+  stale: 'These prices are out of date, so we used today\'s price. Ask for a quote instead.',
+};
+
+/* The day as 'YYYY-MM-DD', or null when none was given. */
+function dayOf(now) {
+  if (!now) return null;
+  if (typeof now === 'string') return now.slice(0, 10);
+  if (!(now instanceof Date) || isNaN(now.getTime())) return null;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+/* cmp with the rows whose price table is not for opts.now marked stale
+   (gainIfSwitch null, so nothing is claimed from them). A quote you typed
+   is always current. Discovery's own plans follow the Discovery Health
+   table; other medical aids and gap cover their own. */
+function freshen(cmp, opts) {
+  const day = dayOf(opts && opts.now);
+  if (!day || !cmp) return cmp;
+  const c = Object.assign({}, cmp);
+  const mark = (x, tableOf) => {
+    if (!x || !Array.isArray(x.rows)) return x;
+    let any = false;
+    const rows = x.rows.map(r => {
+      if (r.quoted || priceValidFor(tableOf(r), day)) return r;
+      any = true;
+      return Object.assign({}, r, { stale: true, gainIfSwitch: null });
+    });
+    return any ? Object.assign({}, x, { rows, stale: rows.some(r => r.stale && !isDiscovery(r)) }) : x;
+  };
+  c.health = mark(cmp.health, r => (isDiscovery(r) ? 'discoveryHealth' : 'schemes'));
+  c.gap = mark(cmp.gap, () => 'gap');
+  return c;
+}
+
+/* Whether the medical aid can be compared at all, and if not why:
+   { ok, why: 'unsplit'|'stale'|null, note }. */
+function medicalState(st, health) {
+  if (!health) return { ok: false, why: null, note: '' };
+  /* a stale plan price is the reason the debit was not split, so it comes first */
+  if (st && st.bill && st.bill.priceStale) return { ok: false, why: 'stale', note: ASSUMED_NOTE.stalePlan };
+  if (health.vitalityKnown === false) return { ok: false, why: 'unsplit', note: ASSUMED_NOTE.unsplit };
+  return { ok: true, why: null, note: '' };
+}
+
 const GROUPS = [
   { id: 'bank', label: 'Bank', keys: ['bank', 'bank.rewards'] },
   { id: 'medical', label: 'Medical aid', keys: ['medical', 'vitality', 'vitality.rewards'] },
@@ -100,11 +170,11 @@ const GROUPS = [
   { id: 'life', label: 'Life cover', keys: ['life', 'life.rewards'] },
 ];
 
-function buildSwitch(st, cmp, products) {
-  const c = only(cmp, products);
+function buildSwitch(st, cmp, products, opts) {
+  const c = freshen(only(cmp, products), opts);
   const bankOn = has(products, 'bank');
   const rows = [];
-  const add = (key, label, kind, stay, go, extra) => rows.push(Object.assign({ key, label, kind, stay, go, goName: '', goNote: '', assumed: false }, extra || {}));
+  const add = (key, label, kind, stay, go, extra) => rows.push(Object.assign({ key, label, kind, stay, go, goName: '', goNote: '', assumed: false, assumedWhy: null }, extra || {}));
   const rewardsAfter = [];
   const BI = backItems(st);
 
@@ -118,34 +188,48 @@ function buildSwitch(st, cmp, products) {
     }
     const be = cm.rows.filter(r => !isDiscovery(r)).map(r => r.breakEven).filter(v => v > 0);
     add(key, label, 'cost', cm.current.annual, cm.current.annual, {
-      assumed: true,
-      goNote: 'No quote yet, so taken as the same as now' + (be.length ? `. A quote under ${money(Math.min(...be))} a month would beat it.` : '.'),
+      assumed: true, assumedWhy: 'noQuote',
+      goNote: ASSUMED_NOTE.noQuote + (be.length ? ` Switching pays if their quote is under ${money(Math.min(...be))} a month.` : ''),
     });
   };
 
   // ── what you pay ──
   const alt = bankOn ? st.chosen : null;
-  if (alt) add('bank', 'Bank fees', 'cost', st.cost, alt.fees, { goName: alt.name });
+  if (alt) add('bank', 'Bank fees', 'cost', st.cost, alt.fees, { goName: alt.name, unconfirmed: altUnsure(alt), goNote: altUnsure(alt) ? unsureNote(alt) : '' });
   if (c.health) {
-    const best = cheapest(c.health.rows.filter(r => priced(r) && r.likeForLike !== false && !isDiscovery(r)));
+    /* The medical aid is only compared when its own price is known (the
+       debit split out, at a price that still holds) and the rivals' prices
+       are current; otherwise moving is taken as costing the same, as the
+       Health verdict's "Get quotes" says. */
+    const ms = medicalState(st, c.health);
+    const best = ms.ok ? cheapest(c.health.rows.filter(r => priced(r) && !r.stale && r.likeForLike !== false && !isDiscovery(r))) : null;
+    const staleRivals = ms.ok && !best && c.health.rows.some(r => r.stale && !isDiscovery(r));
     if (best) add('medical', 'Medical aid', 'cost', c.health.current.annual, best.monthly * 12, { goName: `${best.scheme} ${best.plan}`, goNote: 'The cheapest plan that covers what you ticked' });
-    else add('medical', 'Medical aid', 'cost', c.health.current.annual, c.health.current.annual, { assumed: true, goNote: 'No other plan is priced for your family, so taken as the same as now.' });
+    else {
+      const why = ms.why || (staleRivals ? 'stale' : 'noQuote');
+      add('medical', 'Medical aid', 'cost', c.health.current.annual, c.health.current.annual, { assumed: true, assumedWhy: why, goNote: ms.note || (staleRivals ? ASSUMED_NOTE.stale : 'No other plan is priced for your family yet, so we used today\'s price.') });
+    }
   }
-  const vit = has(products, 'health') ? st.vitality || {} : {};
+  /* a product whose payments stopped (st.confidence.ended) has no rewards
+     left to lose either */
+  const ended = id => !!(st && st.confidence && st.confidence.ended && st.confidence.ended[id]);
+  const vit = has(products, 'health') && !ended('health') ? st.vitality || {} : {};
   if (vit.premium !== null && vit.premium > 0) add('vitality', 'Vitality Health fee', 'cost', vit.premium, 0, { goNote: 'Ends when you leave Discovery Health' });
   if (c.gap) {
     /* an under-45 price for an older (or unknown-age) family is no saving */
-    const best = cheapest(c.gap.rows.filter(r => priced(r) && !isDiscovery(r) && (!r.ageLimited || r.quoted)));
+    const best = cheapest(c.gap.rows.filter(r => priced(r) && !r.stale && !isDiscovery(r) && (!r.ageLimited || r.quoted)));
+    const aged = c.gap.rows.some(r => r.ageLimited && !isDiscovery(r));
+    const why = aged ? 'age' : c.gap.rows.some(r => r.stale && !isDiscovery(r)) ? 'stale' : 'noQuote';
     if (best) add('gap', 'Gap cover', 'cost', c.gap.current.annual, best.monthly * 12, { goName: `${best.provider} ${best.plan}`, goNote: 'Discovery Gap Cover ends with Discovery Health' });
-    else add('gap', 'Gap cover', 'cost', c.gap.current.annual, c.gap.current.annual, { assumed: true, goNote: 'No price fits your family yet (rival prices are for under 45s), so taken as the same as now.' });
+    else add('gap', 'Gap cover', 'cost', c.gap.current.annual, c.gap.current.annual, { assumed: true, assumedWhy: why, goNote: ASSUMED_NOTE[why] });
   }
   quoted('car', 'Car insurance', c.insure);
   quoted('life', 'Life cover', c.life);
 
   // ── what you get back ──
-  if (alt) add('bank.rewards', 'Bank rewards (Miles, discounts, interest)', 'benefit', st.value, alt.rewards, { goName: alt.name, stayItems: BI.bank, goItems: altItems(alt) });
+  if (alt) add('bank.rewards', 'Bank rewards (Miles, discounts, interest)', 'benefit', st.value, alt.rewards, { goName: alt.name, unconfirmed: altUnsure(alt), goNote: altUnsure(alt) ? unsureNote(alt) : '', stayItems: BI.bank, goItems: altItems(alt) });
   if (vit.value >= 0.5) add('vitality.rewards', 'Vitality Health rewards (gym, HealthyFood, flights)', 'benefit', vit.value, 0, { goNote: 'Ends when you leave Discovery Health', stayItems: BI.vitality, goItems: [] });
-  const drive = has(products, 'insure') ? (st.lines || []).find(l => l.key === 'fuel.drive') : null;
+  const drive = has(products, 'insure') && !ended('insure') ? (st.lines || []).find(l => l.key === 'fuel.drive') : null;
   if (drive && drive.annual >= 0.5) add('drive', 'Vitality Drive fuel rewards', 'benefit', drive.annual, 0, { goNote: 'Ends when you leave Discovery Insure and the bank', stayItems: BI.drive, goItems: [] });
   for (const [key, label, v, name, items] of rewardsAfter) add(key, label, 'benefit', 0, v, { goName: name, stayItems: [], goItems: items });
 
@@ -184,24 +268,47 @@ function topFive(rows) {
 }
 const rival = (name, pay, back, what, extra) => Object.assign({ name, pay, back, real: pay === null ? null : pay - back, what: what || '', misses: [], quoteUnder: null, quoted: false, items: [] }, extra || {});
 
-function buildRivals(st, cmp, products) {
-  const c = only(cmp, products);
+function buildRivals(st, cmp, products, opts) {
+  const c = freshen(only(cmp, products), opts);
   const out = [];
-  const section = (id, label, discovery, rivals) => { if (rivals.length) out.push({ id, label, discovery: { ...discovery, real: discovery.pay - discovery.back }, rivals: topFive(rivals) }); };
+  /* gap: how much more (above 0) or less a rival costs than Discovery after
+     rewards, null when it is not priced or cannot fairly be set against
+     Discovery (comparable false, with assumedWhy). A section whose
+     Discovery side is not known (the medical aid when the debit could not
+     be split, or its price is stale) is comparable: false as a whole. */
+  const section = (id, label, discovery, rivals, extra) => {
+    if (!rivals.length) return;
+    const x = extra || {};
+    const d = { ...discovery, real: discovery.pay - discovery.back };
+    const ok = x.comparable !== false;
+    const list = topFive(rivals).map(r => {
+      const fair = ok && r.comparable !== false && r.pay !== null;
+      const why = !ok ? x.assumedWhy || null : r.assumedWhy || (r.pay === null ? 'noQuote' : null);
+      return { ...r, comparable: ok && r.comparable !== false, assumedWhy: why, gap: fair ? r.real - d.real : null };
+    });
+    out.push({ id, label, discovery: d, rivals: list, comparable: ok, assumedWhy: ok ? null : x.assumedWhy || null, note: ok ? '' : x.note || '' });
+  };
   const vit = st.vitality || {};
   const BI = backItems(st);
 
   if (has(products, 'bank')) section('bank', 'Banks', { name: 'Discovery Bank', pay: st.cost, back: st.value, backNote: 'Miles, discounts, the Apple Watch and interest', items: BI.bank },
     (st.alternatives || []).map(a => rival(a.name, a.fees, a.rewards,
-      [altRateWords(a), ...(a.partners || []).map(p => (p.known ? `${pct(p.pct)} back: ${p.label}` : 'shop deals (rate not published)')).filter((x, i, xs) => xs.indexOf(x) === i)].join(' + '), { items: altItems(a) })));
+      [altRateWords(a), ...(a.partners || []).map(p => (p.known ? `${pct(p.pct)} back: ${p.label}` : 'shop deals (rate not published)')).filter((x, i, xs) => xs.indexOf(x) === i)].join(' + '), { items: altItems(a), unconfirmed: altUnsure(a), unconfirmedNote: altUnsure(a) ? unsureNote(a) : '' })));
 
-  if (c.health) section('medical', 'Medical aids',
-    { name: c.health.own ? `Discovery ${c.health.own.plan}` : 'Discovery Health', pay: c.health.current.annual + (vit.premium || 0), back: vit.value || 0, backNote: 'Vitality rewards: gym, HealthyFood, flights', items: BI.vitality },
-    c.health.rows.filter(r => !isDiscovery(r)).map(r => rival(`${r.scheme} ${r.plan}`, priced(r) ? r.monthly * 12 : null, 0,
-      [r.dayToDay, r.network].filter(Boolean).join(' · '), { misses: r.misses || [], quoted: !!r.quoted })));
+  if (c.health) {
+    const ms = medicalState(st, c.health);
+    section('medical', 'Medical aids',
+      { name: c.health.own ? `Discovery ${c.health.own.plan}` : 'Discovery Health', pay: c.health.current.annual + (vit.premium || 0), back: vit.value || 0, backNote: 'Vitality rewards: gym, HealthyFood, flights', items: BI.vitality },
+      c.health.rows.filter(r => !isDiscovery(r)).map(r => rival(`${r.scheme} ${r.plan}`, priced(r) ? r.monthly * 12 : null, 0,
+        [r.dayToDay, r.network].filter(Boolean).join(' · '), { misses: r.misses || [], quoted: !!r.quoted, ...(r.stale ? { comparable: false, assumedWhy: 'stale' } : {}) })),
+      ms.ok ? {} : { comparable: false, assumedWhy: ms.why, note: ms.note });
+  }
 
   if (c.gap) section('gap', 'Gap cover', { name: 'Discovery Gap Cover', pay: c.gap.current.annual, back: 0, backNote: '' },
-    c.gap.rows.filter(r => !isDiscovery(r)).map(r => rival(`${r.provider} ${r.plan}`, priced(r) ? r.monthly * 12 : null, 0, r.cover, { quoted: !!r.quoted })));
+    c.gap.rows.filter(r => !isDiscovery(r)).map(r => rival(`${r.provider} ${r.plan}`, priced(r) ? r.monthly * 12 : null, 0, r.cover, {
+      quoted: !!r.quoted,
+      ...(r.ageLimited ? { comparable: false, assumedWhy: 'age' } : r.stale ? { comparable: false, assumedWhy: 'stale' } : {}),
+    })));
 
   const drive = has(products, 'insure') ? (st.lines || []).find(l => l.key === 'fuel.drive') : null;
   const quoteOnly = r => (r.quoted && priced(r)
@@ -214,4 +321,4 @@ function buildRivals(st, cmp, products) {
   return out;
 }
 
-module.exports = { buildSwitch, buildRivals, backItems, byKind, KINDS, has, only };
+module.exports = { buildSwitch, buildRivals, backItems, byKind, KINDS, has, only, freshen, medicalState, ASSUMED_NOTE };

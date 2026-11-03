@@ -78,7 +78,7 @@ for (const id of ['bank', 'health', 'gap', 'insure', 'life']) {
 
 // another bank's MONTHLY ACCOUNT FEE is not evidence of Discovery Bank
 assert.strictEqual(none.bank.found, false);
-assert.ok(/None of your budget accounts/.test(none.bank.why));
+assert.ok(/None of the accounts in your statements/.test(none.bank.why));
 
 // a returned premium (money in) alone is not proof of a debit order
 const refundOnly = detectProducts({ accounts: {}, categories: {}, rows: [row('2026-10-01', 'DISC PREM 1234', 3200, 'X')] });
@@ -275,5 +275,75 @@ assert.deepStrictEqual(resolveVitality({ vitality: { money: true, health: null, 
 // health and drive follow the products you SAID you have
 assert.deepStrictEqual(resolveVitality({ products: { health: false, insure: null } }, detAll, { vitalityMoney: false }), { money: false, health: false, drive: true });
 assert.deepStrictEqual(resolveVitality(undefined, undefined, undefined), { money: false, health: false, drive: false });
+
+// ── round 2 (red team rt3, base db6562d) ──────────────────────────────
+// a product left years ago is reported ended and not ticked for you (item 5)
+{
+  const months = ['2024-01', '2024-02', '2024-03'];
+  const old = {
+    accounts: { 'Sam Everyday': OTHER },
+    categories: {},
+    rows: months.map(ym => row(ym + '-02', 'DISCINSURE 9012', -1100, 'Sam Everyday'))
+      .concat(['2026-08', '2026-09', '2026-10'].map(ym => row(ym + '-01', 'DISC PREM 1234', -3200, 'Sam Everyday')))
+      .concat([row('2026-10-28', 'SPAR SOMETOWN', -90, 'Sam Everyday')]),
+  };
+  const dx = detectProducts(old);
+  assert.strictEqual(dx.insure.found, true, 'the budget still shows it');
+  assert.strictEqual(dx.insure.lastPaid, '2024-03-02');
+  assert.strictEqual(dx.insure.ended, true, 'nothing since March 2024');
+  assert.ok(/no longer have Discovery Insure/.test(dx.insure.why), dx.insure.why);
+  assert.strictEqual(dx.health.ended, false, 'paid this month');
+  assert.strictEqual(dx.health.lastPaid, '2026-10-01');
+  assert.strictEqual(dx.gap.ended, false, 'never there is not ended');
+  assert.strictEqual(dx.gap.lastPaid, null);
+  const picked = resolveProducts({ products: { bank: null, health: null, gap: null, insure: null, life: null } }, dx);
+  assert.strictEqual(picked.insure, false, 'an ended product is not ticked for you');
+  assert.strictEqual(picked.health, true);
+  assert.strictEqual(resolveProducts({ products: { insure: true } }, dx).insure, true, 'your answer still wins');
+  // the end can be given: a window that ends in March 2024 sees Insure as current
+  assert.strictEqual(detectProducts(old, { end: '2024-03' }).insure.ended, false);
+  // two missed premiums: ended; one missed: not yet
+  const miss = n => detectProducts({ accounts: {}, categories: {}, rows: [row('2026-08-01', 'DISC LIFE 1', -500, 'X'), row(n, 'SPAR', -10, 'X')] }).life.ended;
+  assert.strictEqual(miss('2026-09-30'), false, 'September missing only');
+  assert.strictEqual(miss('2026-10-02'), true, 'September and October missing');
+  // a claim only: a year with none says it ended
+  const claim = end => detectProducts({ accounts: {}, categories: {}, rows: [row('2025-06-01', 'INSGAPCLA 1', 900, 'X'), row(end, 'SPAR', -10, 'X')] }).gap.ended;
+  assert.strictEqual(claim('2026-03-01'), false);
+  assert.strictEqual(claim('2026-07-01'), true);
+  // a Discovery Bank account that went quiet
+  const quiet = detectProducts({ accounts: { 'Disc Cheque': DISC, 'Sam Everyday': OTHER }, categories: {}, rows: [row('2025-01-10', 'SPAR', -10, 'Disc Cheque'), row('2026-10-10', 'SPAR', -10, 'Sam Everyday')] });
+  assert.strictEqual(quiet.bank.found, true);
+  assert.strictEqual(quiet.bank.ended, true);
+  assert.ok(/closed it/.test(quiet.bank.why) && !/[−-]\s?R/.test(quiet.bank.why), quiet.bank.why);
+  assert.strictEqual(resolveProducts({}, quiet).bank, false);
+  assert.strictEqual(d.bank.ended, false, 'the full household is current');
+  for (const id of ['bank', 'health', 'gap', 'insure', 'life']) assert.strictEqual(d[id].ended, false, id);
+}
+// Vitality Money from any wording, a Suite fee that holds it, or an interest boost (item 6)
+{
+  const vmRows = desc => [row('2026-10-25', 'MONTHLY ACCOUNT FEE', -435, 'Cheque'), row('2026-10-25', 'FACILITY FEE', -69, 'Card'), row('2026-10-25', desc, -101, 'Cheque')];
+  for (const w of ['VITALITY MONEY FEE', 'VM FEE', 'Vitality Money Premium']) {
+    const b = bank(both, vmRows(w));
+    assert.strictEqual(b.vitalityMoney, true, w);
+    assert.strictEqual(b.tier, 'Black', w);
+  }
+  // one combined fee of R605: the whole Black Suite fee, Vitality Money inside
+  const one = bank(both, [row('2026-10-25', 'MONTHLY ACCOUNT FEE', -605, 'Cheque')]);
+  assert.strictEqual(one.tier, 'Black');
+  assert.strictEqual(one.vitalityMoney, true);
+  assert.ok(/Vitality Money included/.test(one.vitalityMoneyWhy.join(' ')), one.vitalityMoneyWhy.join(' '));
+  // the account and facility fees alone: no Vitality Money
+  const without = bank(both, [row('2026-10-25', 'MONTHLY ACCOUNT FEE', -435, 'Cheque'), row('2026-10-25', 'FACILITY FEE', -69, 'Card')]);
+  assert.strictEqual(without.tier, 'Black');
+  assert.strictEqual(without.vitalityMoney, false);
+  // an interest boost is only paid with Vitality Money
+  const boosted = bank({ Pot: acct('savings') }, [row('2026-10-25', 'DYNAMIC INTEREST BOOST', 120, 'Pot')]);
+  assert.strictEqual(boosted.vitalityMoney, true);
+  assert.ok(/interest boost/.test(boosted.why), boosted.why);
+  // a premium stopped a year ago is not Vitality Money now
+  const stopped = bank(both, [row('2025-09-25', 'VITALITY MONEY PREMIUM', -101, 'Cheque'), row('2026-10-25', 'MONTHLY ACCOUNT FEE', -435, 'Cheque'), row('2026-10-25', 'FACILITY FEE', -69, 'Card')]);
+  assert.strictEqual(stopped.vitalityMoney, false);
+  assert.ok(/stopped it/.test(stopped.why), stopped.why);
+}
 
 console.log('detect OK');

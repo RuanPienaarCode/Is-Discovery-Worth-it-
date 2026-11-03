@@ -4,6 +4,8 @@
 const { ItemView } = require('obsidian');
 const { VIEW_TYPE } = require('./constants');
 const { mountBottomLine } = require('./bottom-line');
+const { stopWelcome } = require('./welcome');
+const { cancelRefocus } = require('./ui-benefits');
 
 class BottomLineView extends ItemView {
   constructor(leaf, plugin) {
@@ -20,13 +22,20 @@ class BottomLineView extends ItemView {
     /* the Flows diagram measures its labels: let Nunito arrive first, but
        never wait more than a second for it */
     const fonts = this.plugin.fonts && this.plugin.fonts.load ? this.plugin.fonts.load() : null;
-    if (fonts) await Promise.race([fonts.catch(() => null), new Promise(r => setTimeout(r, 1000))]);
-    await this.ui.refresh();
+    if (fonts) {
+      let wait = null;
+      await Promise.race([fonts.catch(() => null), new Promise(r => { wait = setTimeout(r, 1000); })]);
+      clearTimeout(wait);
+    }
+    if (!this.closed) await this.ui.refresh();
   }
 
   refresh() { return this.ui ? this.ui.refresh() : Promise.resolve(); }
 
   async onClose() {
+    this.closed = true;
+    stopWelcome();
+    cancelRefocus();
     if (this.ui) this.ui.destroy();
   }
 }

@@ -59,3 +59,17 @@
 .dc-radio-l { min-width: 0; }
 .dc-radio input.dc-radio-in:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
 @supports not selector(:focus-visible) { .dc-radio input.dc-radio-in:focus { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; } }
+
+/* ── amounts with their direction in words ───────────── */
+/* "R 1 197" over "better off": the word sits under the number, small */
+.dc-amt .dc-amt-w { display: block; font-size: 11px; font-weight: 500; line-height: 1.25; color: var(--dc-muted); white-space: normal; }
+.dc-tot .dc-amt { text-align: right; }
+/* the one-line definition under a page's cards ("After rewards means ...") */
+.dc-small.dc-def { margin: 8px 2px 0; }
+/* what a section card's figure is: "R 7 189 you pay a year" */
+.dc-head-fig-wrap { display: inline-flex; align-items: baseline; gap: 4px; margin-left: auto; white-space: nowrap; }
+@media (max-width: 420px) { .dc-head-fig-wrap { flex-basis: 100%; margin-left: 0; } }
+/* a need's name in the cover grid wraps instead of being cut off */
+.dc-needs-r.dc-cmp-h > span:not(:first-child) { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; word-break: break-word; line-height: 1.15; }
+.dc-page.is-phone .dc-needs-r.dc-cmp-h { letter-spacing: 0; font-size: 9px; }
+.dc-page.is-phone .dc-needs-r.dc-cmp-h > span:not(:first-child) { letter-spacing: 0; }

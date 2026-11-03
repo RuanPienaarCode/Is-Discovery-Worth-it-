@@ -225,4 +225,11 @@ assert.ok(INSURERS.length >= 6, 'at least six insurers');
   assert.strictEqual(unknown.vitalityKnown, false, 'unknown premium passed on');
   assert.strictEqual(compareHealth(health, {}, plans).vitalityKnown, true, 'old callers: known');
 }
+
+// round 2: a product whose payments stopped has nothing to compare
+assert.strictEqual(compareHealth({ ...health, ended: true }, { members: { adults: 2, children: 1 } }, plans), null);
+assert.strictEqual(compareGap({ paid: 3000, ended: true }, {}), null);
+assert.strictEqual(compareInsure({ paid: 12000, ended: true }, {}), null);
+assert.strictEqual(compareLife({ monthly: 500, ended: true }, {}), null);
+assert.ok(compareGap({ paid: 3000 }, {}), 'not ended: still compared');
 console.log('compare: ok');

@@ -20,9 +20,9 @@
    reads 'About the same': the estimates are not that precise. Every
    sentence that names a saving is conditional ("By these figures, …"). */
 
-const { has, only } = require('./switch');
+const { has, only, freshen } = require('./switch');
 const { altConfirmed } = require('./rates');
-const { money } = require('./format');
+const { money, dayLabel } = require('./format');
 
 const MATERIAL = 600;
 
@@ -61,6 +61,15 @@ function extrapolatedOf(st, keys) {
 }
 
 const PRODUCT_WORDS = { health: 'Discovery Health debit orders', gap: 'gap cover payments', insure: 'Discovery Insure debit orders' };
+const PAYMENT_WORD = { health: 'Discovery Health debit order', gap: 'gap cover payment', insure: 'Discovery Insure debit order', life: 'Discovery Life payment' };
+
+/* A product whose payments stopped (st.confidence.ended, round 2): no
+   figure, and the verdict says why. tone 'unknown' like "Not enough data",
+   so a page that hides figures under it hides them here too. */
+const endedVerdict = (id, lastPaid) => ({
+  id, tone: 'unknown', word: 'Ended', ended: true, lastPaid: lastPaid || null, amount: null, vs: null,
+  why: `Your last ${PAYMENT_WORD[id] || 'payment'} was on ${lastPaid ? dayLabel(lastPaid) : 'an earlier date'}, and there has been none since, so it looks like you no longer have it. If so, choose the Discovery products you have on the Inputs tab.`,
+});
 
 const notEnough = (id, why) => ({ id, tone: 'unknown', word: 'Not enough data', amount: null, vs: null, why });
 const restsOn = (st, keys) => `The answer turns on ${labelsOf(st, keys)}, worked out from one or two payments and made into a year, so it is not enough to go on.`;
@@ -98,9 +107,11 @@ function withoutRewards(cmp, extra, endsRewards) {
    compare.js (null where there is nothing to compare); products: the
    resolveProducts() map — a product set to false gets no verdict (leave it
    out for all). st.confidence (model.js: { months, thin, extrapolated,
-   notes }) is optional. */
-function buildVerdicts(st, cmp, products) {
-  const c = only(cmp, products);
+   notes, productMonths, ended }) is optional. opts: { now } — as for
+   buildSwitch: a price table that is not for that day is not compared, so
+   the verdicts and Compare agree. */
+function buildVerdicts(st, cmp, products, opts) {
+  const c = freshen(only(cmp, products), opts);
   const out = {};
   const conf = (st && st.confidence) || null;
 
@@ -124,10 +135,14 @@ function buildVerdicts(st, cmp, products) {
     } else if (sideOf(gain) === 'even') {
       out.bank = { id: 'bank', tone: 'good', word: 'About the same', amount: -gain, vs: alt.name, why: `By these figures, ${alt.name} is within ${money(MATERIAL)} a year of Discovery Bank, too close to call.${unsure}` };
     } else {
-      /* "worth more than its fees" only when they are */
-      const why = st.net >= 0
+      /* "worth more than its fees" only when they are, by at least half a
+         rand (nothing against nothing is not "worth more") */
+      const net = Number(st.net) || 0;
+      const why = net >= 0.5
         ? 'Its rewards are worth more than its fees, and more than the other bank would give you.'
-        : 'Its fees cost more than its rewards give back, but the other bank would leave you worse off.';
+        : net <= -0.5
+          ? 'Its fees cost more than its rewards give back, but the other bank would leave you worse off.'
+          : 'Its fees and its rewards come to about the same, and the other bank would leave you worse off.';
       out.bank = { id: 'bank', tone: 'good', word: 'Worth it', amount: -gain, vs: alt.name, why: why + unsure };
     }
   }
@@ -143,6 +158,8 @@ function buildVerdicts(st, cmp, products) {
     evenTail: vitText,
   };
   const healthName = r => r.scheme + ' ' + r.plan;
+  /* the rivals' prices are not for today (opts.now): ask for quotes */
+  if (c.health && c.health.stale) healthOpts.noQuote = 'The other medical aids\' prices here are out of date (most change every January). Ask them for a quote.';
   out.health = fromMarket('health', c.health, healthName, healthOpts);
   /* the Vitality Health rewards a rival would end, where they rest on one
      or two payments: the verdict stands only if it holds without them */
@@ -159,7 +176,7 @@ function buildVerdicts(st, cmp, products) {
   }
   /* say what the best one could not confirm */
   const hb = bestPriced(c.health);
-  if (out.health && hb && hb.unsure && hb.unsure.length && out.health.tone !== 'good' && out.health.tone !== 'unknown') {
+  if (out.health && hb && hb.unsure && hb.unsure.length && (out.health.tone === 'check' || out.health.tone === 'over')) {
     const label = id => ((c.health.needs || []).find(n => n.id === id) || { label: id }).label.toLowerCase();
     out.health.why += ` Check first: ${hb.unsure.map(label).join(', ')}.`;
   }
@@ -169,7 +186,8 @@ function buildVerdicts(st, cmp, products) {
   const gapAged = c.gap && c.gap.pricedForAge === false;
   out.gap = fromMarket('gap', c.gap, r => r.provider + ' ' + r.plan, {
     check: 'Cheaper gap cover exists, but it usually pays out less on a big medical bill. Compare the cover before you switch.',
-    noQuote: gapAged ? 'Rival prices shown are for under 45s. Ask them for a quote for your family\'s ages.' : undefined,
+    noQuote: gapAged ? 'Rival prices shown are for under 45s. Ask them for a quote for your family\'s ages.'
+      : c.gap && c.gap.stale ? 'The gap cover prices here are out of date (most change every January). Ask for a quote.' : undefined,
   });
 
   const insureOpts = {
@@ -220,6 +238,10 @@ function buildVerdicts(st, cmp, products) {
       out.home = fromMarket('home', h, r => r.name);
     }
   }
+
+  /* A product whose payments stopped: "Ended", whatever else was found. */
+  const ended = (conf && conf.ended) || {};
+  for (const id of ['health', 'gap', 'insure', 'life']) if (ended[id] && has(products, id)) out[id] = endedVerdict(id, ended[id]);
 
   /* a product left out has no verdict at all, not an empty one */
   for (const id of ['bank', 'health', 'gap', 'insure', 'life']) if (!has(products, id)) delete out[id];

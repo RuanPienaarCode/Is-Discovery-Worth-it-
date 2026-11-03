@@ -15,17 +15,39 @@ const { isMilesStatement, parseMilesStatement, mergeStatements } = require('./mi
 const sub = (base, name) => (base ? base + '/' : '') + name + '/';
 const nameOf = p => p.slice(p.lastIndexOf('/') + 1).replace(/\.md$/, '');
 
-/* The folder whose Transactions/<account>/<YYYY-MM>.md files exist.
-   `hint` wins when set. Shortest match first, so a nested backup never
-   shadows the real budget. */
+/* Every folder that looks like a Budget plugin budget (it holds
+   Transactions/<account>/<YYYY-MM>.md notes), best first:
+     a folder with account notes (Accounts/<name>.md) before one without
+     (a stray or copied Transactions folder has none);
+     then the one with the most transaction notes;
+     then the one whose notes run latest (an old archive gives way);
+     then the shorter path, then by name.
+   → [{ folder, notes, accounts, latest: 'YYYY-MM' }] ('' = the vault root) */
+function budgetCandidates(paths) {
+  const found = new Map();
+  for (const p of paths || []) {
+    const m = /^(.*?)\/?Transactions\/[^/]+\/(\d{4}-\d\d)\.md$/.exec(p);
+    if (!m) continue;
+    const c = found.get(m[1]) || { folder: m[1], notes: 0, accounts: 0, latest: '' };
+    c.notes++;
+    if (m[2] > c.latest) c.latest = m[2];
+    found.set(m[1], c);
+  }
+  for (const c of found.values()) {
+    const ac = sub(c.folder, 'Accounts');
+    c.accounts = (paths || []).filter(p => p.startsWith(ac) && /\.md$/i.test(p) && !p.slice(ac.length).includes('/')).length;
+  }
+  return [...found.values()].sort((x, y) =>
+    (y.accounts > 0) - (x.accounts > 0) || y.notes - x.notes || (y.latest > x.latest ? 1 : y.latest < x.latest ? -1 : 0)
+    || x.folder.length - y.folder.length || (x.folder < y.folder ? -1 : x.folder > y.folder ? 1 : 0));
+}
+
+/* The budget folder to read: `hint` (settings.budgetFolder) wins when set;
+   otherwise the best of budgetCandidates, or null when there is none. */
 function findBudgetFolder(paths, hint) {
   if (hint) return hint.replace(/\/+$/, '');
-  const hits = new Set();
-  for (const p of paths) {
-    const m = /^(.*?)\/?Transactions\/[^/]+\/\d{4}-\d\d\.md$/.exec(p);
-    if (m) hits.add(m[1]);
-  }
-  return [...hits].sort((a, b) => a.length - b.length)[0] ?? null;
+  const best = budgetCandidates(paths)[0];
+  return best ? best.folder : null;
 }
 
 async function loadBudget(source, hint) {
@@ -34,7 +56,10 @@ async function loadBudget(source, hint) {
   const miles = csv.miles, csvSkipped = csv.skipped, csvNotes = csv.notes;
   const paths = all.filter(p => /\.md$/i.test(p));
   const folder = findBudgetFolder(paths, hint);
-  if (folder === null) return { folder: null, rows: [], accounts: {}, categories: {}, skipped: 0, notes: 0, miles, csvSkipped, csvNotes };
+  /* every budget-looking folder, best first, so the page can say which one
+     it read when there is more than one */
+  const candidates = budgetCandidates(paths);
+  if (folder === null) return { folder: null, candidates, rows: [], accounts: {}, categories: {}, skipped: 0, notes: 0, miles, csvSkipped, csvNotes };
   const tx = sub(folder, 'Transactions'), ac = sub(folder, 'Accounts'), ca = sub(folder, 'Categories');
   const rows = [];
   const accounts = {};
@@ -56,7 +81,7 @@ async function loadBudget(source, hint) {
       categories[nameOf(p)] = (parseFrontmatter(await source.read(p)).type || '').trim().toLowerCase();
     }
   }
-  return { folder, rows, accounts, categories, skipped, notes, miles, csvSkipped, csvNotes };
+  return { folder, candidates, rows, accounts, categories, skipped, notes, miles, csvSkipped, csvNotes };
 }
 
 /* Every Discovery Miles statement CSV in the vault, wherever it was saved.
@@ -93,4 +118,4 @@ async function loadMiles(source, csvPaths) {
   return { miles: files.length ? { files, rows: mergeStatements(lists) } : null, skipped, notes };
 }
 
-module.exports = { findBudgetFolder, loadBudget, MAX_CSV_BYTES };
+module.exports = { findBudgetFolder, budgetCandidates, loadBudget, MAX_CSV_BYTES };

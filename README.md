@@ -18,10 +18,10 @@ The plugin is free. It gives no advice: it shows what the numbers say, and the d
 
 ## First run
 
-On first open it asks a few questions, one at a time. You can go back at any step, and you can skip the lot and answer later under Inputs.
+On first open it asks a few questions, one at a time. You can go back at any question, and you can use "Skip the questions" and answer later under Inputs.
 
-1. **Which Discovery products do you have?** Bank, medical aid, gap cover, car and home insurance, life cover. The list is pre-ticked from what your statements show, with a line saying why. Untick or tick to correct it. Products you do not have get no tab and are left out of the totals and the comparison.
-2. **Your status** in each Vitality programme you have, and your bank Suite.
+1. **Which Discovery products do you have?** Bank, medical aid, gap cover, car and home insurance, life cover. The list is pre-ticked from what your statements show, with a line saying why. A product whose payments stopped is not ticked, and the line says when you stopped paying. Untick or tick to correct it. Products you do not have get no tab and are left out of the totals and the comparison.
+2. **Your Discovery Bank package** (the all-in-one package, a credit card on its own, and so on), and your **score** in each Vitality programme you have: your bank score (Vitality Money status), your health score (Vitality Health status) and your car score (Vitality Drive status). Each question says where to find the score in the Discovery app. If you are unsure, pick Blue, which lowers the estimate.
 3. **Your household,** adults and children, and your medical aid plan. The plan is picked for you only when one plan clearly fits your monthly debit; if not, it says so and puts the plans that fit first. If you have gap cover it also asks how old the oldest person on it is, because other providers charge more from 45.
 4. **Which benefits do you actually use?** One row per benefit, with a suggestion taken from your statements and the reason for it. For each, choose:
    - **I use it:** counts in full.
@@ -35,8 +35,8 @@ Costs are never reduced. You pay them whether or not you use the benefit. Only t
 - **Overview.** A short not-affiliated notice, then a verdict for each product you have and the whole Discovery bill against what comes back, with dates to watch.
 - **Compare.** Stay with Discovery, or move everything away. Each cost and each benefit side by side, with a total for both. Anything nobody has priced is taken as the same on both sides, and the page says so.
 - **Flows.** An animated diagram of where your money goes and what comes back. Tap a product to follow it.
-- **Bank.** What your Suite costs, what you would lose by leaving, and the same card spend at other South African banks.
-- **Health.** Premium, claims paid back, and how your plan compares with other medical aids.
+- **Bank.** What your Discovery Bank package costs, what you would lose by leaving, and the same card spend at other South African banks.
+- **Health.** Premium, claims paid to you, and how your plan compares with other medical aids.
 - **Gap.** Gap cover against other providers.
 - **Insure.** Car and home insurance against other insurers.
 - **Life.** An individual policy against other cover, including an employer's group scheme.
@@ -51,7 +51,7 @@ Each figure is labelled with where it came from, so you can judge it:
 - **From your statements:** read from your Budget notes.
 - **From your Miles statement:** read from the CSV.
 - **You entered:** typed by you.
-- **Estimate:** worked out from a rate, which can be changed beside the line it affects. Most rates are published, and name their source and date. Some rates, such as a few rival banks' rewards, are **not published**: those are the plugin's own guesses, and the page marks them so. Type your own figure when you know it.
+- **Estimate:** worked out from a rate, which can be changed beside the line it affects. Most rates are published, and name their source and date. Some rates, such as a few rival banks' rewards, are **not published**: those are the plugin's own guesses, and the page marks each one it knows about as not published. It cannot know about a rate that changed after the release you installed. Type your own figure when you know it.
 
 ## Privacy
 
@@ -61,7 +61,7 @@ Each figure is labelled with where it came from, so you can judge it:
 
 ## Market data and how fresh it is
 
-Prices, plans and fees for Discovery and for the other providers are written into the plugin, each set with an "as at" date shown on the Compare page. The plugin does not fetch anything. They are checked and refreshed about every six months, in a new release. When the date gets old the page says the prices may be out of date.
+Prices, plans and fees for Discovery and for the other providers are written into the plugin, each set with an "as at" date shown on the Compare page. The plugin does not fetch anything. They are checked and refreshed about every six months, in a new release. When the date gets old, every tab that shows another provider's prices carries a warning that they may be out of date.
 
 How the numbers are refreshed is written up in [docs/updating-market-data.html](docs/updating-market-data.html). Spotted a wrong or old price? Open an issue with the "Wrong or outdated price" form.
 
@@ -83,11 +83,11 @@ gh attestation verify main.js -R RuanPienaarCode/Is-Discovery-Worth-it-
 
 - It can only judge what it can see. If your statements do not show a Discovery product, it will not know you have it until you say so. If you tell it you have a product it cannot see any payments for, the figures for it will be thin.
 - The prices of other providers are their published prices, for a typical case. Your own quote can be higher or lower, because insurers price you, not the average person. Type your own quotes under Inputs for a fair comparison.
-- Some reward rates are not published. Where that is so, the page says it is an estimate.
+- Some reward rates are not published. Where the plugin knows that, the page says it is an estimate.
 - Medical aids and insurers differ in ways a table cannot show: hospital networks, waiting periods, what happens to your cover history if you move. Check these before you move anything.
 - Discovery changes its rewards and prices every year. Read the "as at" dates.
 - **This is a calculator, not financial advice.** It does not know your whole situation, and nothing in it is a recommendation to buy, keep or cancel any product. It is free, and the figures are estimates. Check with Discovery or a licensed financial adviser before you change a product.
-- With only a few months of statements, the page says the figures are thin and shows "Not enough data" instead of a verdict.
+- A product with fewer than 6 months of its own payments shows "Not enough data" instead of a verdict, and no figure is drawn under those words. The same goes for the whole comparison when there are fewer than 6 months of Discovery payments.
 
 ## Not affiliated
 

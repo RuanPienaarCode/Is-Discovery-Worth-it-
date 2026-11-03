@@ -413,11 +413,11 @@ assert.ok(/Black Suite's published account fee is R 435 a month/.test(det(s, 'fe
 const sGold = buildStatement(m, { ...settings, suite: 'Gold', status: { ...settings.status, money: 'Gold' } });
 assert.ok(/Gold Suite's published account fee is R 115 a month/.test(det(sGold, 'fee.account')), det(sGold, 'fee.account'));
 assert.ok(/R 66 a month/.test(det(sGold, 'fee.vitalityMoney')));
-assert.ok(/up to 11% at your Gold status/.test(det(sGold, 'miles.healthyFood')), det(sGold, 'miles.healthyFood'));
-assert.ok(/up to 25% at your Diamond status/.test(det(s, 'miles.healthyFood')));
-assert.ok(/up to 15% at your Diamond status/.test(det(s, 'fuel.money')));
-assert.ok(/1,5% more on savings at your Diamond status/.test(det(s, 'interest.boost')));
-assert.ok(/1% more on savings at your Gold status/.test(det(sGold, 'interest.boost')));
+assert.ok(/up to 11% with your bank score at Gold/.test(det(sGold, 'miles.healthyFood')), det(sGold, 'miles.healthyFood'));
+assert.ok(/up to 25% with your bank score at Diamond/.test(det(s, 'miles.healthyFood')));
+assert.ok(/up to 15% with your bank score at Diamond/.test(det(s, 'fuel.money')));
+assert.ok(/bank score at Diamond, that is 1,5% more on savings/.test(det(s, 'interest.boost')));
+assert.ok(/bank score at Gold, that is 1% more on savings/.test(det(sGold, 'interest.boost')));
 assert.ok(!s.lines.some(l => /R435|R101|R69\b/.test(l.detail)), 'no Black-only fee figures left');
 const sTxFee = buildStatement(m, { ...settings, bankKind: 'transaction' });
 assert.ok(!/credit card fee is/.test(det(sTxFee, 'fee.facility')), 'no card, no card fee figure');
@@ -736,7 +736,15 @@ const ACC = {
     assert.ok(!c.extrapolated.includes('fee.account'), 'a monthly fee is a rate, not an event');
     assert.ok(c.notes.length >= 2 && c.notes.every(n => !/-\s?\d|−/.test(n) && /\.$/.test(n)), c.notes.join(' | '));
     const full = run(base().concat([R('2026-10-12', 'VITALITY TRAVEL', -9000, 'Disc Card', 'Holiday')]), { bankKind: 'suite' }, null, all).st.confidence;
-    assert.deepStrictEqual([full.months, full.thin, full.extrapolated], [12, false, []], 'one booking in a year is a year');
+    /* round 2: one or two bookings are a rough guess at ANY window length
+       (one family holiday would otherwise carry the bank's verdict) */
+    assert.deepStrictEqual([full.months, full.thin], [12, false]);
+    assert.ok(full.extrapolated.includes('travel.bank'), 'one booking in a year is still a rough guess: ' + full.extrapolated);
+    const note = full.notes.find(n => /^Flight discount from the bank/.test(n));
+    assert.ok(note && /one booking in 12 months, so it is a rough guess\./.test(note) && !/made into a year/.test(note), note);
+    const three = ['2026-02-12', '2026-06-12', '2026-10-12'].map(d => R(d, 'VITALITY TRAVEL', -3000, 'Disc Card', 'Holiday'));
+    const c3 = run(base().concat(three), { bankKind: 'suite' }, null, all).st.confidence;
+    assert.ok(!c3.extrapolated.includes('travel.bank'), 'three bookings in a year are a habit');
   }
   // 14. the Health debit is not split once it is past the plan table's prices
   {
@@ -749,7 +757,16 @@ const ACC = {
       const sL = buildStatement(late, { ...settings, members: { adults: 2, children: 0 }, health: { plan: plan.id } });
       if (stale) {
         assert.strictEqual(sL.bill.vitalityMonthly, null, 'no split');
-        assert.ok(/price changed after these figures/.test(sL.bill.items[0].note) && /Inputs/.test(sL.bill.items[0].note), sL.bill.items[0].note);
+        assert.ok(/price has changed since the prices we have/.test(sL.bill.items[0].note) && /Inputs/.test(sL.bill.items[0].note), sL.bill.items[0].note);
+        assert.strictEqual(sL.bill.priceStale, true);
+        assert.strictEqual(sL.bill.priceStaleSide, 'after');
+      }
+      /* round 2: a debit from BEFORE the plan table's period says so, not "changed after" */
+      const early = { ...m, from: '2025-01', to: '2025-02', months: ['2025-01', '2025-02'], figures: { ...m.figures, 'product.medical': fig({ '2025-01': 9999, '2025-02': 9999 }) } };
+      if (typeof valid === 'function' && !valid('2025-02')) {
+        const sE = buildStatement(early, { ...settings, members: { adults: 2, children: 0 }, health: { plan: plan.id } });
+        assert.strictEqual(sE.bill.priceStaleSide, 'before');
+        assert.ok(/from before the plan prices we have/.test(sE.bill.items[0].note) && !/changed since/.test(sE.bill.items[0].note), sE.bill.items[0].note);
       }
       const typed = buildStatement(late, { ...settings, members: { adults: 2, children: 0 }, health: { plan: plan.id }, bill: { medical: 5000 } });
       assert.ok(typed.bill.vitalityMonthly > 0, 'a typed medical aid amount still splits it');
@@ -775,5 +792,120 @@ const ACC = {
   assert.ok(fF.full > 1000, 'fuel estimate kept, not replaced by a few statement Miles: ' + fF.full);
   const noFunder = buildStatement(mF, { ...base, rates: { ...base.rates, driveFunderAccount: 0 } }, msF, opts).lines.find(l => l.key === 'fuel.drive');
   assert.strictEqual(noFunder.source, 'statement', 'Drive paid in Miles: the statement is the figure');
+}
+// ── round 2 (base db6562d), lane H2: numbers out, end to end ──────────
+{
+  const { measure, monthsBetween: mb } = require('../src/measure');
+  const { buildProducts } = require('../src/products');
+  const { DEFAULT_SETTINGS } = require('../src/constants');
+  const MONTHS = mb('2025-11', '2026-10');
+  const day = (ym, d) => ym + '-' + String(d).padStart(2, '0');
+  const ACC = { 'Disc Card': { institution: 'Discovery Bank', type: 'credit_card' }, 'Disc Transact': { institution: 'Discovery Bank', type: 'checking' },
+    'Disc Save': { institution: 'Discovery Bank', type: 'savings' }, 'Disc Forex': { institution: 'Discovery Bank', type: 'savings' }, 'Other Cheque': { institution: 'Other Bank', type: 'checking' } };
+  const R = (date, description, amount, account, category) => ({ date, description, category: category || '', amount, account, split: '', excluded: false });
+  const fees = () => { const rows = []; for (const ym of MONTHS) rows.push(R(day(ym, 3), 'MONTHLY ACCOUNT FEE', -250, 'Disc Transact', 'Fees'), R(day(ym, 5), 'TAKEALOT', -8000, 'Disc Card', 'Shopping')); return rows; };
+  const salary = () => MONTHS.map(ym => R(day(ym, 25), 'SALARY SOMETOWN', 30000, 'Other Cheque', 'Salary'));
+  const settingsOf = over => {
+    const s0 = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    for (const [k, v] of Object.entries(over || {})) s0[k] = v && typeof v === 'object' && !Array.isArray(v) && s0[k] && typeof s0[k] === 'object' ? Object.assign({}, s0[k], v) : v;
+    return s0;
+  };
+  const run = (rows, over, opts) => {
+    const s0 = settingsOf(over);
+    const mm = measure(rows, ACC, {}, { from: '2025-11', to: '2026-10' });
+    const stx = buildStatement(mm, s0, null, opts);
+    return { m: mm, st: stx, pr: buildProducts(stx, mm, null, s0, new Date(2026, 10, 3), opts && opts.products), s: s0 };
+  };
+  const premium = (rows, months, amount) => { for (const ym of months) rows.push(R(day(ym, 2), 'DEBIT ORDER DISC PREM 55', -amount, 'Other Cheque', 'Medical')); return rows; };
+  const healthOnly = { products: { bank: false, health: true, gap: false, insure: false, life: false }, vitality: { money: false, health: true, drive: false } };
+
+  // B2. thin is about Discovery Bank statements: a Health-only household with no bank is not thin (before: thin, Compare "Not enough data")
+  {
+    const o = run(premium(salary(), MONTHS, 6000), { members: { adults: 2, children: 0 } }, healthOnly);
+    assert.strictEqual(o.st.confidence.months, 0);
+    assert.strictEqual(o.st.confidence.thin, false, 'no bank, so no bank months needed');
+    assert.strictEqual(o.st.confidence.productMonths.health, 12);
+    const withBank = run(premium(salary(), MONTHS, 6000), {}, { ...healthOnly, products: { ...healthOnly.products, bank: true } });
+    assert.strictEqual(withBank.st.confidence.thin, true, 'the bank on with no bank statements is still thin');
+  }
+  // B3. a product's months are its own premiums' months (before: the paying account's 12 months → R12 000 "a year")
+  {
+    const joined = run(premium(salary(), ['2026-09', '2026-10'], 6000), {}, healthOnly);
+    assert.strictEqual(joined.st.confidence.productMonths.health, 2, 'two months of premiums');
+    near(joined.pr.all.find(p => p.id === 'health').debitYear, 72000, 'R6 000 a month is R72 000 a year');
+    assert.ok(!joined.st.confidence.ended.health, 'joined is not ended');
+    const left = run(premium(salary(), ['2025-11', '2025-12', '2026-01', '2026-02'], 6000), {}, healthOnly);
+    assert.strictEqual(left.st.confidence.ended.health, '2026-02-02', 'last paid in February, statements to October: ended');
+    const hp = left.pr.all.find(p => p.id === 'health');
+    assert.strictEqual(hp.ended, true);
+    assert.strictEqual(hp.lastPaid, '2026-02-02');
+    near(hp.debitYear, 24000, 'an ended product shows what was really paid in the period');
+    /* a premium skipped in the second-last month is not "ended" (two months or less) */
+    const gap = run(premium(salary(), MONTHS.filter(ym => ym !== '2026-09' && ym !== '2026-10'), 6000), {}, healthOnly);
+    assert.ok(!gap.st.confidence.ended.health, 'two quiet months are not an ending');
+  }
+  // B4. one family booking a year is a rough guess at any window length (before: counted in full, Worth it)
+  {
+    const rows = fees().concat([R('2026-08-10', 'VITALITY TRAVEL BOOKING', -60000, 'Disc Card', 'Travel')]);
+    const o = run(rows, { bankKind: 'suite' }, { products: { bank: true, health: true }, vitality: { money: true, health: true } });
+    const tb = o.st.lines.find(l => l.key === 'travel.bank');
+    assert.ok(tb.extrapolated && tb.eventWord === 'booking', 'one booking in 12 months is rough');
+    assert.ok(o.st.confidence.extrapolated.includes('travel.bank'));
+    assert.ok(/one booking in 12 months of statements, so it is a rough guess/.test(tb.detail) && !/made into a year/.test(tb.detail), tb.detail);
+  }
+  // B5. rival accounts per holder: only accounts CHARGED a fee, not savings or forex (before: R0 lines and a reversal added holders)
+  {
+    const rows = fees();
+    for (const ym of MONTHS) rows.push(R(day(ym, 1), 'MONTHLY ACCOUNT FEE', 0, 'Disc Save', 'Fees'), R(day(ym, 1), 'MONTHLY ACCOUNT FEE', 0, 'Disc Forex', 'Fees'));
+    rows.push(R('2026-06-03', 'MONTHLY ACCOUNT FEE REVERSAL', 250, 'Disc Card', 'Fees'));
+    const o = run(rows, { bankKind: 'suite' });
+    assert.ok(o.st.alternatives.every(a => a.holders === 1), o.st.alternatives.map(a => a.holders).join(','));
+    const two = { ...o.m, rows: { ...o.m.rows, 'fee.account': [{ account: 'A', amount: -250 }, { account: 'B', amount: -250 }, { account: 'My Savings', amount: -10 }] } };
+    assert.strictEqual(buildStatement(two, settingsOf({ bankKind: 'suite' })).alternatives[0].holders, 2, 'a savings-named account is not a holder');
+  }
+  // B6. Funder Account on, but INSURECASH still arrived: those months are cash (before: R0 cash, the whole year estimated)
+  {
+    const rows = fees();
+    for (const ym of MONTHS) rows.push(R(day(ym, 8), 'BP SOMETOWN', -1500, 'Disc Card', 'Fuel'));
+    MONTHS.slice(0, 6).forEach(ym => rows.push(R(day(ym, 20), 'INSURECASH CASH TO PLANHOLDER', 540, 'Disc Transact')));
+    const opts = { products: { bank: true, insure: true }, vitality: { money: true, drive: true } };
+    const on = run(rows, { rates: { driveFunderAccount: 1, fuelDrivePct: 20, fuelCap: 1500 } }, opts).st.lines.find(l => l.key === 'fuel.drive');
+    near(on.cash, 3240, 'six months of R540 really arrived');
+    near(on.full, 3240 + 6 * 1500 * 0.2 * 2, 'the other six months: the doubled estimate');
+    assert.ok(/INSURECASH still reached your account in 6 months/.test(on.detail), on.detail);
+  }
+  // B7. a measured interest boost proves Vitality Money, even for a savings-only Discovery client the detection called "no Vitality Money"
+  {
+    const rows = salary();
+    for (const ym of MONTHS) rows.push(R(day(ym, 25), 'DYNAMIC INTEREST BOOST', 120, 'Disc Save'), R(day(ym, 25), 'INTEREST EARNED', 400, 'Disc Save'));
+    const o = run(rows, { bankKind: 'savings' }, { products: { bank: true }, vitality: { money: false } });
+    near(o.st.lines.find(l => l.key === 'interest.boost').annual, 1440, 'the boost counts');
+    assert.strictEqual(o.st.setup.vitality.money, true);
+    const said = run(rows, { bankKind: 'savings', vitality: { money: false } }, { products: { bank: true }, vitality: { money: false } });
+    assert.strictEqual(said.st.lines.find(l => l.key === 'interest.boost').annual, 0, 'your own "no" still wins');
+  }
+  // B7. the Miles sentence quotes the card spend the Miles line uses; a R0 benefit says why (zeroWhy)
+  {
+    const rows = fees();
+    for (const ym of MONTHS) rows.push(R(day(ym, 11), 'CLICKS SOMETOWN', -450, 'Disc Card', 'Health'), R(day(ym, 9), 'SHELL SOMETOWN', -900, 'Other Cheque', 'Fuel'));
+    const o = run(rows, { bankKind: 'suite', benefits: { gym: 'none' } }, { products: { bank: true, health: true, insure: true }, vitality: { money: true, health: true, drive: true } });
+    const B = o.st.benefits;
+    assert.ok(new RegExp(`about R\\s${Math.round(o.st.cardSpend / 1000)}\\s\\d{3} a year by Discovery Bank card`).test(B.miles.why.replace(/ /g, ' ')), B.miles.why);
+    assert.ok(/30% of what you spend at Clicks as HealthyCare, and that came to less than R 200 in every month/.test(B.healthyCare.zeroWhy), B.healthyCare.zeroWhy);
+    assert.ok(/with another bank's card/.test(B.fuel.zeroWhy), B.fuel.zeroWhy);
+    assert.strictEqual(B.gym.zeroWhy, 'You said Not for me, so it counts nothing.');
+    assert.ok(/Miles statement shows the gameboard/.test(B.gameboard.zeroWhy), B.gameboard.zeroWhy);
+    assert.strictEqual(B.miles.zeroWhy, '', 'a benefit that counts has no zeroWhy');
+    for (const x of Object.values(B)) assert.ok(!/minus|−|\bnet\b|face value/.test(x.zeroWhy + x.why), x.zeroWhy + ' ' + x.why);
+  }
+  // B10. sentences the statement makes follow the glossary
+  {
+    const o = run(fees(), { bankKind: 'suite', milesUse: 'dday' }, { products: { bank: true, health: true }, vitality: { money: true, health: true } });
+    for (const l of o.st.lines) {
+      assert.ok(!/minus|\bnet\b|face value|counted carefully|cautious|\bband\b|real cost|\btier\b/i.test(l.detail || ''), l.key + ': ' + l.detail);
+      if (/Ð-Day/.test(l.detail || '')) assert.ok(/Ð-Day \(the 15th of each month\)|Ð-Day, the 15th of each month/.test(l.detail), l.key + ': ' + l.detail);
+    }
+    assert.ok(o.st.bill.items.every(i => !/Claims paid back|claims paid$/.test(i.label)), o.st.bill.items.map(i => i.label).join(' | '));
+  }
 }
 console.log('model OK');

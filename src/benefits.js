@@ -13,7 +13,9 @@
 
 const { total } = require('./measure');
 const { money, pct } = require('./format');
-const { FACE_VALUE, RATES, SUITES, SUITE_TABLES, rate, bankProductOf } = require('./rates');
+const { FACE_VALUE, RATES, SUITES, SUITE_TABLES, rate, bankProductOf, normStatus } = require('./rates');
+/* a status saved by an older build that is not a status any more reads Blue */
+const statusOf = s => (typeof normStatus === 'function' ? normStatus(s) : s && typeof s === 'string' ? s : 'Blue');
 
 /* Headline figures for the offers, read from rates.js so they move with it:
    the best a rate gets (Diamond, or the top spend band, on ANY tier — Purple
@@ -29,7 +31,7 @@ const caseVal = (key, when) => {
 /* a case's figure for one status (fuel limits by Drive status) */
 const caseAt = (key, when, status) => {
   const c = (RATES[key].cases || []).find(x => x.when === when);
-  return c && c.byStatus ? c.byStatus[status] : undefined;
+  return c && c.byStatus ? c.byStatus[statusOf(status)] : undefined;
 };
 const BEST_MILES = Math.min(...SUITES.map(x => x.baseMiles.Diamond));
 const THRESHOLDS = SUITES.map(x => x.milesThreshold);
@@ -53,15 +55,15 @@ const GROUPS = [
 const BENEFITS = [
   { id: 'miles', products: ['bank'], label: 'Miles on card payments', question: 'Do you pay with your Discovery Bank card?', lineKeys: ['miles.card', 'miles.partners'],
     group: 'everyday', needs: WITH_BANK,
-    offer: `One Discovery Mile for as little as every ${R(BEST_MILES)} you pay with the virtual card, at Diamond status. That runs up to a monthly limit of ${R(Math.min(...THRESHOLDS))} to ${R(Math.max(...THRESHOLDS))}, depending on your account, then one Mile for every ${R(val('milesAboveThreshold'))}. Partners take ${Math.round(1 / val('mileValue'))} Miles as ${R(1)}.`,
+    offer: `One Discovery Mile for as little as every ${R(BEST_MILES)} you pay with the virtual card, at Diamond status. That runs up to a monthly limit of ${R(Math.min(...THRESHOLDS))} to ${R(Math.max(...THRESHOLDS))}, depending on your account, then one Mile for every ${R(val('milesAboveThreshold'))}. At partners, ${Math.round(1 / val('mileValue'))} Miles pay for ${R(1)} of shopping.`,
     measuredBy: 'From your Discovery Bank card spend, or your Miles statement when you add one.' },
   { id: 'healthyFood', products: ['bank', 'health'], label: 'HealthyFood rewards', question: 'Do you buy groceries at Checkers, Woolworths or Pick n Pay?', lineKeys: ['miles.healthyFood', 'healthyFood.health'],
     group: 'everyday', needs: `Vitality Health, and ${WITH_BANK} for the extra`,
-    offer: `Vitality Health gives ${pct(val('healthyFoodHealthPct'))} back on HealthyFood at your main shop, and ${pct(caseVal('healthyFoodHealthPct', 'assessed'))} once you have done your Vitality Age and a Vitality Health Check. That is on up to ${R(val('healthyFoodHealthCap'))} a month for the family. Discovery Bank adds up to ${pct(top('healthyFood'))} more on up to ${R(val('healthyFoodMoneyCap'))} a month, depending on your account, your status and your card spend.`,
+    offer: `Vitality Health gives ${pct(val('healthyFoodHealthPct'))} back on HealthyFood at your main shop, and ${pct(caseVal('healthyFoodHealthPct', 'assessed'))} once you have done your Vitality Age (an online health-age test) and a Vitality Health Check (a screening at a clinic or pharmacy). That is on up to ${R(val('healthyFoodHealthCap'))} a month for the family. Discovery Bank adds up to ${pct(top('healthyFood'))} more on up to ${R(val('healthyFoodMoneyCap'))} a month, depending on your account, your status and your card spend.`,
     measuredBy: 'From what you spend at Checkers, Woolworths and Pick n Pay, or your Miles statement.' },
   { id: 'healthyCare', products: ['bank', 'health'], label: 'HealthyCare rewards', question: 'Do you shop at Clicks or Dis-Chem?', lineKeys: ['miles.healthyCare', 'healthyCare.health'],
     group: 'health', needs: `Vitality Health, and ${WITH_BANK} for the extra`,
-    offer: `Vitality Health gives ${pct(val('healthyCareHealthPct'))} back on HealthyCare at your main shop, and ${pct(caseVal('healthyCareHealthPct', 'assessed'))} once you have done your Vitality Age and a Vitality Health Check. That is on up to ${R(val('healthyCareCap'))} a month for the family. Discovery Bank adds up to ${pct(top('healthyCare'))} more on up to ${R(val('healthyCareMoneyCap'))} a month, depending on your account, your status and your card spend.`,
+    offer: `Vitality Health gives ${pct(val('healthyCareHealthPct'))} back on HealthyCare at your main shop, and ${pct(caseVal('healthyCareHealthPct', 'assessed'))} once you have done your Vitality Age (an online health-age test) and a Vitality Health Check (a screening at a clinic or pharmacy). That is on up to ${R(val('healthyCareCap'))} a month for the family. Discovery Bank adds up to ${pct(top('healthyCare'))} more on up to ${R(val('healthyCareMoneyCap'))} a month, depending on your account, your status and your card spend.`,
     measuredBy: 'From what you spend at Clicks and Dis-Chem, or your Miles statement.' },
   { id: 'fuel', products: ['bank', 'insure'], label: 'Fuel rewards', question: 'Do you fill up at bp or Shell?', lineKeys: ['fuel.money', 'fuel.drive'],
     group: 'car', needs: `Discovery Insure with Vitality Drive, and ${WITH_BANK} for the extra`,
@@ -69,23 +71,23 @@ const BENEFITS = [
     measuredBy: 'From what you spend on fuel at bp and Shell, and the Vitality Drive cash paid to you.' },
   { id: 'flights', products: ['bank', 'health'], label: 'Flight discount', question: 'Do you book flights through Vitality Travel?', lineKeys: ['travel.bank', 'travel.health'],
     group: 'travel', needs: `Vitality Health, and ${WITH_BANK} for the extra`,
-    offer: `Vitality Health gives ${pct(val('travelHealthPct'))} off flights booked through Vitality Travel, and ${pct(caseVal('travelHealthPct', 'assessed'))} once you have done your Vitality Age and a Vitality Health Check. Discovery Bank adds up to ${pct(top('flightsLocal'))} more on local flights, for three return flights a year, depending on your account, your status and your card spend.`,
+    offer: `Vitality Health gives ${pct(val('travelHealthPct'))} off flights booked through Vitality Travel, and ${pct(caseVal('travelHealthPct', 'assessed'))} once you have done your Vitality Age (an online health-age test) and a Vitality Health Check (a screening at a clinic or pharmacy). Discovery Bank adds up to ${pct(top('flightsLocal'))} more on local flights, for three return flights a year, depending on your account, your status and your card spend.`,
     measuredBy: 'From your payments to Vitality Travel, or the receipts you type in.' },
   { id: 'gameboard', products: ['bank', 'health'], label: 'Exercise rewards and the gameboard', question: 'Do you meet your weekly exercise goals and play the gameboard?', lineKeys: ['gameboard', 'activeRewards', 'activeRewards.basic'],
     group: 'health', needs: 'Vitality Health, and Discovery Bank for the gameboard',
-    offer: 'Miles for meeting your weekly exercise goals, played on the gameboard in the Discovery Bank app. Without the bank, Vitality Health still gives a play for each goal, but those Miles can only be spent on Vitality Active Rewards.',
+    offer: 'Miles for meeting your weekly exercise goals, played on the gameboard (the weekly game in the Discovery Bank app). Without the bank, Vitality Health still gives a play for each goal, but those Miles can only be spent on Vitality Active Rewards.',
     measuredBy: 'Only from your Miles statement, since bank statements do not show it.' },
   { id: 'appleWatch', products: ['bank'], label: 'Apple Watch deal', question: 'Do you have an Apple Watch through Discovery?', lineKeys: ['appleWatch'],
-    group: 'health', needs: 'The Discovery Bank Suite with a credit card',
+    group: 'health', needs: 'The all-in-one Discovery Bank package (account and credit card)',
     offer: `An Apple Watch on a 24-month contract, for a once-off ${R(val('appleWatchActivation'))} activation fee. You pay less, or nothing, in months you meet your weekly exercise goals.`,
     measuredBy: 'From the Apple Watch payments on your Discovery statements.' },
   { id: 'interest', products: ['bank'], label: 'Extra interest and cashback', question: 'Do you keep savings or money in your Discovery accounts?', lineKeys: ['interest.boost', 'interest.cashback'],
     group: 'money', needs: WITH_BANK,
     offer: `Extra interest on your savings and on money left in the card, up to ${pct(best('savingsBoostPct'))} more at Diamond status on the Black Suite.`,
     measuredBy: 'From the extra interest and cashback on your Discovery statements.' },
-  { id: 'milesPlus', products: ['bank'], label: 'Spending your Miles', question: 'How do you spend your Miles: on Ð-Day, at Discovery Miles partners, or on electricity and data?', lineKeys: ['miles.uplift'],
+  { id: 'milesPlus', products: ['bank'], label: 'Spending your Miles', question: 'How do you spend your Miles: on Ð-Day (the 15th of each month), at Discovery Miles partners, or on electricity and data?', lineKeys: ['miles.uplift'],
     group: 'money', needs: WITH_BANK,
-    offer: `Spend Miles at Discovery Miles partners and get ${pct(val('milesPartnerPct'))} off for each Vitality programme you have, so up to ${pct(val('milesPartnerPct') * 3)} with Vitality Money, Health and Drive. It is double on Ð-Day (the 15th), up to ${pct(val('milesDdayPct') * 3)}. Prepaid electricity, data and airtime in the app get the everyday discount, not the Ð-Day one. Anywhere else, ${Math.round(1 / FACE_VALUE)} Miles are worth ${R(1)}. That goes for Vitality Health's Miles too.`,
+    offer: `Spend Miles at Discovery Miles partners and get ${pct(val('milesPartnerPct'))} off for each Vitality programme you have, so up to ${pct(val('milesPartnerPct') * 3)} with Vitality Money, Health and Drive. It is double on Ð-Day (the 15th of each month), up to ${pct(val('milesDdayPct') * 3)}. Prepaid electricity, data and airtime in the app get the everyday discount, not the Ð-Day one. Anywhere else a Mile is worth 10c. That goes for Vitality Health's Miles too.`,
     measuredBy: 'From your Miles statement, or from how you said you spend your Miles.' },
   { id: 'gym', products: ['health'], label: 'Gym discount', question: 'Do you go to Virgin Active or Planet Fitness?', lineKeys: [],
     group: 'health', needs: 'Vitality Health',
@@ -126,7 +128,7 @@ const NEEDS = {
   bank: { test: x => x.products.bank, why: 'You do not bank with Discovery.' },
   anyCard: { test: x => x.kind !== 'savings', why: 'A savings account on its own earns no Miles. It needs a Discovery Bank card.' },
   card: { test: x => x.kind === 'suite' || x.kind === 'card', why: 'It needs a Discovery Bank credit card, in a Suite or a Credit Card Account.' },
-  suite: { test: x => x.kind === 'suite', why: 'It needs a Discovery Bank Suite with a credit card.' },
+  suite: { test: x => x.kind === 'suite', why: 'It needs the all-in-one Discovery Bank package (account and credit card).' },
   money: { test: x => x.money, why: 'It needs Vitality Money, which you do not have.' },
   health: { test: x => x.vitality.health, why: 'It needs Vitality Health, which you do not have.' },
   insure: { test: x => x.products.insure, why: 'It needs Discovery Insure.' },
@@ -160,20 +162,26 @@ const KINDS = ['suite', 'card', 'transaction', 'savings'];
 const bankKindOf = settings => (KINDS.includes(settings && settings.bankKind) ? settings.bankKind : 'suite');
 
 /* settings: plugin settings (bankKind); products: resolveProducts() map;
-   vitality: resolved { money, health, drive } booleans.
+   vitality: resolved { money, health, drive } booleans; evidence (optional):
+   { moneyProven } — the statements show something only Vitality Money pays
+   (the extra interest, its fee, the bank's Miles), so it is there even when
+   the only Discovery account in the budget is a savings account (the card
+   or transaction account it came with is simply not imported).
    → { lines: Set of the line keys this setup can earn,
        benefits: { [id]: { available, reason, note } } }
    reason says why a benefit is not available; note says which part of an
    available one is not (the bank's extra, say). */
-function availableFor(settings, products, vitality) {
+function availableFor(settings, products, vitality, evidence) {
   const p = products || {}, v = vitality || {};
   const kind = bankKindOf(settings);
+  const proven = !!(evidence && evidence.moneyProven);
   const x = {
     kind,
     products: { bank: p.bank === true, insure: p.insure === true },
     vitality: { health: v.health === true, drive: v.drive === true },
-    /* Vitality Money never comes with a savings account on its own */
-    money: v.money === true && kind !== 'savings',
+    /* Vitality Money never comes with a savings account on its own, unless
+       the statements prove it is there */
+    money: v.money === true && (kind !== 'savings' || proven),
   };
   const blocked = key => {
     for (const n of LINE_NEEDS[key] || []) {
@@ -227,7 +235,7 @@ function benefitsFor(products, settings, vitality) {
 }
 
 /* ── The offer at THIS person's tier and statuses ───────────────────── */
-const STATUS = s => (s && typeof s === 'string' ? s : 'Blue');
+const STATUS = s => statusOf(s);
 /* the most a band rate pays at this tier and status (the top spend band) */
 const TOP_SPEND = 1e9;
 
@@ -245,7 +253,8 @@ function offerText(benefit, settings) {
   const prod = bankProductOf(s);
   const ccOnly = bankKindOf(s) === 'card';
   const rt = (key, spend) => rate(s, key, status, { spend: spend || 0 });
-  const at = `at your ${status.money} Vitality Money status on the ${prod.label}`;
+  /* Ruan's words for the statuses: bank, health and car score */
+  const at = `with your bank score at ${status.money} (Vitality Money status) on the ${prod.label}`;
   const bankAdds = (key, cap) => {
     const p = rt(key, TOP_SPEND);
     return p > 0
@@ -256,14 +265,14 @@ function offerText(benefit, settings) {
   const checks = (key, what) => {
     const now = rt(key);
     const up = caseVal(key, 'assessed');
-    const raise = up !== null && up > now ? ` It goes up to ${pct(up)} once you have done your Vitality Age and a Vitality Health Check in the last 12 months.` : '';
-    return `Vitality Health gives ${pct(now)} ${what}.${raise} The health checks set this, not your ${status.health} Vitality Health status.`;
+    const raise = up !== null && up > now ? ` It goes up to ${pct(up)} once you have done your Vitality Age (an online health-age test) and a Vitality Health Check (a screening at a clinic or pharmacy) in the last 12 months.` : '';
+    return `Vitality Health gives ${pct(now)} ${what}.${raise} The health checks set this, not your health score (Vitality Health status, ${status.health}).`;
   };
   switch (b.id) {
     case 'miles': {
       const per = rt(ccOnly ? 'ccMilesRandPerMile' : 'milesRandPerMile');
       if (!(per > 0)) return `The ${prod.label} earns no Miles on card spend.`;
-      return `One Discovery Mile for every ${R(per)} you pay with the virtual card ${at}, on up to ${R(rt('milesThreshold'))} a month, then one for every ${R(rt('milesAboveThreshold'))}. Partners take ${Math.round(1 / rt('mileValue'))} Miles as ${R(1)}.`;
+      return `One Discovery Mile for every ${R(per)} you pay with the virtual card ${at}, on up to ${R(rt('milesThreshold'))} a month, then one for every ${R(rt('milesAboveThreshold'))}. At partners, ${Math.round(1 / rt('mileValue'))} Miles pay for ${R(1)} of shopping.`;
     }
     case 'healthyFood':
       return `${checks('healthyFoodHealthPct', `back on HealthyFood at your main shop, on up to ${R(rt('healthyFoodHealthCap'))} a month for the family`)} ${bankAdds('healthyFoodMoneyPct', 'healthyFoodMoneyCap')}`;
@@ -274,8 +283,8 @@ function offerText(benefit, settings) {
       const cap = rt('fuelCap');
       const home = caseAt('fuelCap', 'homeBoth', status.drive);
       const first = drive > 0
-        ? `Vitality Drive gives ${pct(drive)} back at bp and Shell at your ${status.drive} Drive status on the Classic or Purple plan, and half that on Essential. That is on up to ${R(cap)} of fuel a month per driver.${home > cap ? ` If Discovery also insures your home, the limit at your status goes up to ${R(home)}.` : ''}`
-        : `Vitality Drive gives nothing back at your ${status.drive} Drive status yet.`;
+        ? `Vitality Drive gives ${pct(drive)} back at bp and Shell with your car score at ${status.drive} (Vitality Drive status) on the Classic or Purple plan, and half that on Essential. That is on up to ${R(cap)} of fuel a month per driver.${home > cap ? ` If Discovery also insures your home, the limit at your car score goes up to ${R(home)}.` : ''}`
+        : `Vitality Drive gives nothing back with your car score at ${status.drive} (Vitality Drive status) yet.`;
       return `${first} ${bankAdds('fuelMoneyPct')}`;
     }
     case 'flights':
@@ -284,23 +293,28 @@ function offerText(benefit, settings) {
       const boost = rt(ccOnly ? 'ccSavingsBoostPct' : 'savingsBoostPct');
       return boost > 0
         ? `Extra interest on your savings and on money left in the card, ${pct(boost)} more ${at}.`
-        : `No extra interest ${at} yet. It grows as your status goes up.`;
+        : `No extra interest ${at} yet. It grows as your bank score goes up.`;
     }
     case 'milesPlus': {
       const v = s.vitality || {};
       const n = ['money', 'health', 'drive'].filter(k => v[k] === true).length;
       /* the discounts are for Discovery Bank clients with Vitality Money
          (Discovery Miles bank benefit guide), as the model counts them */
-      if (v.money === false) return 'Discounts on spending your Miles need Vitality Money with Discovery Bank. Without it, a Mile buys its face value.';
+      if (v.money === false) return 'Discounts on spending your Miles need Vitality Money with Discovery Bank. Without it, a Mile is worth 10c.';
       if (!n) return b.offer;
       const each = rt('milesPartnerPct'), dday = rt('milesDdayPct');
-      return `You have ${n === 1 ? 'one Vitality programme' : `${n === 2 ? 'two' : 'three'} Vitality programmes`}, so your Miles get ${pct(each * n)} off at Discovery Miles partners, at ${pct(each)} for each. On Ð-Day (the 15th) it is ${pct(dday * n)}. Prepaid electricity, data and airtime in the app get the everyday ${pct(each * n)}, not the Ð-Day figure.`;
+      return `You have ${n === 1 ? 'one Vitality programme' : `${n === 2 ? 'two' : 'three'} Vitality programmes`}, so your Miles get ${pct(each * n)} off at Discovery Miles partners, at ${pct(each)} for each. On Ð-Day (the 15th of each month) it is ${pct(dday * n)}. Prepaid electricity, data and airtime in the app get the everyday ${pct(each * n)}, not the Ð-Day figure.`;
     }
     case 'gym': {
       const now = rt('gymDiscountPct');
       const up = caseVal('gymDiscountPct', 'gym36');
-      return `${pct(now)} off Virgin Active or Planet Fitness fees with Vitality Health.${up !== null && up > now ? ` It is ${pct(up)} off a one-gym membership once you work out there at least 36 times in 12 months.` : ''} Your workouts set this, not your ${status.health} Vitality Health status.`;
+      return `${pct(now)} off Virgin Active or Planet Fitness fees with Vitality Health.${up !== null && up > now ? ` It is ${pct(up)} off a one-gym membership once you work out there at least 36 times in 12 months.` : ''} Your workouts set this, not your health score (Vitality Health status, ${status.health}).`;
     }
+    case 'gameboard':
+      /* without Discovery Bank there is no gameboard: Vitality Health's own
+         exercise rewards are what is left */
+      if (s.products && s.products.bank === false) return 'Vitality Health gives you rewards for meeting your weekly exercise goals, which you spend on Vitality Active Rewards (a coffee or a smoothie, say). The gameboard (the weekly game in the Discovery Bank app) needs Discovery Bank, so it is not part of your setup.';
+      return b.offer;
     case 'appleWatch':
       return `An Apple Watch on a 24-month contract, for a once-off ${R(rt('appleWatchActivation'))} activation fee. You pay less, or nothing, in months you meet your weekly exercise goals.`;
     default:
@@ -343,29 +357,45 @@ function shopsSeen(m, shops) {
 }
 
 /* m: measured window (measure.js); milesSummary: summariseMiles() or null;
-   settings: plugin settings.
+   settings: plugin settings; ctx (optional, from model.js so the sentences
+   use the statement's own figures): { cardSpendYear, cardSpendSource:
+   'statement'|'debit'|'transactions', mileValue } — the card spend a year
+   the Miles line uses, and what a Mile the bank paid is counted at.
    → { [id]: { suggested: 'full'|'half'|'none', why: 'plain sentence' } } */
-function suggestBenefits(m, milesSummary, settings) {
+function suggestBenefits(m, milesSummary, settings, ctx) {
   const s = settings || {};
+  const c = ctx || {};
   const when = inWindow(m);
   const ms = statementIn(milesSummary, m);
   const stmtMiles = key => (ms && ms.figures && ms.figures[key]) || 0;
+  /* a Mile the bank paid at the value its line uses; Vitality Health's at 10c */
+  const bankMile = num(c.mileValue) && c.mileValue > 0 ? Number(c.mileValue) : FACE_VALUE;
   const out = {};
   const put = (id, suggested, why) => { out[id] = { suggested, why }; };
 
   // Miles on every card payment
-  const card = Math.max(0, total(m, 'spend.card'));
-  put('miles', 'full', card >= 0.5
-    ? `You paid ${money(card)} by Discovery Bank card ${when}. Miles are earned on every card payment.`
-    : 'Miles are earned on every Discovery Bank card payment, without you doing anything.');
+  if (num(c.cardSpendYear)) {
+    const year = Math.max(0, Number(c.cardSpendYear));
+    const how = c.cardSpendSource === 'statement' ? ' (as counted on your Miles statement)' : c.cardSpendSource === 'debit' ? ' (your debit card, debit orders included)' : '';
+    put('miles', 'full', year >= 0.5
+      ? `You pay about ${money(year)} a year by Discovery Bank card${how}. Miles are earned on every card payment.`
+      : 'Miles are earned on every Discovery Bank card payment, without you doing anything.');
+  } else {
+    const card = Math.max(0, total(m, 'spend.card'));
+    put('miles', 'full', card >= 0.5
+      ? `You paid ${money(card)} by Discovery Bank card ${when}. Miles are earned on every card payment.`
+      : 'Miles are earned on every Discovery Bank card payment, without you doing anything.');
+  }
 
   // HealthyFood and HealthyCare: shopping at the partner shops
   const shops = (id, list, kind, stmtKeys, noneText) => {
     const seen = shopsSeen(m, list);
     const rand = seen.reduce((t, x) => t + x.rand, 0);
     const fromStmt = stmtKeys.reduce((t, k) => t + Math.max(0, stmtMiles(k)), 0);
+    /* the bank's Miles at the bank's Mile value, Vitality Health's at 10c */
+    const worth = stmtKeys.reduce((t, k) => t + Math.max(0, stmtMiles(k)) * (/^money\./.test(k) ? bankMile : FACE_VALUE), 0);
     if (rand >= 0.5) put(id, 'full', `You spent ${money(rand)} at ${joinNames(seen.map(x => x.name))} ${when}.`);
-    else if (fromStmt >= 0.5) put(id, 'full', `Your Miles statement shows ${fmtMiles(fromStmt)} of ${kind} rewards ${when}, worth ${money(fromStmt * FACE_VALUE)}.`);
+    else if (fromStmt >= 0.5) put(id, 'full', `Your Miles statement shows ${fmtMiles(fromStmt)} of ${kind} rewards ${when}, worth ${money(worth)}.`);
     else put(id, 'none', noneText);
   };
   shops('healthyFood', [['shop.checkers', 'Checkers'], ['shop.woolworths', 'Woolworths'], ['shop.pnp', 'Pick n Pay']], 'HealthyFood',
@@ -381,9 +411,9 @@ function suggestBenefits(m, milesSummary, settings) {
   const otherText = otherFuel >= 0.5 ? ` You also spent ${money(otherFuel)} at other fuel brands, which earn nothing.` : '';
   if (fuelRand >= 0.5) put('fuel', 'full', `You spent ${money(fuelRand)} on fuel at ${joinNames(fuelSeen.map(x => x.name))} ${when}.${otherText}`);
   else if (driveCash >= 0.5) put('fuel', 'full', `Vitality Drive paid you ${money(driveCash)} in fuel rewards ${when}.`);
-  else if (stmtMiles('money.fuel') >= 0.5) put('fuel', 'full', `Your Miles statement shows ${fmtMiles(stmtMiles('money.fuel'))} of fuel rewards ${when}, worth ${money(stmtMiles('money.fuel') * FACE_VALUE)}.`);
+  else if (stmtMiles('money.fuel') >= 0.5) put('fuel', 'full', `Your Miles statement shows ${fmtMiles(stmtMiles('money.fuel'))} of fuel rewards ${when}, worth ${money(stmtMiles('money.fuel') * bankMile)}.`);
   /* Vitality Drive can pay its fuel rewards in Miles instead of cash */
-  else if (stmtMiles('drive') >= 0.5) put('fuel', 'full', `Your Miles statement shows ${fmtMiles(stmtMiles('drive'))} from Vitality Drive ${when}, worth ${money(stmtMiles('drive') * FACE_VALUE)}.`);
+  else if (stmtMiles('drive') >= 0.5) put('fuel', 'full', `Your Miles statement shows ${fmtMiles(stmtMiles('drive'))} from Vitality Drive ${when}, worth ${money(stmtMiles('drive') * bankMile)}.`);
   else if (otherFuel >= 0.5) put('fuel', 'none', `You spent ${money(otherFuel)} on fuel ${when}, all at other brands, which earn nothing. Only bp and Shell count.`);
   else put('fuel', 'none', `We found no fuel bought at bp or Shell ${when}.`);
 
@@ -414,7 +444,7 @@ function suggestBenefits(m, milesSummary, settings) {
   // Miles spent at better than face value (Discovery Miles partners, Ð-Day)
   if (!ms) {
     const use = s.milesUse;
-    if (use === 'dday') put('milesPlus', 'full', 'You said you spend your Miles on Ð-Day (the 15th) at Discovery Miles partners.');
+    if (use === 'dday') put('milesPlus', 'full', 'You said you spend your Miles on Ð-Day (the 15th of each month) at Discovery Miles partners.');
     else if (use === 'partners') put('milesPlus', 'full', 'You said you spend your Miles at Discovery Miles partners.');
     else if (use === 'utilities') put('milesPlus', 'full', 'You said you spend your Miles on electricity, data or airtime in the app. They get the everyday discount there, but not the Ð-Day one.');
     else if (use === 'none') put('milesPlus', 'none', 'You said you do not spend your Miles.');
@@ -424,14 +454,17 @@ function suggestBenefits(m, milesSummary, settings) {
   else {
     const face = ms.spentMiles * FACE_VALUE;
     const extra = Math.max(0, (ms.spentRand || 0) - face);
-    if (extra >= 0.5) put('milesPlus', 'full', `Your Miles bought ${money(ms.spentRand)} of goods ${when}, ${money(extra)} more than their face value.`);
-    else put('milesPlus', 'none', `Your Miles bought ${money(Math.max(0, ms.spentRand || 0))} of goods ${when}, no more than their face value.`);
+    if (extra >= 0.5) put('milesPlus', 'full', `Your Miles bought ${money(ms.spentRand)} of goods ${when}, ${money(extra)} more than they would at 10c a Mile.`);
+    else put('milesPlus', 'none', `Your Miles bought ${money(Math.max(0, ms.spentRand || 0))} of goods ${when}, no more than they would at 10c a Mile.`);
   }
 
   // The gameboard: only the Miles statement shows it
   const board = Math.max(0, stmtMiles('gameboard'));
-  if (!ms) put('gameboard', 'half', 'There is no Miles statement to show whether you play the gameboard, so it counts at half.');
-  else if (board >= 0.5) put('gameboard', 'full', `Your Miles statement shows ${fmtMiles(board)} from the gameboard ${when}, worth ${money(board * FACE_VALUE)}.`);
+  const noBank = s.products && s.products.bank === false;
+  if (!ms) put('gameboard', 'half', noBank
+    ? 'Without Discovery Bank there is no gameboard. There is no Miles statement to show Vitality Health\'s exercise rewards, so they count at half.'
+    : 'There is no Miles statement to show whether you play the gameboard (the weekly game in the Discovery Bank app), so it counts at half.');
+  else if (board >= 0.5) put('gameboard', 'full', `Your Miles statement shows ${fmtMiles(board)} from the gameboard (the weekly game in the Discovery Bank app) ${when}, worth ${money(board * bankMile)}.`);
   else put('gameboard', 'none', `Your Miles statement shows no gameboard rewards ${when}.`);
 
   /* You said you use something the budget shows no sign of: the payments
@@ -450,6 +483,16 @@ function suggestBenefits(m, milesSummary, settings) {
   return out;
 }
 
+/* The benefit's question for this person's setup: without Discovery Bank
+   the gameboard is not theirs, so it asks about the exercise goals only. */
+function questionText(benefit, settings) {
+  const b = typeof benefit === 'string' ? BENEFITS.find(x => x.id === benefit) : benefit;
+  if (!b) return '';
+  const p = (settings && settings.products) || {};
+  if (b.id === 'gameboard') return p.bank === false ? 'Do you meet your weekly exercise goals with Vitality Health?' : 'Do you meet your weekly exercise goals and play the gameboard (the weekly game in the Discovery Bank app)?';
+  return b.question;
+}
+
 /* The level that counts: the person's own choice beats the suggestion. */
 function levelOf(settings, id, suggestion) {
   const set = settings && settings.benefits && settings.benefits[id];
@@ -458,4 +501,4 @@ function levelOf(settings, id, suggestion) {
   return isLevel(sug) ? sug : 'full';
 }
 
-module.exports = { BENEFITS, GROUPS, WEIGHT, LINE_NEEDS, benefitsFor, availableFor, offerText, bankKindOf, suggestBenefits, levelOf, anyKey };
+module.exports = { BENEFITS, GROUPS, WEIGHT, LINE_NEEDS, benefitsFor, availableFor, offerText, questionText, bankKindOf, suggestBenefits, levelOf, anyKey };

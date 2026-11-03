@@ -1,5 +1,5 @@
 'use strict';
-const { Plugin, Notice } = require('obsidian');
+const { Plugin, Notice, normalizePath } = require('obsidian');
 const { VIEW_TYPE, DEFAULT_SETTINGS } = require('./constants');
 const { BottomLineView } = require('./view');
 const { SettingsTab } = require('./settings-tab');
@@ -10,6 +10,8 @@ const { makeFontLoader } = require('./font-loader');
    reaches someone whose data.json predates it. */
 function mergeSettings(saved) {
   const out = { ...DEFAULT_SETTINGS, ...(saved || {}) };
+  /* a window of 3 months is no longer offered (it is always "Not enough data") */
+  if (!(Number(out.months) >= 6)) out.months = 6;
   for (const k of ['status', 'rates', 'actualMiles', 'travel', 'members', 'quotes', 'products', 'benefits', 'vitality', 'conditions', 'health', 'life', 'home', 'bill']) out[k] = { ...DEFAULT_SETTINGS[k], ...((saved || {})[k] || {}) };
   return out;
 }
@@ -50,7 +52,11 @@ class DiscoveryWorthItPlugin extends Plugin {
   async readBudget() {
     const vault = this.app.vault;
     const files = new Map(vault.getFiles().filter(f => f.extension === 'md' || f.extension === 'csv').map(f => [f.path, f]));
-    const b = await loadBudget({ paths: () => [...files.keys()], read: p => vault.cachedRead(files.get(p)), stat: p => files.get(p).stat }, this.settings.budgetFolder);
+    /* the folder as typed in settings, tidied the way Obsidian tidies paths
+       (stray slashes, a leading slash); blank stays blank so it is searched for */
+    const typed = String(this.settings.budgetFolder || '').trim();
+    const folder = typed ? normalizePath(typed) : '';
+    const b = await loadBudget({ paths: () => [...files.keys()], read: p => vault.cachedRead(files.get(p)), stat: p => files.get(p).stat }, folder);
     this.budgetFolder = b.folder;
     return b;
   }

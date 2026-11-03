@@ -232,4 +232,46 @@ assert.strictEqual(RB[0].rivals.find(r => r.name === 'Capitec').items[0].kind, '
   const swQuote = bs(stG, gapCmp([{ provider: 'Gapco', plan: 'Lite', monthly: 300, ageLimited: false, quoted: true }]), { gap: true });
   assert.ok(JSON.stringify(swQuote).includes('Gapco'), 'a typed quote is used');
 }
+
+// ── round 2 (lane H2): Compare agrees with the Health verdict, and says why a row is assumed ──
+{
+  const hNow = { ...health, vitalityKnown: true };
+  /* the debit could not be split: the medical aid is not compared (before: the whole debit, Vitality included, against rivals) */
+  const un = buildSwitch(st, { health: { ...health, vitalityKnown: false } }, { health: true });
+  const med = un.rows.find(r => r.key === 'medical');
+  assert.ok(med.assumed && med.assumedWhy === 'unsplit' && med.go === med.stay, JSON.stringify(med));
+  const rvU = buildRivals(st, { health: { ...health, vitalityKnown: false } }, { health: true }).find(s => s.id === 'medical');
+  assert.strictEqual(rvU.comparable, false);
+  assert.ok(rvU.rivals.every(r => r.gap === null && r.assumedWhy === 'unsplit'), 'no price gap against an unknown medical aid price');
+  /* the plan's price changed since the table */
+  const stale = buildSwitch({ ...st, bill: { priceStale: true } }, { health: hNow }, { health: true }).rows.find(r => r.key === 'medical');
+  assert.ok(stale.assumed && stale.assumedWhy === 'stale' && /changed since/.test(stale.goNote), JSON.stringify(stale));
+  /* a split, current price is compared, with a gap per rival */
+  const ok = buildSwitch(st, { health: hNow }, { health: true }).rows.find(r => r.key === 'medical');
+  assert.ok(!ok.assumed && ok.assumedWhy === null && ok.go < ok.stay);
+  const rvOk = buildRivals(st, { health: hNow }, { health: true }).find(s => s.id === 'medical');
+  const bm = rvOk.rivals.find(r => r.name === 'Bestmed Pace');
+  near(bm.gap, bm.real - rvOk.discovery.real, 'gap = rival after rewards less Discovery after rewards');
+  assert.strictEqual(rvOk.rivals.find(r => r.pay === null).assumedWhy, 'noQuote');
+  /* opts.now: other medical aids' prices not for that day → stale, not compared */
+  const { PERIODS } = require('../src/market');
+  const after = PERIODS.schemes.changes;
+  const later = buildSwitch(st, { health: hNow }, { health: true }, { now: after }).rows.find(r => r.key === 'medical');
+  assert.ok(later.assumed && later.assumedWhy === 'stale', JSON.stringify(later));
+  const quotedLater = { ...hNow, rows: hNow.rows.map(r => (r.id === 'bestmed' ? { ...r, quoted: true } : r)) };
+  assert.ok(!buildSwitch(st, { health: quotedLater }, { health: true }, { now: after }).rows.find(r => r.key === 'medical').assumed, 'your own quote is always current');
+  /* car / life with no quote: the glossary's sentence */
+  const car = buildSwitch(st, { insure: insureNoQuote }, { insure: true }).rows.find(r => r.key === 'car');
+  assert.strictEqual(car.assumedWhy, 'noQuote');
+  assert.ok(/^No quote yet, so we used today's price\. Switching pays if their quote is under R\s1\s000 a month\.$/.test(car.goNote), car.goNote);
+  /* an ended product has no Vitality or Drive rewards left to lose */
+  const stEnded = { ...st, confidence: { ended: { health: '2026-02-02', insure: '2026-03-03' } } };
+  const se = buildSwitch(stEnded, {}, { health: true, insure: true });
+  assert.ok(!se.rows.some(r => r.key === 'vitality' || r.key === 'vitality.rewards' || r.key === 'drive'), se.rows.map(r => r.key).join(','));
+  /* an unconfirmed rival bank is named with a caveat */
+  const stU = { ...st, chosen: { id: 'capitec', name: 'Capitec Global One', fees: 690, rewards: 300, unconfirmed: true } };
+  const bankRow = buildSwitch(stU, {}, { bank: true }).rows.find(r => r.key === 'bank');
+  assert.ok(bankRow.unconfirmed && /not confirmed/.test(bankRow.goNote), JSON.stringify(bankRow));
+}
+console.log('switch round 2 OK');
 console.log('switch back items OK');

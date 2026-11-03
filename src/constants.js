@@ -31,7 +31,9 @@ const lead = (body, flags) => new RegExp(VERB_PREFIX + '(?:' + body + ')', flags
 const RULES = [
   { key: 'fee.account', desc: /monthly account fee/i, discoveryOnly: true, direction: 'cost' },
   { key: 'fee.facility', desc: /facility fee/i, discoveryOnly: true, direction: 'cost' },
-  { key: 'fee.vitalityMoney', desc: /vitality money premium/i, discoveryOnly: true, direction: 'cost' },
+  /* The Vitality Money premium, however the statement words it: "Vitality
+     Money premium", "Vitality Money fee", "VM fee". */
+  { key: 'fee.vitalityMoney', desc: /vitality money (?:monthly )?(?:premium|fee|subscription)|\bVM (?:monthly )?(?:premium|fee)\b/i, discoveryOnly: true, direction: 'cost' },
   { key: 'fee.fx', desc: /intl payment fee|international payment fee|forex fee/i, discoveryOnly: true, direction: 'cost' },
   { key: 'interest.boost', desc: /dynamic interest boost/i, discoveryOnly: true, direction: 'income' },
   { key: 'interest.cashback', desc: /dynamic interest cashback/i, discoveryOnly: true, direction: 'income' },

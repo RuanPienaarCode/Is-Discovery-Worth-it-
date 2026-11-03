@@ -19,12 +19,14 @@ function toBuffer(b64) {
 }
 
 /* opts: { faces: { [weight]: base64 }, doc, FontFaceImpl, log } — the
-   defaults are the real document and src/fonts.js; tests pass their own. */
+   defaults are the real document and src/fonts.js; tests pass their own.
+   A face that fails is silent unless a `log` with warn() is given: the page
+   simply falls back to the system font. */
 function makeFontLoader(opts) {
   const o = opts || {};
   const doc = o.doc || (typeof document !== 'undefined' ? document : null);
   const Impl = o.FontFaceImpl || (typeof FontFace === 'function' ? FontFace : null);
-  const log = o.log || console;
+  const log = o.log || { warn() {} };
   let loading = null;
   let gen = 0;
   const added = [];

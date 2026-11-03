@@ -23,24 +23,35 @@ function txt(parent, x, y, s, cls, anchor) {
   t.textContent = s;
   return t;
 }
-/* A label wider than maxW wraps onto a second line at a word break;
-   returns the extra height it took (0 when it fits): a line is 17px, so the
-   two lines of text do not touch (Nunito's line box is about 16.4px at 12px). */
+/* A label wider than maxW wraps onto more lines at word breaks (up to
+   three, the last one cut with "…" only as a last resort); returns the extra
+   height it took (0 when it fits): a line is 17px, so lines of text do not
+   touch (Nunito's line box is about 16.4px at 12px). */
 function fitText(parent, x, y, s, maxW) {
   const t = txt(parent, x, y, s, '');
   if (!t.getComputedTextLength || t.getComputedTextLength() <= maxW) return 0;
   const words = s.split(' ');
-  let i = words.length - 1;
-  for (; i > 1; i--) {
-    t.textContent = words.slice(0, i).join(' ');
-    if (t.getComputedTextLength() <= maxW) break;
+  const fits = (node, str) => { node.textContent = str; return node.getComputedTextLength() <= maxW; };
+  let line = 0, node = t, cur = '', i = 0;
+  while (i < words.length) {
+    const next = cur ? cur + ' ' + words[i] : words[i];
+    if (fits(node, next) || !cur) { cur = next; i++; continue; }
+    /* this line is full: start the next one */
+    node.textContent = cur;
+    line++;
+    if (line >= 3) break;
+    node = txt(parent, x, y + LINE * line, '', '');
+    cur = '';
   }
-  if (i < 1) return 0;
-  t.textContent = words.slice(0, i).join(' ');
-  const rest = words.slice(i).join(' ');
-  const t2 = txt(parent, x, y + LINE, rest, '');
-  for (let n = rest.length - 1; n > 1 && t2.getComputedTextLength() > maxW; n--) t2.textContent = rest.slice(0, n) + '…';
-  return LINE;
+  if (i < words.length) {
+    /* more words than three lines hold: the third line ends with an ellipsis */
+    let rest = (cur ? cur + ' ' : '') + words.slice(i).join(' ');
+    node.textContent = rest;
+    for (let n = rest.length - 1; n > 1 && node.getComputedTextLength() > maxW; n--) node.textContent = rest.slice(0, n) + '…';
+    return LINE * Math.min(line, 2);
+  }
+  node.textContent = cur;
+  return LINE * line;
 }
 /* the pitch between two lines of SVG text */
 const LINE = 17;
@@ -66,9 +77,9 @@ function mountFlow(parent, opts) {
   }
   const legend = el(root, 'div', 'dc-fl-legend');
   const lg = (cls, label) => { const s = el(legend, 'span'); el(s, 'span', 'dc-fl-sw ' + cls); el(s, 'span', null, label); };
-  lg('out', 'Money out');
-  lg('back', 'Money back');
-  el(legend, 'span', 'dc-fl-legend-note', 'Wider band, more money');
+  lg('out', 'You pay');
+  lg('back', 'Comes back');
+  el(legend, 'span', 'dc-fl-legend-note', 'A thicker stripe means more money');
   const host = el(root, 'div', 'dc-fl-host');
   const detail = el(root, 'div', 'dc-fl-detail');
   const flows = opts.products.filter(p => p.paid >= 0.5 || p.backSum >= 0.5);
@@ -78,8 +89,8 @@ function mountFlow(parent, opts) {
      when it passes one) */
   const opened = opts.open || new Set();
   let moreSeq = 0;
-  /* the longer words under the totals wait behind More */
-  function more(parent, key, fill) {
+  /* the longer words under the totals wait behind a button that says what it opens */
+  function more(parent, key, label, fill) {
     const id = 'dc-fl-more-' + (++moreSeq);
     const btn = el(parent, 'button', 'dc-more');
     btn.type = 'button';
@@ -91,15 +102,18 @@ function mountFlow(parent, opts) {
       const on = opened.has(key);
       btn.setAttribute('aria-expanded', String(on));
       clear(btn);
-      el(btn, 'span', null, on ? 'Less' : 'More');
+      el(btn, 'span', null, on ? 'Less' : label);
       icon(btn, on ? 'chevron-up' : 'chevron-down', 'dc-more-chev');
       body.hidden = !on;
     };
     btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); if (opened.has(key)) opened.delete(key); else opened.add(key); sync(); });
     sync();
   }
-  const fmt = (v, plus) => money(opts.per(v), { plus });
-  const moneyText = (g, x, y, v, cls, anchor, plus) => txt(g, x, y, fmt(v, plus), (cls || '') + (v < 0 ? ' neg' : ' pos'), anchor);
+  /* an amount is always positive here: the words around it say which way it goes */
+  const fmt = v => money(opts.per(Math.abs(v)));
+  const moneyText = (g, x, y, v, cls, anchor) => txt(g, x, y, fmt(v), 'amt ' + (cls || ''), anchor);
+  /* what is left after rewards, as words: "R 3 092 better off" or "R 65 580 you lose" */
+  const afterWords = net => (net >= 0.5 ? `${fmt(net)} better off` : `${fmt(net)} you lose`);
 
   function link(g, p, kind, x0, a0, b0, x1, a1, b1) {
     if (b0 - a0 < 1.5) { b0 = a0 + 1.5; b1 = a1 + 1.5; }
@@ -113,14 +127,14 @@ function mountFlow(parent, opts) {
   }
   function node(g, p, x, y, w, h) {
     const n = sv('g', { class: 'dc-fl-node dc-p-' + p.id, 'data-k': p.id, tabindex: '0', role: 'button',
-      'aria-label': `${p.name}: paid ${fmt(-p.paid)}, back ${fmt(p.backSum, true)}, net ${fmt(p.net, true)}` }, g);
+      'aria-label': `${p.name}: you pay ${fmt(p.paid)}, ${fmt(p.backSum)} comes back, after rewards ${afterWords(p.net)}` }, g);
     sv('rect', { x, y, width: w, height: h, rx: 6, class: 'dc-fl-bx' }, n);
     sv('rect', { x, y, width: 4, height: h, rx: 2, class: 'dc-fl-stripe' }, n);
     return n;
   }
   function you(g, attrs) {
     return sv('g', Object.assign({ class: 'dc-fl-node dc-fl-you', 'data-k': 'you', tabindex: '0', role: 'button',
-      'aria-label': `From you: ${fmt(-OUT)} to Discovery, ${fmt(BACK, true)} back` }, attrs || {}), g);
+      'aria-label': `From you: ${fmt(OUT)} to Discovery, ${fmt(BACK)} comes back` }, attrs || {}), g);
   }
 
   function wide(svg, W) {
@@ -129,7 +143,7 @@ function mountFlow(parent, opts) {
     const sumMid = flows.reduce((s, p) => s + Math.max(p.paid, p.backSum), 0) || 1;
     const s = (Math.max(380, Math.min(500, W * 0.55)) - gap * 4) / sumMid;
     let y = top;
-    for (const p of flows) { const h = Math.max(48, Math.max(p.paid, p.backSum) * s); p.box = { y, h }; y += h + gap; }
+    for (const p of flows) { const h = Math.max(66, Math.max(p.paid, p.backSum) * s); p.box = { y, h }; y += h + gap; }
     const midH = y - gap, youH = Math.max(40, OUT * s), youY = top + (midH - top - youH) / 2;
     const gl = sv('g', {}, svg), gn = sv('g', {}, svg), gt = sv('g', {}, svg);
     txt(gt, 0, 14, 'From you', 'h'); txt(gt, prodX, 14, 'Discovery', 'h'); txt(gt, backX, 14, 'Back to you', 'h');
@@ -140,13 +154,13 @@ function mountFlow(parent, opts) {
       if (p.paid >= 0.5) {
         link(gl, p, 'out', youW, a0, b0, prodX, p.box.y, p.box.y + p.paid * s);
         const ol = sv('g', { 'data-k': p.id }, gt);
-        moneyText(ol, prodX - 8, p.box.y + Math.max(p.paid * s, 2) / 2 + 4, -p.paid, 'dc-fl-halo', 'end');
+        moneyText(ol, prodX - 8, p.box.y + Math.max(p.paid * s, 2) / 2 + 4, p.paid, 'dc-fl-halo', 'end');
         if (p.via) txt(ol, prodX - 8, p.box.y + Math.max(p.paid * s, 2) / 2 + 4 + LINE, 'via payslip', 'm dc-fl-halo', 'end');
       }
       const n = node(gn, p, prodX, p.box.y, boxW, p.box.h);
       txt(n, prodX + 12, p.box.y + 18, p.name, 'b');
-      txt(n, prodX + 12, p.box.y + 34, 'net', 'm');
-      moneyText(n, prodX + 36, p.box.y + 34, p.net, '', 'start', true);
+      txt(n, prodX + 12, p.box.y + 34, 'after rewards', 'm');
+      txt(n, prodX + 12, p.box.y + 51, afterWords(p.net), 'amt ' + (p.net >= 0.5 ? 'pos' : ''));
       let bc = 0;
       for (const b of p.back) {
         const h = Math.max(b.v * s, 2), ny = Math.max(cursor, p.box.y + bc * s);
@@ -156,7 +170,7 @@ function mountFlow(parent, opts) {
         sv('rect', { x: backX, y: ny, width: 8, height: h, rx: 1, class: 'dc-fl-bar' }, bg);
         /* a long label wraps, as in the narrow layout: a landscape phone is "wide" too */
         const extra = fitText(bg, backX + 14, ny + 12, b.label, W - backX - 16);
-        moneyText(bg, backX + 14, ny + 12 + LINE + extra, b.v, '', 'start', true);
+        moneyText(bg, backX + 14, ny + 12 + LINE + extra, b.v, '', 'start');
         cursor = ny + Math.max(h, 18 + LINE + extra) + 6;
       }
       if (!p.back.length) {
@@ -168,7 +182,7 @@ function mountFlow(parent, opts) {
     const u = you(gn);
     sv('rect', { x: 0, y: youY, width: youW, height: youH, rx: 6, class: 'dc-fl-bx' }, u);
     txt(u, 10, youY + 18, 'Your money', 'b');
-    moneyText(u, 10, youY + 34, -OUT, '', 'start');
+    moneyText(u, 10, youY + 34, OUT, '', 'start');
     txt(u, 10, youY + 50, 'salary and card', 'm');
     return Math.max(midH, cursor) + 8;
   }
@@ -180,15 +194,17 @@ function mountFlow(parent, opts) {
     const s = 84 / biggest, rowGap = 16;
     let y = 38;
     const gl = sv('g', {}, svg), gn = sv('g', {}, svg), gt = sv('g', {}, svg);
-    txt(gt, 0, 13, 'From you', 'h'); moneyText(gt, 0, 29, -OUT, '', 'start');
-    txt(gt, backX, 13, 'Back to you', 'h'); moneyText(gt, backX, 29, BACK, '', 'start', true);
+    txt(gt, 0, 13, 'From you', 'h'); moneyText(gt, 0, 29, OUT, '', 'start');
+    txt(gt, backX, 13, 'Back to you', 'h'); moneyText(gt, backX, 29, BACK, '', 'start');
     const first = y;
     for (const p of flows) {
-      const bh = Math.max(60, p.paid * s, p.backSum * s);
+      const bh = Math.max(98, p.paid * s, p.backSum * s);
       const n = node(gn, p, boxX, y, boxW, bh);
       txt(n, boxX + 10, y + 17, p.short, 'b');
-      txt(n, boxX + 10, y + 33, 'paid', 'm'); moneyText(n, boxX + boxW - 6, y + 33, -p.paid, '', 'end');
-      txt(n, boxX + 10, y + 49, 'net', 'm'); moneyText(n, boxX + boxW - 6, y + 49, p.net, '', 'end', true);
+      txt(n, boxX + 10, y + 33, 'you pay', 'm'); moneyText(n, boxX + boxW - 6, y + 33, p.paid, '', 'end');
+      txt(n, boxX + 10, y + 49, 'after rewards', 'm');
+      moneyText(n, boxX + 10, y + 66, p.net, p.net >= 0.5 ? 'pos' : '', 'start');
+      txt(n, boxX + 10, y + 82, p.net >= 0.5 ? 'better off' : 'you lose', 'm');
       if (p.paid >= 0.5) link(gl, p, 'out', spineW, y, y + p.paid * s, boxX, y, y + p.paid * s);
       if (p.via) txt(sv('g', { 'data-k': p.id }, gt), spineW + 4, y + p.paid * s + 12, 'payslip', 'm dc-fl-halo');
       let bc = 0, ny = y;
@@ -199,7 +215,7 @@ function mountFlow(parent, opts) {
         const bg = sv('g', { class: 'dc-p-' + p.id, 'data-k': p.id }, gn);
         sv('rect', { x: backX, y: ny, width: 6, height: h, rx: 1, class: 'dc-fl-bar' }, bg);
         const extra = fitText(bg, backX + 11, ny + 12, b.label, W - backX - 13);
-        moneyText(bg, backX + 11, ny + 12 + LINE + extra, b.v, '', 'start', true);
+        moneyText(bg, backX + 11, ny + 12 + LINE + extra, b.v, '', 'start');
         ny += 20 + LINE + extra;
       }
       if (!p.back.length) {
@@ -221,41 +237,43 @@ function mountFlow(parent, opts) {
     const p = flows.find(x => x.id === k);
     detail.className = 'dc-fl-detail' + (p ? ' dc-p-' + p.id : '');
     const rows = el(null, 'dl', 'dc-fl-rows');
-    const row = (label, v, plus, cls) => {
+    /* an amount is plain; only the "after rewards" result is coloured */
+    const row = (label, v, tone, cls) => {
       el(rows, 'dt', cls || null, label);
       const dd = el(rows, 'dd', cls || null);
-      el(dd, 'span', 'dc-amt ' + (v < 0 ? 'is-neg' : 'is-pos'), fmt(v, plus));
+      el(dd, 'span', 'dc-amt ' + (tone === 'result' ? (v >= 0.5 ? 'is-pos' : 'is-plain') : 'is-plain'), fmt(v));
     };
+    const netLabel = v => (v >= 0.5 ? `Better off after rewards, ${opts.perLabel()}` : `What you lose after rewards, ${opts.perLabel()}`);
     const title = el(detail, 'h3', 'dc-fl-d-t');
     if (!p && k !== 'you') {
       el(title, 'span', null, 'Tap a product to follow it');
-      row('Paid to Discovery', -OUT);
-      row('Back to you, in cash and rewards', BACK, true);
-      row(`Back minus paid, ${opts.perLabel()}`, BACK - OUT, true, 'net');
+      row('You pay Discovery', OUT);
+      row('Comes back to you, in cash and rewards', BACK);
+      row(netLabel(BACK - OUT), BACK - OUT, 'result', 'net');
       detail.appendChild(rows);
-      el(detail, 'p', 'dc-fl-d-note', 'Back is cash and rewards together.');
-      more(detail, 'flow.all', b => el(b, 'p', null, 'Rewards include Miles (at what yours were worth) and a few estimates, so this mixes cash with other value. The Overview\'s cash table counts cash only.'));
+      el(detail, 'p', 'dc-fl-d-note', 'After rewards means what you pay, less what comes back. What comes back is cash and rewards together.');
+      more(detail, 'flow.all', 'How this is worked out', b => el(b, 'p', null, 'Rewards include Miles (at what yours were worth) and a few estimates, so this mixes cash with other value. The Overview\'s cash table counts cash only.'));
       return;
     }
     if (k === 'you') {
       el(title, 'span', null, `Your money, ${opts.perLabel()}`);
-      for (const q of flows) row(q.name, -q.paid);
-      row('Paid to Discovery', -OUT, false, 'net');
+      for (const q of flows) row(q.name, q.paid);
+      row('You pay Discovery', OUT, null, 'net');
       detail.appendChild(rows);
       return;
     }
     productLogo(title, p.id);
     el(title, 'span', null, `${p.name}, ${opts.perLabel()}`);
-    row(`Paid: ${p.outLabel}`, -p.paid);
-    for (const [label, v] of p.outParts || []) row(label, v, false, 'sub');
+    row(`You pay: ${p.outLabel}`, p.paid);
+    for (const [label, v] of p.outParts || []) row(label, v, null, 'sub');
     for (const b of p.back) {
-      row(b.label, b.v, true);
-      for (const [label, v] of b.parts || []) row(label, v, true, 'sub');
+      row(`Comes back: ${b.label}`, b.v);
+      for (const [label, v] of b.parts || []) row(label, v, null, 'sub');
     }
-    row('Back minus paid', p.net, true, 'net');
+    row(netLabel(p.net), p.net, 'result', 'net');
     detail.appendChild(rows);
     if (opts.onOpen) button(detail, 'dc-link', `Open ${p.name}`, () => opts.onOpen(p.id), 'chevron-right');
-    if (p.note) more(detail, 'flow.' + p.id, b => el(b, 'p', null, p.note));
+    if (p.note) more(detail, 'flow.' + p.id, 'About these figures', b => el(b, 'p', null, p.note));
   }
 
   function mark(k) {

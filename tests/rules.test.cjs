@@ -50,6 +50,9 @@ yes.push(['fee.facility', 'Monthly facility fee', -69, DISC]);
 no.push([null, 'Monthly facility fee', -69, OTHER]);
 yes.push(['fee.vitalityMoney', 'Vitality Money Premium', -66, DISC]);
 no.push([null, 'Vitality Money Premium', -66, OTHER]);
+// other wordings of the same premium (rt3/s3)
+yes.push(['fee.vitalityMoney', 'VITALITY MONEY FEE', -101, DISC], ['fee.vitalityMoney', 'VM FEE', -101, DISC], ['fee.vitalityMoney', 'Vitality Money monthly premium', -101, DISC], ['fee.vitalityMoney', 'VM PREMIUM', -101, DISC]);
+no.push([null, 'VITALITY MONEY FEE', -101, OTHER], [null, 'VM FEESTIVAL TICKETS', -300, DISC], [null, 'VITALITY MONEY GOAL MET', 0.5, DISC]);
 yes.push(['fee.fx', 'INTL PAYMENT FEE', -12, DISC], ['fee.fx', 'Forex fee', -5, DISC]);
 no.push([null, 'INTL PAYMENT FEE', -12, OTHER]);
 yes.push(['interest.boost', 'Dynamic interest boost', 40, DISC]);

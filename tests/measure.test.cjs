@@ -223,6 +223,79 @@ const W = { from: '2026-09', to: '2026-09' };
   ], accounts, { ...categories, Flat: 'housing' }, W);
   assert.strictEqual(total(mO, 'spend.debit'), 3000, 'only the Woolworths swipe');
   assert.strictEqual(total(mO, 'disc.gym'), 500, 'a debit order at a partner is still partner spend');
-  assert.strictEqual(total(mO, 'payt.payments'), 6, 'every one of them is still a payment');
+  assert.strictEqual(total(mO, 'payt.payments'), 5, 'the debit orders cost a payment fee; the Woolworths card swipe is free');
+}
+// ── round 2 (red team rt3, base db6562d) ──────────────────────────────
+{
+  const { matchMoves, trailingWindow: tw, lastDataDate } = require('../src/measure');
+  const acc = { ...accounts, Savings: { institution: 'Discovery Bank', type: 'savings' } };
+  const cats = { ...categories, Transfer: 'transfer', Groceries: 'expense', Fuel: 'expense', Salary: 'income' };
+  // a partner purchase is never a move, however well its amount lines up (rt3/s5a, s6)
+  const fill = [
+    r('2026-09-23', 'Credit Card', 'BP SOMETOWN', 'Fuel', -1000),
+    r('2026-09-25', 'Transaction Account', 'SCHEDULED TRANSFER TO SAVINGS', 'Transfer', -1000),
+    r('2026-09-25', 'Savings', 'SCHEDULED TRANSFER FROM TRANSACTION', 'Transfer', 1000),
+  ];
+  assert.deepStrictEqual([...matchMoves(fill, acc, undefined, cats)].map(x => x.description), ['SCHEDULED TRANSFER TO SAVINGS'], 'the transfer pairs, the fuel fill does not');
+  const mF2 = measure(fill, acc, cats, W);
+  assert.strictEqual(total(mF2, 'fuel.bp'), 1000, 'the bp fill stays fuel');
+  assert.strictEqual(total(mF2, 'spend.card'), 1000);
+  // an untagged card purchase is not a move either: money out of a card that does not read as a transfer is a purchase
+  assert.strictEqual(matchMoves([r('2026-09-10', 'Credit Card', 'SOMETOWN CAFE', 'Eating out', -250), r('2026-09-10', 'Savings', 'DEPOSIT', '', 250)], acc).size, 0, 'a café is never a move');
+  // the uncategorised transfer is a move even when a purchase of the same amount came first (rt3/s5b)
+  const mB = measure([
+    r('2026-09-24', 'Credit Card', 'CHECKERS HYPER SOMETOWN', 'Groceries', -2000),
+    r('2026-09-25', 'Transaction Account', 'TRANSFER TO SAVINGS', '', -2000),
+    r('2026-09-25', 'Savings', 'TRANSFER FROM TRANSACTION', '', 2000),
+  ], acc, cats, W);
+  assert.strictEqual(total(mB, 'shop.checkers'), 2000);
+  assert.strictEqual(total(mB, 'spend.debit'), 0, 'the transfer is not a swipe');
+  assert.strictEqual(total(mB, 'payt.payments'), 0, 'and moving money between your own accounts is free');
+  // a reversal or a salary arriving explains no outflow
+  assert.strictEqual(matchMoves([r('2026-09-10', 'Transaction Account', 'PLUMBER', '', -900), r('2026-09-10', 'Credit Card', 'REVERSAL', '', 900)], acc).size, 0, 'a reversal is not a move');
+  assert.strictEqual(matchMoves([r('2026-09-10', 'Transaction Account', 'PLUMBER', '', -900), r('2026-09-10', 'Savings', 'SALARY', 'Salary', 900)], acc, undefined, cats).size, 0, 'income is not a move');
+  // the closest pair wins: same day before a day apart, whatever the row order
+  const near = [
+    r('2026-09-10', 'Transaction Account', 'TRANSFER A', '', -500),
+    r('2026-09-11', 'Transaction Account', 'TRANSFER B', '', -500),
+    r('2026-09-11', 'Savings', 'TRANSFER IN', '', 500),
+  ];
+  assert.deepStrictEqual([...matchMoves(near, acc)].map(x => x.description), ['TRANSFER B'], 'the same-day transfer pairs');
+  // Excluded rows: shop tags and wallet or purchase words mean a purchase; transfer words, PayShap and another bank's name mean a move (rt3/s5c, s5d)
+  const ex = (account, d) => r('2026-09-10', account, d, '', -500, true);
+  for (const d of ['SAVINGS MART SOMETOWN', 'TAKEALOT PAYMENT', 'SNAPSCAN PAYMENT CHECKERS', 'ZAPPER PAYMENT', 'DEPOSIT ON LAYBY ROUTE', 'PNP PAYMENT POS']) {
+    assert.strictEqual(total(measure([ex('Credit Card', d)], acc, cats, W), 'spend.card'), 500, `Excluded "${d}" is still a purchase`);
+  }
+  for (const d of ['PAYSHAP TO SAM', 'CAPITEC SAM', 'CREDIT CARD REPAYMENT', 'ATM CASH SOMETOWN']) {
+    assert.strictEqual(total(measure([ex('Credit Card', d)], acc, cats, W), 'spend.card'), 0, `Excluded "${d}" is money moving`);
+  }
+  for (const d of ['PAYSHAP TO SAM', 'CAPITEC SAM', 'FNB CARD SAM', 'IB TRANSFER TO SAM', 'RENT JULY']) {
+    const mX2 = measure([ex('Transaction Account', d)], acc, cats, W);
+    assert.strictEqual(total(mX2, 'spend.debit'), 0, `Excluded "${d}" is not a debit card swipe`);
+    assert.strictEqual(total(mX2, 'payt.payments'), 1, `"${d}" is still a payment to someone`);
+  }
+  assert.strictEqual(total(measure([r('2026-09-10', 'Transaction Account', 'PAYSHAP TO SAM', '', -800)], acc, cats, W), 'spend.debit'), 0, 'a PayShap payment is never a swipe');
+  // debit orders through South African collection houses are not swipes (rt3 item 3)
+  for (const d of ['NETCASH*SOMETOWN GYM', 'SAGEPAY SOMETOWN ISP', 'PAYFAST DEBIT ORDER FIBRE', 'D/O SOMETOWN SCHOOL', 'HYPHEN SOMETOWN LIFE']) {
+    assert.strictEqual(total(measure([r('2026-09-02', 'Transaction Account', d, '', -400)], acc, cats, W), 'spend.debit'), 0, `"${d}" is a debit order`);
+  }
+  assert.strictEqual(total(measure([r('2026-09-02', 'Transaction Account', 'PAYFAST*SOMETOWN SHOP', '', -400)], acc, cats, W), 'spend.debit'), 400, 'a PayFast checkout is a purchase');
+  // a partial last month: statements stopping on the 18th leave that month out, and say so (rt3 item 4)
+  const now = new Date(2026, 10, 3);
+  assert.deepStrictEqual(tw(now, 12, '2026-10-31'), { from: '2025-11', to: '2026-10' }, 'a whole month: no change');
+  const part = tw(now, 12, '2026-10-18');
+  assert.strictEqual(part.from + '..' + part.to, '2025-10..2026-09');
+  assert.ok(/18 Oct 2026/.test(part.windowNote) && /end of Sep 2026/.test(part.windowNote) && !/[−-]\s?R|\bminus\b/.test(part.windowNote), part.windowNote);
+  const early = tw(now, 12, '2026-07-28');
+  assert.strictEqual(early.to, '2026-07', 'statements that end in July end the window in July');
+  assert.ok(/end on 28 Jul 2026/.test(early.windowNote), early.windowNote);
+  assert.deepStrictEqual(tw(now, 12, '2026-11-02'), { from: '2025-11', to: '2026-10' }, 'rows this month do not move the window');
+  // the budget itself can be passed: the Discovery accounts set the end
+  const budgetRows = [r('2026-10-18', 'Credit Card', 'CHECKERS SOMETOWN', 'Food', -100), r('2026-10-30', 'Other Bank', 'SPAR', 'Food', -50)];
+  assert.strictEqual(lastDataDate(budgetRows, accounts), '2026-10-18', 'the Discovery rows decide');
+  assert.strictEqual(lastDataDate([budgetRows[1]], accounts), '2026-10-30', 'no Discovery rows: any account');
+  assert.strictEqual(tw(now, 12, { rows: budgetRows, accounts }).to, '2026-09');
+  assert.strictEqual(measure(budgetRows, accounts, categories, { ...part }).windowNote, part.windowNote, 'measure passes the note through');
+  assert.strictEqual(measure(budgetRows, accounts, categories, W).windowNote, null);
 }
 console.log('measure OK');

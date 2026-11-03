@@ -24,10 +24,11 @@ class SettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Months to look back')
-      .setDesc('Complete calendar months before this one.')
+      .setDesc('Complete calendar months before this one. Six months or more gives figures you can lean on.')
       .addDropdown(d => {
-        for (const n of [3, 6, 12, 24]) d.addOption(String(n), `${n} months`);
-        d.setValue(String(s.months)).onChange(async v => { s.months = Number(v); await save(); });
+        /* 3 months is left out: a window that short is always "Not enough data" */
+        for (const n of [6, 12, 24]) d.addOption(String(n), `${n} months`);
+        d.setValue(String(Math.max(6, Number(s.months) || 12))).onChange(async v => { s.months = Number(v); await save(); });
       });
 
     new Setting(containerEl)
@@ -45,7 +46,7 @@ class SettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('First-time questions')
-      .setDesc('Which Discovery products you have, your bank product and tier, your Vitality statuses and the benefits you use. Run them again to change your answers; the page asks them the next time you open it.')
+      .setDesc('Which Discovery products you have, your Discovery Bank package, your Vitality scores and the benefits you use. Run them again to change your answers; the page asks them the next time you open it.')
       .addButton(b => b.setButtonText('Run the first-time questions again').onClick(async () => {
         s.onboarded = false;
         await this.plugin.saveSettings();

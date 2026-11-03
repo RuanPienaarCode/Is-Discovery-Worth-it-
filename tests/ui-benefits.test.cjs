@@ -13,7 +13,7 @@ Module._load = function (request, ...rest) {
   if (request === 'obsidian') return { setIcon: () => {} };
   return origLoad.call(this, request, ...rest);
 };
-const { benefitTotals, setLevel, clearLevel, hasAnswer, shareLine, oneLiner, shortReason, MARK_OF } = require(path.join(root, 'src/ui-benefits.js'));
+const { benefitTotals, setLevel, clearLevel, hasAnswer, shareLine, oneLiner, shortReason, plainWords, zeroReason, MARK_OF, MILES_USE } = require(path.join(root, 'src/ui-benefits.js'));
 const { buildStatement } = require(path.join(root, 'src/model.js'));
 const { BENEFITS, GROUPS } = require(path.join(root, 'src/benefits.js'));
 const { MARKS } = require(path.join(root, 'src/art.js'));
@@ -74,7 +74,7 @@ const y = {};
 setLevel(y, 'miles', 'half', 'full');
 assert.deepStrictEqual(y.benefits, { miles: 'half' }, 'creates settings.benefits when missing');
 
-// "Use the suggestion": clearLevel forgets the answer, so the benefit follows the budget again
+// "Use our suggestion": clearLevel forgets the answer, so the benefit follows the budget again
 assert.strictEqual(hasAnswer(z, 'gym'), true);
 assert.strictEqual(clearLevel(z, 'gym'), true);
 assert.ok(!('gym' in z.benefits), 'the stored answer is gone');
@@ -110,12 +110,46 @@ for (const kind of ['suite', 'card', 'transaction', 'savings']) {
     const set = Object.assign(base(), { bankKind: kind, status: { money: status, health: status, drive: status } });
     for (const b of BENEFITS) {
       const line = oneLiner(b, set);
-      assert.ok(line && line.length <= 38, `${b.id} (${kind}, ${status}): "${line}" is one short line`);
+      /* the gameboard's line says what the gameboard is, so it wraps */
+      assert.ok(line && line.length <= (b.id === 'gameboard' ? 110 : 38), `${b.id} (${kind}, ${status}): "${line}" is one short line`);
       assert.ok(!/[−]/.test(line), `${b.id}: no minus sign`);
+      assert.ok(!/Clicks, Dis-Chem|exercise pays off/.test(line), `${b.id}: plain words`);
     }
   }
 }
 assert.match(oneLiner(BENEFITS.find(b => b.id === 'gym'), base()), /^Up to \d+(,\d+)?% off gym fees$/);
+
+// the card lines read in plain words
+assert.strictEqual(oneLiner(BENEFITS.find(b => b.id === 'healthyCare'), base()), 'Up to 10% back at Clicks and Dis-Chem');
+assert.strictEqual(oneLiner(BENEFITS.find(b => b.id === 'appleWatch'), base()), 'A watch you pay off by exercising');
+assert.match(oneLiner(BENEFITS.find(b => b.id === 'gameboard'), base()), /gameboard \(the weekly game in the Discovery Bank app\)/);
+assert.ok(MILES_USE.find(o => o.value === 'dday').label.includes('the 15th of each month'), 'Ð-Day says its date');
+
+// plainWords: the glossary on text written in benefits.js
+assert.strictEqual(plainWords('Partners take 10 Miles as R 1.'), 'At partners, 10 Miles pay for R 1 of shopping.');
+assert.strictEqual(plainWords('Without it, a Mile buys its face value.'), 'Without it, a Mile is worth only 10c.');
+assert.strictEqual(plainWords('R 300 more than their face value.'), 'R 300 more than 10c a Mile would have bought.');
+assert.strictEqual(plainWords('no more than their face value.'), 'no more than 10c a Mile would have bought.');
+assert.match(plainWords('once you have done your Vitality Age and a Vitality Health Check in the last 12 months'), /Vitality Age \(an online health-age test\) and a Vitality Health Check \(a screening at a clinic or pharmacy\)/);
+assert.strictEqual(plainWords('The Discovery Bank Suite with a credit card'), 'The all-in-one package (account and credit card)');
+assert.strictEqual(plainWords('On Ð-Day (the 15th) it is double.'), 'On Ð-Day (the 15th of each month) it is double.');
+assert.strictEqual(plainWords('Already plain.'), 'Already plain.');
+assert.strictEqual(plainWords(null), '');
+for (const b of BENEFITS) for (const f of ['offer', 'needs', 'measuredBy']) assert.ok(!/face value/.test(plainWords(b[f])), `${b.id}.${f}: no face value`);
+
+// a card that counts R0 says why: the model's reason first, else your own answer or the suggestion
+const sp = t => t.replace(/\u00a0/g, ' ');
+const gymB = BENEFITS.find(b => b.id === 'gym');
+const none = { full: 4380, counted: 0 };
+assert.strictEqual(sp(zeroReason({ benefits: { gym: 'none' } }, gymB, none, 'none')), 'You said Not for me, so this counts as R 0.');
+assert.strictEqual(sp(zeroReason({ benefits: {} }, gymB, none, 'none')), 'We suggest Not for me from your statements, so this counts as R 0.');
+assert.strictEqual(zeroReason({ benefits: {} }, gymB, Object.assign({ zeroWhy: 'It pays only at your main shop.' }, none), 'full'), 'It pays only at your main shop.', 'the model\'s reason shows');
+assert.strictEqual(zeroReason({ benefits: { gym: 'none' } }, gymB, Object.assign({ zeroWhy: 'You said Not for me, so it counts nothing.' }, none), 'none'), 'You said Not for me, so it counts nothing.', 'the model\'s reason wins over ours');
+assert.strictEqual(zeroReason({ benefits: {} }, gymB, none, 'full'), '', 'nothing to say, nothing said');
+assert.strictEqual(sp(zeroReason({ milesUse: 'none' }, BENEFITS.find(b => b.id === 'milesPlus'), { full: 0, counted: 0 }, 'none')), 'You said you do not spend your Miles, so this counts as R 0.');
+// the real statement gives a reason for every available R0 card
+const zeroRows = benefitTotals(st).available.filter(r => !(r.x.counted >= 0.5));
+for (const r of zeroRows) assert.ok(zeroReason(s, r.b, r.x, r.x.level), `${r.b.id} counts R0 and says why`);
 
 // a reason cut to its first idea
 assert.strictEqual(shortReason('It needs Vitality Health, which you do not have.'), 'It needs Vitality Health');
