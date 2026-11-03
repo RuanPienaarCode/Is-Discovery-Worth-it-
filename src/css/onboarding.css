@@ -129,6 +129,7 @@
 .dc-onb .dc-onb-opts.is-compact .dc-onb-opt { align-items: center; }
 
 .dc-onb input.dc-onb-in {
+  --checkbox-size: 22px;
   flex: none;
   width: 22px;
   height: 22px;
@@ -152,6 +153,7 @@
 .dc-onb .dc-onb-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 120px; min-width: 0; }
 .dc-onb .dc-onb-field-label { font-size: 13px; color: var(--dc-muted); }
 .dc-onb input.dc-onb-num {
+  box-shadow: none;
   width: 100%;
   min-height: 44px;
   padding: 0 12px;

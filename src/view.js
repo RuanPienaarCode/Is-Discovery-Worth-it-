@@ -17,6 +17,10 @@ class BottomLineView extends ItemView {
   async onOpen() {
     this.contentEl.classList.add('dc-view');
     this.ui = mountBottomLine(this.contentEl, { plugin: this.plugin });
+    /* the Flows diagram measures its labels: let Nunito arrive first, but
+       never wait more than a second for it */
+    const fonts = this.plugin.fonts && this.plugin.fonts.load ? this.plugin.fonts.load() : null;
+    if (fonts) await Promise.race([fonts.catch(() => null), new Promise(r => setTimeout(r, 1000))]);
     await this.ui.refresh();
   }
 

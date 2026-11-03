@@ -235,7 +235,7 @@
 .dc-content {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 28px 28px calc(60px + var(--safe-area-inset-bottom, 0px));
+  padding: 28px 28px calc(60px + var(--view-bottom-spacing, var(--safe-area-inset-bottom, 0px)));
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -264,7 +264,8 @@
   gap: 14px;
   padding: 12px 12px 16px;
   padding-left: max(12px, var(--safe-area-inset-left, 0px));
-  padding-bottom: max(16px, var(--safe-area-inset-bottom, 0px));
+  /* clear Obsidian's floating phone navbar, not just the home bar */
+  padding-bottom: max(16px, calc(var(--view-bottom-spacing, var(--safe-area-inset-bottom, 0px)) + 8px));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   background: var(--dc-rail);
@@ -286,7 +287,7 @@
 .dc-page.is-narrow.dc-menu-open .dc-nav-scrim { opacity: 1; visibility: visible; }
 .dc-page.is-narrow.dc-menu-ready .dc-nav-scrim { transition: opacity 260ms ease, visibility 0s linear 260ms; }
 .dc-page.is-narrow.dc-menu-ready.dc-menu-open .dc-nav-scrim { transition: opacity 260ms ease, visibility 0s; }
-.dc-page.is-narrow .dc-content { padding: 18px 16px calc(48px + var(--safe-area-inset-bottom, 0px)); gap: 20px; }
+.dc-page.is-narrow .dc-content { padding: 18px 16px calc(24px + var(--view-bottom-spacing, var(--safe-area-inset-bottom, 0px))); gap: 20px; }
 .is-phone .dc-page.is-narrow .dc-content { padding-right: max(16px, var(--safe-area-inset-right, 0px)); }
 
 /* light theme: a white rail, as Learning Hub's */
@@ -746,6 +747,7 @@
 .dc-page button:not(.clickable-icon):focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
 @supports not selector(:focus-visible) { .dc-page button:not(.clickable-icon):focus { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; } }
 .dc-fl-node:focus-visible .dc-fl-bx { stroke: var(--dc-accent); stroke-width: 2.5; }
+@supports not selector(:focus-visible) { .dc-fl-node:focus .dc-fl-bx { stroke: var(--dc-accent); stroke-width: 2.5; } }
 .dc-page button.dc-tab:active,
 .dc-page button.dc-cmp-r:active,
 .dc-page button.dc-line-head:active,

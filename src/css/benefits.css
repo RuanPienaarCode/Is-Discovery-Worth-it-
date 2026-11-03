@@ -99,7 +99,7 @@
 .dc-ben .dc-ben-how-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .dc-ben .dc-ben-how-opt { display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; padding: 6px 10px; border: 1px solid var(--dc-line-2); border-radius: 10px; background: var(--dc-surface-2); font-size: 12.5px; font-weight: 600; line-height: 1.25; cursor: pointer; }
 .dc-ben .dc-ben-how-opt.is-on { border-color: var(--dc-accent); background: rgba(var(--dc-accent-rgb), 0.12); }
-.dc-ben input.dc-ben-how-in { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--dc-navy-2); cursor: pointer; }
+.dc-ben input.dc-ben-how-in { --checkbox-size: 16px; flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--dc-navy-2); cursor: pointer; }
 .dc-ben .dc-ben-how-t { min-width: 0; }
 .dc-page.is-phone .dc-ben .dc-ben-how-opts { grid-template-columns: minmax(0, 1fr); }
 
@@ -150,6 +150,7 @@
    older WebKit gets :focus in the fallback below ─────── */
 .dc-ben input.dc-ben-in:focus-visible + .dc-ben-opt-t { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
 .dc-ben input.dc-ben-how-in:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
+@supports not selector(:focus-visible) { .dc-ben input.dc-ben-how-in:focus { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; } }
 .dc-ben .dc-ben-off-sum:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: -2px; }
 .dc-ben button.dc-ben-more:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
 @supports not selector(:focus-visible) {

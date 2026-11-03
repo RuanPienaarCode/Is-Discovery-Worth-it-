@@ -235,7 +235,7 @@
 .dc-content {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 28px 28px calc(60px + var(--safe-area-inset-bottom, 0px));
+  padding: 28px 28px calc(60px + var(--view-bottom-spacing, var(--safe-area-inset-bottom, 0px)));
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -264,7 +264,8 @@
   gap: 14px;
   padding: 12px 12px 16px;
   padding-left: max(12px, var(--safe-area-inset-left, 0px));
-  padding-bottom: max(16px, var(--safe-area-inset-bottom, 0px));
+  /* clear Obsidian's floating phone navbar, not just the home bar */
+  padding-bottom: max(16px, calc(var(--view-bottom-spacing, var(--safe-area-inset-bottom, 0px)) + 8px));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   background: var(--dc-rail);
@@ -286,7 +287,7 @@
 .dc-page.is-narrow.dc-menu-open .dc-nav-scrim { opacity: 1; visibility: visible; }
 .dc-page.is-narrow.dc-menu-ready .dc-nav-scrim { transition: opacity 260ms ease, visibility 0s linear 260ms; }
 .dc-page.is-narrow.dc-menu-ready.dc-menu-open .dc-nav-scrim { transition: opacity 260ms ease, visibility 0s; }
-.dc-page.is-narrow .dc-content { padding: 18px 16px calc(48px + var(--safe-area-inset-bottom, 0px)); gap: 20px; }
+.dc-page.is-narrow .dc-content { padding: 18px 16px calc(24px + var(--view-bottom-spacing, var(--safe-area-inset-bottom, 0px))); gap: 20px; }
 .is-phone .dc-page.is-narrow .dc-content { padding-right: max(16px, var(--safe-area-inset-right, 0px)); }
 
 /* light theme: a white rail, as Learning Hub's */
@@ -746,6 +747,7 @@
 .dc-page button:not(.clickable-icon):focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
 @supports not selector(:focus-visible) { .dc-page button:not(.clickable-icon):focus { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; } }
 .dc-fl-node:focus-visible .dc-fl-bx { stroke: var(--dc-accent); stroke-width: 2.5; }
+@supports not selector(:focus-visible) { .dc-fl-node:focus .dc-fl-bx { stroke: var(--dc-accent); stroke-width: 2.5; } }
 .dc-page button.dc-tab:active,
 .dc-page button.dc-cmp-r:active,
 .dc-page button.dc-line-head:active,
@@ -1068,7 +1070,7 @@
 .dc-ben .dc-ben-how-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .dc-ben .dc-ben-how-opt { display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; padding: 6px 10px; border: 1px solid var(--dc-line-2); border-radius: 10px; background: var(--dc-surface-2); font-size: 12.5px; font-weight: 600; line-height: 1.25; cursor: pointer; }
 .dc-ben .dc-ben-how-opt.is-on { border-color: var(--dc-accent); background: rgba(var(--dc-accent-rgb), 0.12); }
-.dc-ben input.dc-ben-how-in { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--dc-navy-2); cursor: pointer; }
+.dc-ben input.dc-ben-how-in { --checkbox-size: 16px; flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--dc-navy-2); cursor: pointer; }
 .dc-ben .dc-ben-how-t { min-width: 0; }
 .dc-page.is-phone .dc-ben .dc-ben-how-opts { grid-template-columns: minmax(0, 1fr); }
 
@@ -1119,6 +1121,7 @@
    older WebKit gets :focus in the fallback below ─────── */
 .dc-ben input.dc-ben-in:focus-visible + .dc-ben-opt-t { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
 .dc-ben input.dc-ben-how-in:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
+@supports not selector(:focus-visible) { .dc-ben input.dc-ben-how-in:focus { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; } }
 .dc-ben .dc-ben-off-sum:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: -2px; }
 .dc-ben button.dc-ben-more:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
 @supports not selector(:focus-visible) {
@@ -1268,6 +1271,7 @@
 .dc-onb .dc-onb-opts.is-compact .dc-onb-opt { align-items: center; }
 
 .dc-onb input.dc-onb-in {
+  --checkbox-size: 22px;
   flex: none;
   width: 22px;
   height: 22px;
@@ -1291,6 +1295,7 @@
 .dc-onb .dc-onb-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 120px; min-width: 0; }
 .dc-onb .dc-onb-field-label { font-size: 13px; color: var(--dc-muted); }
 .dc-onb input.dc-onb-num {
+  box-shadow: none;
   width: 100%;
   min-height: 44px;
   padding: 0 12px;
@@ -1414,7 +1419,7 @@
   cursor: pointer;
 }
 .dc-setup-prod:first-child { border-top: 0; }
-.dc-setup-prod .dc-check { flex: none; width: 20px; height: 20px; margin: 1px 0 0; }
+.dc-setup-prod .dc-check { --checkbox-size: 20px; flex: none; width: 20px; height: 20px; margin: 1px 0 0; }
 .dc-setup-prod-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: break-word; word-break: break-word; }
 .dc-setup-prod-t .dc-fld-l { font-size: 14px; color: var(--dc-text); }
 .dc-setup-again { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 16px; }
@@ -1437,6 +1442,7 @@
   cursor: pointer;
 }
 .dc-radio.is-on { border-color: var(--dc-accent); background: rgba(var(--dc-accent-rgb), 0.1); }
-.dc-radio input.dc-radio-in { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--dc-navy-2); cursor: pointer; }
+.dc-radio input.dc-radio-in { --checkbox-size: 18px; flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--dc-navy-2); cursor: pointer; }
 .dc-radio-l { min-width: 0; }
 .dc-radio input.dc-radio-in:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
+@supports not selector(:focus-visible) { .dc-radio input.dc-radio-in:focus { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; } }
