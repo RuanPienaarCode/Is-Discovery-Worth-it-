@@ -20,12 +20,15 @@
                    banner on Compare)
      ?check=1      walk every visible tab at the current width and report
                    sideways scroll, labels over amounts, tap targets under
-                   44px and flow text that an SVG clips or overlaps (in
-                   #dc-check) */
+                   44px, flow text that an SVG clips or overlaps, and cards
+                   that show more than one line before More (in #dc-check) */
 import { makeMemoryVault } from './memory-vault.js';
 const { mountBottomLine } = require('../src/bottom-line');
 const { loadBudget } = require('../src/load');
 const { DEFAULT_SETTINGS } = require('../src/constants');
+const { makeFontLoader } = require('../src/font-loader');
+/* Nunito from the same base64 faces main.js carries */
+makeFontLoader().load();
 
 const q = new URLSearchParams(location.search);
 document.body.classList.add(q.get('theme') === 'dark' ? 'theme-dark' : 'theme-light');
@@ -161,8 +164,8 @@ ui.refresh().then(async () => {
     plugin.settings.tab = t;
     ui.render();
     await new Promise(r => setTimeout(r, 300));
-    /* on a phone the page scrolls inside itself (.dc-page), not the view */
-    const sc = document.querySelector('.dc-page.is-narrow') || host;
+    /* the page scrolls inside itself (.dc-main), not the view */
+    const sc = document.querySelector('.dc-main') || host;
     const over = sc.scrollWidth > sc.clientWidth ? `scrolls sideways ${sc.scrollWidth}/${sc.clientWidth}` : '';
     const heads = [...document.querySelectorAll('.dc-line-head')];
     const overlaps = heads.filter(h => {
@@ -170,7 +173,9 @@ ui.refresh().then(async () => {
       return l && a && l.getBoundingClientRect().right > a.getBoundingClientRect().left + 1;
     }).length;
     /* a checkbox or radio inside a label is tapped through the label */
-    const small = [...document.querySelectorAll('.dc-page button, .dc-page input, .dc-page select, .dc-chrome button')].filter(e => {
+    const small = [...document.querySelectorAll('.dc-page button, .dc-page input, .dc-page select')].filter(e => {
+      /* the closed side menu is off screen, out of reach */
+      if (e.closest('.dc-nav-drawer') && !document.querySelector('.dc-page.dc-menu-open') && document.querySelector('.dc-page.is-narrow')) return false;
       const r = (/^(checkbox|radio)$/.test(e.type) && e.closest('label') ? e.closest('label') : e).getBoundingClientRect();
       return r.width > 0 && r.height > 0 && (r.height < 43.5 || r.width < 43.5);
     }).length;
@@ -181,7 +186,11 @@ ui.refresh().then(async () => {
       flowText += ts.filter((a, i) => a.right > sr.right + 0.5 || ts.some((b, j) => j > i && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1)).length;
     }
     const found = [over, overlaps ? overlaps + ' labels over amounts' : '', small ? small + ' tap targets under 44px' : '', flowText ? flowText + ' flow labels clipped or overlapping' : ''].filter(Boolean).join(', ');
-    lines.push(`${t}: ${found || 'ok'} (${heads.length} lines, ${document.querySelectorAll('.dc-page button, .dc-page input, .dc-page select, .dc-chrome button').length} controls)`);
+    /* a card shows a heading, one line and its figure until More: count
+       visible paragraphs in a card outside a More region */
+    const wordy = [...document.querySelectorAll('.dc-card')].filter(c => [...c.querySelectorAll('p')].filter(p => !p.closest('.dc-more-body, .dc-ben-more-body, [hidden]') && p.offsetHeight > 0 && !p.classList.contains('dc-grp') && !p.classList.contains('dc-subhead')).length > 1 && !c.querySelector('.dc-fgrid') && !c.classList.contains('dc-figs')).length;
+    const found2 = found + (wordy ? (found ? ', ' : '') + wordy + ' cards with more than one line' : '');
+    lines.push(`${t}: ${found2 || 'ok'} (${heads.length} lines, ${document.querySelectorAll('.dc-page button, .dc-page input, .dc-page select').length} controls)`);
   }
   const pre = document.createElement('pre');
   pre.id = 'dc-check';

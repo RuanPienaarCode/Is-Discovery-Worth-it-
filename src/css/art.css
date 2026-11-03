@@ -1,17 +1,18 @@
 /* ── the plugin's own artwork (src/art.js) ──────────────────────────────
    Every mark is line art drawn in currentColor; the class on each mark sets
-   its colour from Obsidian's theme colours, so it follows light and dark.
+   its colour from the page's product colours (Discovery's palette, see
+   src/styles.css), tuned for light and dark.
    This file owns the size of the .dc-logo box and the .dc-tile-logo mark. */
 
 .dc-art { flex: none; }
-.dc-art-app { color: var(--interactive-accent); }
-.dc-art-bank { color: var(--color-blue); }
-.dc-art-health { color: var(--color-purple); }
-.dc-art-gap { color: var(--color-cyan); }
-.dc-art-insure { color: var(--color-orange); }
-.dc-art-life { color: var(--color-yellow); }
-.dc-art-rewards { color: var(--color-green); }
-.dc-art-miles { color: var(--color-yellow); }
+.dc-art-app { color: var(--dc-pink, #f41c5e); }
+.dc-art-bank { color: var(--c-bank-ink, #f8116a); }
+.dc-art-health { color: var(--c-health-ink, #1ebeaa); }
+.dc-art-gap { color: var(--c-gap-ink, #9440e8); }
+.dc-art-insure { color: var(--c-insure-ink, #00a0d2); }
+.dc-art-life { color: var(--c-life-ink, #3d45e0); }
+.dc-art-rewards { color: var(--dc-pink, #f41c5e); }
+.dc-art-miles { color: var(--dc-accent-ink, #00a0d2); }
 
 .dc-logo { display: inline-flex; flex: none; width: 20px; height: 20px; }
 .dc-logo > .dc-art { display: block; width: 100%; height: 100%; }
@@ -20,7 +21,7 @@
 
 /* ── welcome screen ──────────────────────────────────────────────────── */
 /* full bleed, in the theme's own background (light or dark) */
-.workspace-leaf-content .view-content.dc-view.dc-welcoming { padding: 0; background: var(--background-primary); }
+.workspace-leaf-content .view-content.dc-view.dc-welcoming { padding: 0; background: var(--dc-bg, var(--background-primary)); }
 .dc-page .dc-welcome.dc-hello {
   position: relative;
   display: grid;
@@ -34,8 +35,9 @@
   margin: 0;
   padding: 40px 48px;
   overflow: hidden;
-  background: radial-gradient(ellipse at 72% 48%, hsla(var(--interactive-accent-hsl), 0.12), hsla(var(--interactive-accent-hsl), 0) 62%), var(--background-primary);
-  color: var(--text-normal);
+  background: radial-gradient(ellipse at 72% 48%, rgba(var(--dc-accent-rgb), 0.16), rgba(var(--dc-accent-rgb), 0) 62%), radial-gradient(60% 50% at 0% 100%, rgba(var(--dc-pink-rgb), 0.08), transparent 60%), var(--dc-bg);
+  font-family: var(--dc-font);
+  color: var(--dc-text);
   transition: opacity 0.28s ease, transform 0.28s ease;
 }
 .dc-page .dc-welcome.dc-hello.is-leaving { opacity: 0; transform: scale(0.985); }
@@ -49,7 +51,7 @@
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--dc-muted);
   animation: dc-hello-rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.05s both;
 }
 .dc-hello-eyebrow .dc-hello-mark { width: 18px; height: 18px; }
@@ -61,7 +63,7 @@
   line-height: 1.05;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: var(--text-normal);
+  color: var(--dc-text);
 }
 .dc-hello-ch {
   display: inline-block;
@@ -77,7 +79,7 @@
   width: 80px;
   height: 4px;
   border-radius: 2px;
-  background: linear-gradient(90deg, var(--color-blue) 0 20%, var(--color-purple) 20% 40%, var(--color-cyan) 40% 60%, var(--color-orange) 60% 80%, var(--color-yellow) 80% 100%);
+  background: linear-gradient(90deg, var(--c-bank) 0 20%, var(--c-health) 20% 40%, var(--c-gap) 40% 60%, var(--c-insure) 60% 80%, var(--c-life) 80% 100%);
   transform-origin: left center;
   animation: dc-hello-grow 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.9s both;
 }
@@ -86,7 +88,7 @@
   max-width: 30em;
   font-size: var(--font-ui-medium);
   line-height: 1.5;
-  color: var(--text-muted);
+  color: var(--dc-muted);
   animation: dc-hello-rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.8s both;
 }
 .dc-page button.dc-hello-go {
@@ -98,19 +100,19 @@
   margin-top: 8px;
   padding: 0 26px;
   border-radius: 999px;
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-  font-size: var(--font-ui-medium);
-  font-weight: 600;
+  background: linear-gradient(180deg, var(--dc-navy-2), var(--dc-navy));
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
   text-align: center;
   animation: dc-hello-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 1.4s both, dc-hello-pulse 2.8s ease-out 3.6s infinite;
 }
 .dc-page button.dc-hello-go .dc-icon { width: 18px; height: 18px; }
-@media (hover: hover) { .dc-page button.dc-hello-go:hover { background: var(--interactive-accent-hover); } }
+@media (hover: hover) { .dc-page button.dc-hello-go:hover { box-shadow: 0 10px 28px -8px rgba(17, 75, 138, 0.95); } }
 .dc-page button.dc-hello-skip {
   min-height: 44px;
   padding: 0 4px;
-  color: var(--text-muted);
+  color: var(--dc-muted);
   font-size: var(--font-ui-small);
   text-decoration: underline;
   animation: dc-hello-rise 0.6s ease 1.6s both;
@@ -119,13 +121,13 @@
 /* the picture keeps its space from the first frame (fixed aspect ratio) */
 .dc-page .dc-hello-figure { position: relative; z-index: 1; min-width: 0; margin: 0; }
 .dc-hello-art { display: block; width: 100%; height: auto; max-height: 70vh; aspect-ratio: 400 / 340; overflow: visible; }
-.dc-hello-art text { font-family: var(--font-interface); }
-.dc-hello-art .dc-hello-ink { color: var(--text-muted); }
-.dc-hello-art .dc-hello-knob { fill: var(--background-primary); color: var(--interactive-accent); }
-.dc-hello-art .dc-hello-ask, .dc-hello-art .dc-hello-tick { color: var(--interactive-accent); }
-.dc-hello-art .dc-hello-face { fill: var(--background-primary); }
-.dc-hello-art .dc-hello-cost { color: var(--color-red); }
-.dc-hello-art .dc-hello-back { color: var(--color-green); }
+.dc-hello-art text { font-family: var(--dc-font); }
+.dc-hello-art .dc-hello-ink { color: var(--dc-muted); }
+.dc-hello-art .dc-hello-knob { fill: var(--dc-bg); color: var(--dc-pink); }
+.dc-hello-art .dc-hello-ask, .dc-hello-art .dc-hello-tick { color: var(--dc-pink); }
+.dc-hello-art .dc-hello-face { fill: var(--dc-bg); }
+.dc-hello-art .dc-hello-cost { color: var(--dc-neg); }
+.dc-hello-art .dc-hello-back { color: var(--dc-pos); }
 
 /* The resting picture is the last frame: the scale leaning to the benefit
    side, the coins in, a tick at the pivot. The animations play from a level
@@ -181,9 +183,9 @@
 @keyframes dc-hello-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes dc-hello-draw { from { stroke-dashoffset: 22; } to { stroke-dashoffset: 0; } }
 @keyframes dc-hello-pulse {
-  0% { box-shadow: 0 0 0 0 hsla(var(--interactive-accent-hsl), 0.45); }
-  70% { box-shadow: 0 0 0 14px hsla(var(--interactive-accent-hsl), 0); }
-  100% { box-shadow: 0 0 0 14px hsla(var(--interactive-accent-hsl), 0); }
+  0% { box-shadow: 0 0 0 0 rgba(var(--dc-pink-rgb), 0.45); }
+  70% { box-shadow: 0 0 0 14px rgba(var(--dc-pink-rgb), 0); }
+  100% { box-shadow: 0 0 0 14px rgba(var(--dc-pink-rgb), 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {

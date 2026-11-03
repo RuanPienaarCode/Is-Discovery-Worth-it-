@@ -4,18 +4,23 @@ const { VIEW_TYPE, DEFAULT_SETTINGS } = require('./constants');
 const { BottomLineView } = require('./view');
 const { SettingsTab } = require('./settings-tab');
 const { loadBudget } = require('./load');
+const { makeFontLoader } = require('./font-loader');
 
 /* Settings merge one level deep, so a new nested default (status.drive, say)
    reaches someone whose data.json predates it. */
 function mergeSettings(saved) {
   const out = { ...DEFAULT_SETTINGS, ...(saved || {}) };
-  for (const k of ['status', 'rates', 'actualMiles', 'travel', 'members', 'quotes', 'products', 'benefits', 'vitality', 'health', 'life', 'home', 'bill']) out[k] = { ...DEFAULT_SETTINGS[k], ...((saved || {})[k] || {}) };
+  for (const k of ['status', 'rates', 'actualMiles', 'travel', 'members', 'quotes', 'products', 'benefits', 'vitality', 'conditions', 'health', 'life', 'home', 'bill']) out[k] = { ...DEFAULT_SETTINGS[k], ...((saved || {})[k] || {}) };
   return out;
 }
 
 class DiscoveryWorthItPlugin extends Plugin {
   async onload() {
     this.settings = mergeSettings(await this.loadData());
+    /* Nunito, carried inside main.js (src/fonts.js); the page falls back to
+       the system font until it has loaded */
+    this.fonts = makeFontLoader();
+    this.fonts.load();
     this.registerView(VIEW_TYPE, leaf => new BottomLineView(leaf, this));
     this.addRibbonIcon('calculator', 'Is Discovery worth it?', () => this.openView());
     this.addCommand({ id: 'open', name: 'Open', callback: () => this.openView() });
@@ -34,6 +39,7 @@ class DiscoveryWorthItPlugin extends Plugin {
 
   onunload() {
     clearTimeout(this.refreshTimer);
+    if (this.fonts) this.fonts.unload();
   }
 
   async saveSettings() {

@@ -126,3 +126,5 @@ To release, make the tag equal `manifest.json`'s version (no `v`). The release w
 ## Licence
 
 AGPL-3.0-only. See [LICENSE](LICENSE).
+
+**Font:** the page uses Nunito, under the SIL Open Font License 1.1 ([assets/fonts/OFL.txt](assets/fonts/OFL.txt)), carried inside `main.js` (regenerate with `npm run fonts`).

@@ -6,10 +6,12 @@
    Screens, one question each, in this order. A screen shows only when it
    applies to what has been ticked and answered so far:
      hello · products ·
-     bank:   bankKind · tier (not savings) · vmQ · vmStatus (bank score)
+     bank:   bankKind · tier (not savings) · vmQ · vmStatus (bank score) ·
+               milesUse (with Vitality Money, unless a Miles statement says)
      health: household · plan · vhQ · vhStatus (health score)
                (who is on the aid first, so the plan guess prices the right family)
-     insure: vdQ · vdStatus (car score)
+               checks · gym36 (with Vitality Health)
+     insure: insurePlan · homeCover · vdQ · vdStatus (car score)
      benefits · done
    Each Next writes the answers to settings and awaits save(), so closing the
    page half way keeps what was answered. Only a benefit level you changed
@@ -53,6 +55,18 @@ function benefitsFor(products, settings, vitality) {
   }
   return (Array.isArray(mod.BENEFITS) ? mod.BENEFITS : []).filter(b => (b.products || []).some(x => products[x]));
 }
+/* how you spend your Miles (settings.milesUse) */
+const MILES_USE = [
+  { value: 'dday', label: 'On Ð-Day (the 15th)' },
+  { value: 'partners', label: 'At Discovery Miles partners' },
+  { value: 'utilities', label: 'Electricity, data or airtime' },
+  { value: 'none', label: 'I don\'t spend them' },
+];
+/* settings.conditions: what Discovery sets some rewards by (health checks,
+   gym visits, the Insure plan, home cover); '' or null = not answered */
+const CHECKS = [{ value: 'both', label: 'Both' }, { value: 'one', label: 'One of them' }, { value: 'none', label: 'Neither' }];
+const INSURE_PLANS = [{ value: 'core', label: 'Core' }, { value: 'essential', label: 'Essential' }, { value: 'classic', label: 'Classic' }, { value: 'purple', label: 'Purple' }, { value: '', label: 'Not sure' }];
+const HOME_COVER = [{ value: 'both', label: 'Building and contents' }, { value: 'one', label: 'One of them' }, { value: 'none', label: 'No' }];
 const BANK_KINDS = [
   { value: 'suite', label: 'A banking Suite (account + credit card)' },
   { value: 'card', label: 'A credit card on its own' },
@@ -71,6 +85,27 @@ function radioGroup(parent, o) {
   const box = el(parent, 'fieldset', 'dc-onb-group' + (o.cls ? ' ' + o.cls : ''));
   el(box, 'legend', 'dc-onb-legend', o.legend);
   if (o.hint) el(box, 'p', 'dc-onb-hint', o.hint);
+  /* the longer reason waits behind More */
+  if (o.more) {
+    const id = `dc-onb-more-${uid}`;
+    const btn = el(box, 'button', 'dc-onb-more');
+    btn.type = 'button';
+    btn.setAttribute('aria-controls', id);
+    const body = el(box, 'p', 'dc-onb-hint dc-onb-more-body', o.more);
+    body.id = id;
+    const sync = () => {
+      const on = !!(o.opened && o.opened.has(o.moreKey));
+      btn.setAttribute('aria-expanded', String(on));
+      btn.textContent = on ? 'Less' : 'Why';
+      body.hidden = !on;
+    };
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      if (o.opened.has(o.moreKey)) o.opened.delete(o.moreKey); else o.opened.add(o.moreKey);
+      sync();
+    });
+    sync();
+  }
   const list = el(box, 'div', 'dc-onb-opts' + (o.compact ? ' is-compact' : ''));
   const rows = [];
   const paint = v => rows.forEach(r => r.label.classList.toggle('is-on', r.value === v));
@@ -115,8 +150,14 @@ function renderOnboarding(parent, ctx) {
     plan: (settings.health || {}).plan || '',
     planTouched: !!(settings.health || {}).plan,
     levels: {},
+    milesUse: settings.milesUse || '',
+    cond: Object.assign({ checks: '', gym36: null, insurePlan: '', homeCover: '' }, settings.conditions || {}),
     busy: false,
   };
+  /* which "Why" notes are open, across redraws */
+  const opened = new Set();
+  /* a Miles statement already says what your Miles bought */
+  const milesKnown = () => !!(statement && statement.mileSource === 'statement');
 
   const root = el(parent, 'section', 'dc-onb');
   root.setAttribute('aria-labelledby', uidHead);
@@ -134,7 +175,9 @@ function renderOnboarding(parent, ctx) {
   /* ── the screens, in order, for what has been ticked so far ── */
   /* Vitality as answered so far; a programme only counts with its product */
   const vitNow = () => ({ money: !!(picked.bank && st.vm), health: !!(picked.health && st.vh), drive: !!(picked.insure && st.vd) });
-  const benefitRows = () => benefitsFor(picked, settings, vitNow());
+  /* Spending your Miles has its own question (milesUse), so it is not asked
+     again as "do you use it" */
+  const benefitRows = () => benefitsFor(picked, settings, vitNow()).filter(b => b.id !== 'milesPlus');
   const stepIds = () => {
     const ids = ['hello', 'products'];
     if (picked.bank) {
@@ -142,13 +185,14 @@ function renderOnboarding(parent, ctx) {
       if (st.bankKind !== 'savings') ids.push('tier');
       ids.push('vmQ');
       if (st.vm) ids.push('vmStatus');
+      if (st.vm && !milesKnown()) ids.push('milesUse');
     }
     if (picked.health) {
       ids.push('household', 'plan', 'vhQ');
-      if (st.vh) ids.push('vhStatus');
+      if (st.vh) ids.push('vhStatus', 'checks', 'gym36');
     }
     if (picked.insure) {
-      ids.push('vdQ');
+      ids.push('insurePlan', 'homeCover', 'vdQ');
       if (st.vd) ids.push('vdStatus');
     }
     if (benefitRows().length) ids.push('benefits');
@@ -198,6 +242,10 @@ function renderOnboarding(parent, ctx) {
       settings.vitality = Object.assign({}, settings.vitality, { money: st.vm });
     } else if (id === 'vmStatus') {
       settings.status = Object.assign({}, settings.status, { money: st.status.money });
+    } else if (id === 'checks' || id === 'gym36' || id === 'insurePlan' || id === 'homeCover') {
+      settings.conditions = Object.assign({}, settings.conditions, { [id]: st.cond[id] });
+    } else if (id === 'milesUse') {
+      settings.milesUse = st.milesUse;
     } else if (id === 'plan') {
       settings.health = Object.assign({}, settings.health);
       if (st.plan) settings.health.plan = st.plan; else delete settings.health.plan;
@@ -281,16 +329,16 @@ function renderOnboarding(parent, ctx) {
   const SCREENS = {
     hello(h, lead, body) {
       h.textContent = 'Is Discovery worth it for you?';
-      lead.textContent = 'This adds up what each Discovery product costs you and what it gives back. It reads the bank statements you imported with the Budget plugin.';
+      lead.textContent = 'What Discovery costs you, against what comes back.';
       const list = el(body, 'ul', 'dc-onb-points');
-      el(list, 'li', null, 'Nothing leaves your vault. No account, no sign in, no internet.');
-      el(list, 'li', null, 'A benefit only counts when you use it. A gym discount is worth nothing if you never go.');
-      el(list, 'li', null, 'A few short questions come first, so the numbers fit you. It takes about a minute.');
+      el(list, 'li', null, 'Nothing leaves your vault.');
+      el(list, 'li', null, 'A benefit counts only if you use it.');
+      el(list, 'li', null, 'A minute of questions first.');
     },
 
     products(h, lead, body) {
       h.textContent = 'Which Discovery products do you have?';
-      lead.textContent = 'We looked through your budget and ticked what we found. Change anything that is wrong.';
+      lead.textContent = 'We ticked what your budget shows. Fix anything wrong.';
       const list = el(body, 'div', 'dc-onb-products');
       for (const id of IDS) {
         const d = detected[id] || {};
@@ -307,12 +355,12 @@ function renderOnboarding(parent, ctx) {
         el(name, 'span', null, PRODUCT_NAMES[id]);
         if (d.why) el(text, 'span', 'dc-onb-opt-hint', d.why);
       }
-      el(body, 'p', 'dc-onb-hint', 'Only the products you tick get a page, a place on the overview and a row in the comparison.');
+      el(body, 'p', 'dc-onb-hint', 'Only ticked products get a page.');
     },
 
     bankKind(h, lead, body) {
       h.textContent = 'Which Discovery Bank product do you have?';
-      lead.textContent = 'This decides which rewards and fees apply to you.';
+      lead.textContent = 'It decides your fees and rewards.';
       radioGroup(body, {
         legend: 'Your Discovery Bank product',
         hint: banking.kind ? banking.why : 'Your budget does not say which one it is, so choose.',
@@ -327,7 +375,7 @@ function renderOnboarding(parent, ctx) {
       const opts = tiers();
       if (!opts.some(o => o.value === st.tier)) st.tier = opts.some(o => o.value === 'Black') ? 'Black' : opts[0].value;
       h.textContent = isCard ? 'Which tier is your credit card?' : 'Which tier is your Discovery Bank account?';
-      lead.textContent = 'The tier sets your monthly fees and how many Miles you earn.';
+      lead.textContent = 'It sets your fees and your Miles.';
       radioGroup(body, {
         legend: isCard ? 'Your credit card tier' : 'Your tier',
         hint: banking.tier ? 'Your monthly fees match the tier that is ticked. Change it if that is wrong.' : 'Your fees do not clearly match one tier, so check yours.',
@@ -340,19 +388,30 @@ function renderOnboarding(parent, ctx) {
     vmQ(h, lead, body) {
       const fee = vmFee();
       h.textContent = 'Do you have Vitality Money?';
-      lead.textContent = `Vitality Money is the add-on you pay for each month${fee === null ? '' : ` (${money(fee)} a month on your tier)`}. It unlocks the extra rewards on your bank account.`;
+      lead.textContent = `The monthly add-on${fee === null ? '' : ` (${money(fee)} on your tier)`} for the bank's extra rewards.`;
       yesNo(body, 'Vitality Money', st.vm, banking.vitalityMoney ? 'We saw Vitality Money premiums in your budget.' : 'We saw no Vitality Money premium in your budget.', v => { st.vm = v; drawProgress(); });
     },
 
     vmStatus(h, lead, body) {
       h.textContent = 'Your bank score';
-      lead.textContent = 'Your Vitality Money status, from Blue up to Diamond. The higher it is, the more you earn.';
+      lead.textContent = 'Vitality Money status, Blue to Diamond.';
       statusGroup(body, 'money', 'Your Vitality Money status');
+    },
+
+    milesUse(h, lead, body) {
+      h.textContent = 'How do you mostly spend your Miles?';
+      lead.textContent = 'Some ways make a Mile worth more.';
+      radioGroup(body, {
+        legend: 'How you spend your Miles',
+        options: MILES_USE,
+        value: st.milesUse,
+        onChange: v => { st.milesUse = v; },
+      });
     },
 
     plan(h, lead, body) {
       h.textContent = 'Which Discovery Health plan are you on?';
-      lead.textContent = 'The plan lets us tell the medical aid apart from Vitality and gap cover in the same debit order.';
+      lead.textContent = 'It splits your debit order into medical aid and Vitality.';
       const m = members();
       const guess = m.error ? null : guessHealthPlan(budget, m, discoveryPlans());
       if (!st.planTouched && guess) st.plan = guess.id;
@@ -373,7 +432,7 @@ function renderOnboarding(parent, ctx) {
 
     household(h, lead, body) {
       h.textContent = 'Who is on the medical aid?';
-      lead.textContent = 'The price of a plan depends on how many adults and children it covers.';
+      lead.textContent = 'Plan prices depend on who is covered.';
       const who = el(body, 'fieldset', 'dc-onb-group');
       el(who, 'legend', 'dc-onb-legend', 'People on the medical aid');
       const fields = el(who, 'div', 'dc-onb-fields');
@@ -404,36 +463,63 @@ function renderOnboarding(parent, ctx) {
 
     vhQ(h, lead, body) {
       h.textContent = 'Do you have Vitality Health?';
-      lead.textContent = 'Vitality Health is the wellness add-on to your Discovery Health plan. It unlocks rewards such as gym discounts and cash back on healthy food.';
+      lead.textContent = 'The add-on for gym and healthy food rewards.';
       yesNo(body, 'Vitality Health', st.vh, '', v => { st.vh = v; drawProgress(); });
     },
 
     vhStatus(h, lead, body) {
       h.textContent = 'Your health score';
-      lead.textContent = 'Your Vitality Health status, from Blue up to Diamond. The higher it is, the more you earn.';
+      lead.textContent = 'Vitality Health status, Blue to Diamond.';
       statusGroup(body, 'health', 'Your Vitality Health status');
+    },
+
+    checks(h, lead, body) {
+      h.textContent = 'Have you done your Vitality Age and a Vitality Health Check in the last 12 months?';
+      lead.textContent = 'Some rewards need them.';
+      radioGroup(body, { legend: 'In the last 12 months', options: CHECKS, value: st.cond.checks, compact: true, onChange: v => { st.cond.checks = v; } });
+    },
+
+    gym36(h, lead, body) {
+      h.textContent = 'Do you work out at Virgin Active or Planet Fitness at least 36 times a year?';
+      lead.textContent = 'Some rewards need regular gym visits.';
+      radioGroup(body, { legend: '36 gym visits a year', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }], value: st.cond.gym36 === true ? 'yes' : st.cond.gym36 === false ? 'no' : '', compact: true, onChange: v => { st.cond.gym36 = v === 'yes'; } });
+    },
+
+    insurePlan(h, lead, body) {
+      h.textContent = 'Which Discovery Insure plan are you on?';
+      lead.textContent = 'The plan sets your Drive rewards.';
+      radioGroup(body, { legend: 'Your Discovery Insure plan', options: INSURE_PLANS, value: st.cond.insurePlan, compact: true, onChange: v => { st.cond.insurePlan = v; } });
+    },
+
+    homeCover(h, lead, body) {
+      h.textContent = 'Does Discovery Insure also cover your home?';
+      lead.textContent = 'Home cover can raise your rewards.';
+      radioGroup(body, { legend: 'Home cover with Discovery Insure', options: HOME_COVER, value: st.cond.homeCover, onChange: v => { st.cond.homeCover = v; } });
     },
 
     vdQ(h, lead, body) {
       h.textContent = 'Do you have Vitality Drive?';
-      lead.textContent = 'Vitality Drive is the add-on that comes with Discovery Insure. It earns fuel rewards and cash back for safe driving.';
+      lead.textContent = 'The Insure add-on for fuel rewards.';
       yesNo(body, 'Vitality Drive', st.vd, '', v => { st.vd = v; drawProgress(); });
     },
 
     vdStatus(h, lead, body) {
       h.textContent = 'Your car score';
-      lead.textContent = 'Your Vitality Drive status, from Blue up to Diamond. The higher it is, the more you earn.';
+      lead.textContent = 'Vitality Drive status, Blue to Diamond.';
       statusGroup(body, 'drive', 'Your Vitality Drive status');
     },
 
     benefits(h, lead, body) {
       h.textContent = 'Which of these do you actually use?';
-      lead.textContent = 'A benefit only counts at what it is worth to you. We set each one from your budget. Change any that are wrong.';
+      lead.textContent = 'Each counts only as much as you use it.';
       for (const b of benefitRows()) {
         const s = statement && statement.benefits && statement.benefits[b.id];
         const g = radioGroup(body, {
           legend: b.label,
-          hint: [b.question, s && s.why].filter(Boolean).join(' '),
+          hint: b.question || '',
+          more: s && s.why ? 'From your budget: ' + s.why : '',
+          moreKey: 'why.' + b.id,
+          opened,
           options: LEVELS,
           value: levelOf(b),
           compact: true,
@@ -446,7 +532,7 @@ function renderOnboarding(parent, ctx) {
 
     done(h, lead, body) {
       h.textContent = 'You are all set';
-      lead.textContent = 'The page now counts only what you told us you have and use. You can change any answer later on the Inputs page.';
+      lead.textContent = 'Change any answer later on Inputs.';
       const names = IDS.filter(p => picked[p]).map(p => PRODUCT_NAMES[p]);
       const list = el(body, 'ul', 'dc-onb-points');
       el(list, 'li', null, names.length ? 'Your products: ' + names.join(', ') + '.' : 'You ticked no Discovery products, so there is nothing to work out yet. Go back and tick the ones you have.');
@@ -476,7 +562,7 @@ function renderOnboarding(parent, ctx) {
   function statusGroup(body, key, legend) {
     radioGroup(body, {
       legend,
-      hint: 'Not sure? Leave it on Blue and change it later.',
+      hint: 'Not sure? Leave it on Blue.',
       options: STATUSES.map(s => ({ value: s, label: s })),
       value: st.status[key],
       compact: true,

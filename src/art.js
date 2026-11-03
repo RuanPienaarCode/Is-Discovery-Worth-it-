@@ -6,8 +6,9 @@
 
    Colour comes from CSS (src/css/art.css): every shape is drawn in
    currentColor, and each mark's class (dc-art-bank, dc-art-health, ...) sets
-   `color` from Obsidian's theme colours. So the marks follow light and dark
-   themes, and none of them borrows a company's logo or brand colour. */
+   `color` from the page's product colours (Discovery's own palette, tuned
+   for contrast in light and dark). The shapes are the plugin's own: no
+   company's logo, wordmark or picture. */
 
 const NS = 'http://www.w3.org/2000/svg';
 

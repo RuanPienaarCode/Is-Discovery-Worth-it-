@@ -23,6 +23,15 @@ const LEVELS = [
   { value: 'none', label: 'Not for me' },
 ];
 
+/* How you spend your Miles (settings.milesUse), for the "Spending your
+   Miles" card: one line each. */
+const MILES_USE = [
+  { value: 'dday', label: 'On Ð-Day (the 15th)' },
+  { value: 'partners', label: 'At Discovery Miles partners' },
+  { value: 'utilities', label: 'Electricity, data or airtime' },
+  { value: 'none', label: 'I don\'t spend them' },
+];
+
 /* The plugin's own mark for a benefit, where one fits. */
 const MARK_OF = {
   miles: 'miles',
@@ -202,8 +211,34 @@ function renderBenefits(panel, ctx) {
     const titleId = `dc-ben-${run}-${b.id}`;
     const title = el(head, 'h4', 'dc-ben-card-h', b.label);
     title.id = titleId;
-    el(c, 'p', 'dc-ben-one', oneLiner(b, s));
+    /* Spending your Miles: the question is how, not how much; a Miles
+       statement already says, so then there is nothing to ask */
+    const milesHow = b.id === 'milesPlus';
+    const fromStatement = milesHow && st && st.mileSource === 'statement';
+    el(c, 'p', 'dc-ben-one', fromStatement ? 'Read from your Miles statement' : oneLiner(b, s));
+    if (milesHow && !fromStatement) milesChoice(c, titleId);
+    else if (!milesHow) levelChoice(c, b, x, titleId, suggested, level);
 
+    const worth = el(c, 'div', 'dc-ben-worth');
+    const big = (text, n, cls) => {
+      const w = el(worth, 'div', 'dc-ben-amt ' + cls + (amount(n) < 0.5 ? ' is-zero' : ''));
+      el(w, 'span', 'dc-ben-amt-l', `${text} ${label}`);
+      el(w, 'span', 'dc-ben-amt-n', money(per(amount(n))));
+    };
+    big('Full use', x.full, 'is-full');
+    big('You get', x.counted, 'is-got');
+
+    const more = moreToggle(c, 'card:' + b.id, `dc-ben-${run}-${b.id}-more`);
+    c.appendChild(more);
+    el(more, 'p', 'dc-ben-offer', offerText(b, s) || b.offer || '');
+    if (b.needs) el(more, 'p', 'dc-ben-small', 'Needs: ' + b.needs);
+    if (x.why) el(more, 'p', 'dc-ben-why', 'From your statements: ' + x.why);
+    if (x.note) el(more, 'p', 'dc-ben-small', 'Part of this does not count for you. ' + x.note);
+    if (b.measuredBy) el(more, 'p', 'dc-ben-small', 'How we see it: ' + b.measuredBy);
+  }
+
+  /* I use it / Sometimes / Not for me, as real radios */
+  function levelChoice(c, b, x, titleId, suggested, level) {
     const seg = el(c, 'div', 'dc-ben-seg');
     seg.setAttribute('role', 'radiogroup');
     seg.setAttribute('aria-labelledby', titleId);
@@ -223,23 +258,41 @@ function renderBenefits(panel, ctx) {
       opts.push({ lab, input });
       input.addEventListener('change', () => { if (input.checked) choose(b.id, o.value, suggested, opts, panel); });
     }
+  }
 
-    const worth = el(c, 'div', 'dc-ben-worth');
-    const big = (text, n, cls) => {
-      const w = el(worth, 'div', 'dc-ben-amt ' + cls + (amount(n) < 0.5 ? ' is-zero' : ''));
-      el(w, 'span', 'dc-ben-amt-l', `${text} ${label}`);
-      el(w, 'span', 'dc-ben-amt-n', money(per(amount(n))));
-    };
-    big('Full use', x.full, 'is-full');
-    big('You get', x.counted, 'is-got');
-
-    const more = moreToggle(c, 'card:' + b.id, `dc-ben-${run}-${b.id}-more`);
-    c.appendChild(more);
-    el(more, 'p', 'dc-ben-offer', offerText(b, s) || b.offer || '');
-    if (b.needs) el(more, 'p', 'dc-ben-small', 'Needs: ' + b.needs);
-    if (x.why) el(more, 'p', 'dc-ben-why', 'From your statements: ' + x.why);
-    if (x.note) el(more, 'p', 'dc-ben-small', 'Part of this does not count for you. ' + x.note);
-    if (b.measuredBy) el(more, 'p', 'dc-ben-small', 'How we see it: ' + b.measuredBy);
+  /* How do you spend your Miles? Four real radios; the answer is saved to
+     settings.milesUse and the page drawn again. */
+  function milesChoice(c, titleId) {
+    const box = el(c, 'fieldset', 'dc-ben-how');
+    el(box, 'legend', 'dc-ben-how-l', 'How do you spend your Miles?');
+    const list = el(box, 'div', 'dc-ben-how-opts');
+    const name = `dc-ben-${run}-miles-use`;
+    const opts = [];
+    for (const o of (ctx.milesUse || MILES_USE)) {
+      const lab = el(list, 'label', 'dc-ben-how-opt' + (s.milesUse === o.value ? ' is-on' : ''));
+      const input = el(lab, 'input', 'dc-ben-how-in');
+      input.type = 'radio';
+      input.name = name;
+      input.value = o.value;
+      input.checked = s.milesUse === o.value;
+      input.setAttribute('data-ben', 'milesPlus');
+      el(lab, 'span', 'dc-ben-how-t', o.label);
+      opts.push({ lab, input });
+      input.addEventListener('change', async () => {
+        if (!input.checked) return;
+        for (const q of opts) { q.lab.classList.toggle('is-on', q.input.checked); q.input.disabled = true; }
+        const scope = panel && typeof panel.closest === 'function' ? panel.closest('.dc-page') : null;
+        try {
+          s.milesUse = o.value;
+          if (typeof save === 'function') await save();
+        } finally {
+          for (const q of opts) q.input.disabled = false;
+        }
+        if (typeof rerender === 'function') await rerender();
+        refocus(scope, 'milesPlus');
+      });
+    }
+    return box;
   }
 
   function offList(parent, rows) {
@@ -289,4 +342,4 @@ function refocus(scope, id) {
   if (!go()) setTimeout(go, 0);
 }
 
-module.exports = { renderBenefits, benefitTotals, setLevel, shareLine, oneLiner, shortReason, LEVELS, MARK_OF };
+module.exports = { renderBenefits, benefitTotals, setLevel, shareLine, oneLiner, shortReason, LEVELS, MARK_OF, MILES_USE };

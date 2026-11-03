@@ -25,7 +25,8 @@ const { NEEDS, GRADES, compareHealth, compareGap, compareInsure, compareLife, co
 const { mountFlow } = require('./ui-flow');
 const { RATES, SUITES, rate, sourceText, suiteOf, bankProductOf } = require('./rates');
 const { renderWelcome } = require('./welcome');
-const { brandLogo, productLogo } = require('./logos');
+const { productLogo } = require('./logos');
+const { drawMark } = require('./art');
 const { STATUSES } = require('./constants');
 
 const { renderBenefits } = require('./ui-benefits');
@@ -61,27 +62,47 @@ function bankName(s) {
 const SUBTITLE = {
   bank: (s, v) => `${bankName(s)}${v.vitality.money ? ` · Vitality Money ${s.status.money}` : ''}`,
   health: (s, v) => `Medical aid${v.vitality.health ? ` · Vitality Health ${s.status.health}` : ''}`,
-  gap: () => 'Billed with the Discovery Health debit or on its own',
+  gap: () => 'Pays what the medical aid does not',
   insure: (s, v) => `Cars${v.vitality.drive ? ` · Vitality Drive ${s.status.drive}` : ''}${s.home && Number(s.home.monthly) === 0 && s.home.monthly !== '' && s.home.monthly !== null ? ' · home contents not insured' : ''}`,
   life: () => 'Through your payslip or a debit order',
 };
+/* each page's title and its one line, under the kicker */
+const TITLES = { overview: 'Is it worth it?', compare: 'Stay or switch?', benefits: 'Your benefits', flows: 'Where the money goes', inputs: 'Inputs' };
+const SUBS = {
+  overview: 'What you pay Discovery, and what comes back.',
+  compare: 'Stay with Discovery, or move everything.',
+  benefits: 'Pick the ones you use. Only those count.',
+  flows: 'Tap a product to follow its money.',
+  inputs: 'Everything you can set, in one place.',
+};
+/* settings.conditions, one line per answer */
+const CHECKS = [{ value: 'both', label: 'Both' }, { value: 'one', label: 'One of them' }, { value: 'none', label: 'Neither' }];
+const YES_NO = [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }];
+const INSURE_PLANS = [{ value: 'core', label: 'Core' }, { value: 'essential', label: 'Essential' }, { value: 'classic', label: 'Classic' }, { value: 'purple', label: 'Purple' }, { value: '', label: 'Not sure' }];
+const HOME_COVER = [{ value: 'both', label: 'Building and contents' }, { value: 'one', label: 'One of them' }, { value: 'none', label: 'No' }];
+/* a product's name in the rail */
+const NAV_NAME = { bank: 'Bank', health: 'Health', gap: 'Gap cover', insure: 'Insure', life: 'Life' };
 const TX_SHOWN = 30;
-const LEVEL_WORDS = { half: 'you only use it sometimes', none: 'it is not for you' };
+/* how you spend your Miles (settings.milesUse): one line each */
+const MILES_USE = [
+  { value: 'dday', label: 'On Ð-Day (the 15th)' },
+  { value: 'partners', label: 'At Discovery Miles partners' },
+  { value: 'utilities', label: 'Electricity, data or airtime' },
+  { value: 'none', label: 'I don\'t spend them' },
+];
 
 function mountBottomLine(root, ctx) {
   const plugin = ctx.plugin;
   const now = ctx.now || (() => new Date());
   let budget = null;
   let flow = null;
+  /* what is open (a More, a line, a list), kept across re-renders */
   const open = new Set();
-  /* the phone's tab menu: open or not, kept across re-renders */
+  /* the phone's side menu: open or not, kept across re-renders */
   let menuOpen = false;
   const wrap = el(root, 'div', 'dc-page');
-  /* On a phone the tab bar is a floating dock. It lives here, beside the
-     page and not inside it, because the page scrolls (see .is-narrow) and the
-     dock must not. Empty, and so invisible, on a wide pane. */
-  const chrome = el(root, 'div', 'dc-chrome');
-  const scroller = () => (wrap.classList.contains('is-narrow') ? wrap : root);
+  /* the page scrolls inside .dc-main; the rail (or the phone's bar) stays */
+  const scroller = () => wrap.querySelector('.dc-main') || wrap;
   let currentProducts = [];
   const parentProduct = id => currentProducts.find(p => p.id === id);
   /* the tabs for what this person has, and the page being drawn (the
@@ -95,32 +116,30 @@ function mountBottomLine(root, ctx) {
     return detectedCache;
   };
 
-  /* Narrow layout by the pane's own width (a sidebar or a phone), not the
-     window's — container queries need iOS 16, the floor here is iOS 15. */
+  /* The layout follows the pane's own width (a sidebar or a phone), not the
+     window's — container queries need iOS 16, the floor here is iOS 15.
+     Under 760px the rail becomes a top bar and a side menu; .dc-menu-ready
+     turns the menu's slide on a frame after that, so it never animates in
+     from a resize. */
   const applyWidth = () => {
     const w = wrap.clientWidth;
-    if (!w) return false;
-    /* only touch the classes when they change */
-    const was = wrap.classList.contains('is-narrow');
-    if (was !== w < 720) {
-      wrap.classList.toggle('is-narrow', w < 720);
-      chrome.classList.toggle('is-narrow', w < 720);
-      root.classList.toggle('dc-narrow', w < 720);
+    if (!w) return;
+    const set = (c, on) => { if (wrap.classList.contains(c) !== on) wrap.classList.toggle(c, on); };
+    set('is-medium', w < 1040);
+    set('is-narrow', w < 760);
+    set('is-phone', w < 520);
+    if (w >= 760) {
+      set('dc-menu-ready', false);
+      if (menuOpen) setMenu(false, false);
+    } else if (!wrap.classList.contains('dc-menu-ready')) {
+      requestAnimationFrame(() => { if (wrap.clientWidth < 760) wrap.classList.add('dc-menu-ready'); });
     }
-    if (wrap.classList.contains('is-phone') !== w < 560) wrap.classList.toggle('is-phone', w < 560);
-    return was !== w < 720;
-  };
-  const fit = () => {
-    const flipped = applyWidth();
-    /* the tabs live in a different place on a phone: draw them again */
-    if (flipped && wrap.querySelector('.dc-panel')) render();
-    if (wrap.clientWidth >= 720 && menuOpen) setMenu(false);
   };
   let ro = null;
   /* a frame later, so the class change is not made inside the observer's
      own callback ("ResizeObserver loop completed with undelivered
      notifications") */
-  if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(() => requestAnimationFrame(fit)); ro.observe(wrap); }
+  if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(() => requestAnimationFrame(applyWidth)); ro.observe(wrap); }
 
   /* A rebuild replaces every input, so one that lands while you are already
      in ANOTHER field would drop the keyboard (each field took two taps on a
@@ -148,6 +167,8 @@ function mountBottomLine(root, ctx) {
   const period = () => (plugin.settings.period === 'monthly' ? 'monthly' : 'annual');
   const per = n => (period() === 'monthly' ? n / 12 : n);
   const perLabel = () => (period() === 'monthly' ? 'a month' : 'a year');
+  /* a positive amount for prose: the words say which way it goes */
+  const R = n => money(per(Math.abs(n)));
   /* a saved tab that is now hidden (a product you no longer have) falls back */
   const tab = () => (currentTabs.some(t => t.id === plugin.settings.tab) ? plugin.settings.tab : 'overview');
   const amt = (parent, v, opts) => {
@@ -162,55 +183,61 @@ function mountBottomLine(root, ctx) {
     requestRender(null);
   }
 
-  /* The narrow switcher: a dock-styled bar at the bottom of the view naming
-     the open tab, which opens the whole list as a sheet standing where the
-     bar is. */
-  function setMenu(on) {
+  /* ── the phone's side menu ──────────────────────────────────────────
+     The rail's pages slide in from the left over a dimmed backdrop. Open:
+     focus goes to the open page's button and Tab stays inside; Escape, the
+     backdrop or the close button shut it and focus goes back to the menu
+     button. */
+  function setMenu(on, restore) {
     menuOpen = on;
-    const bar = root.querySelector('.dc-tabs');
-    if (!bar) return;
-    bar.classList.toggle('is-open', on);
-    const t = bar.querySelector('.dc-tabs-toggle');
-    if (t) t.setAttribute('aria-expanded', String(on));
-    /* the sheet covers the bar, so the keyboard goes to the sheet */
-    if (on) requestAnimationFrame(() => { const c = bar.querySelector('.dc-tab[aria-selected="true"]'); if (menuOpen && c) c.focus(); });
+    wrap.classList.toggle('dc-menu-open', on);
+    const t = wrap.querySelector('.dc-nav-menu');
+    if (t) {
+      t.setAttribute('aria-expanded', String(on));
+      t.setAttribute('aria-label', on ? 'Close menu' : 'Open menu');
+    }
+    if (on) {
+      const c = wrap.querySelector('.dc-nav .dc-tab[aria-selected="true"]') || wrap.querySelector('.dc-nav .dc-tab');
+      if (c) c.focus();
+    } else if (restore !== false && t) t.focus();
   }
   root.addEventListener('keydown', e => {
-    if (e.key !== 'Escape' || !menuOpen) return;
-    setMenu(false);
-    const t = root.querySelector('.dc-tabs-toggle');
-    if (t) t.focus();
+    if (!menuOpen) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setMenu(false);
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const drawer = wrap.querySelector('.dc-nav-drawer');
+    if (!drawer) return;
+    const items = Array.prototype.filter.call(drawer.querySelectorAll('button'), b => b.offsetWidth > 0);
+    if (!items.length) return;
+    const at = items.indexOf(document.activeElement);
+    const last = items.length - 1;
+    if (e.shiftKey ? at <= 0 : at === last || at < 0) {
+      e.preventDefault();
+      items[e.shiftKey ? last : 0].focus();
+    }
   });
-  /* A tap outside the open menu closes it and does nothing else: the click
-     that follows is swallowed, so it can't also flip Monthly/Yearly. */
-  let swallow = false;
-  root.addEventListener('pointerdown', e => {
-    if (!menuOpen || (e.target.closest('.dc-tabs') && !e.target.closest('.dc-scrim'))) return;
-    setMenu(false);
-    const t = root.querySelector('.dc-tabs-toggle');
-    if (t) t.focus();
-    swallow = true;
-    setTimeout(() => { swallow = false; }, 500);
-  });
-  root.addEventListener('click', e => {
-    if (!swallow) return;
-    swallow = false;
-    e.preventDefault();
-    e.stopPropagation();
-  }, true);
 
-  async function show(id) {
+  let tabSaveTimer = null;
+  function show(id) {
+    const nav = wrap.querySelector('.dc-nav');
+    const fromNav = !!nav && nav.contains(document.activeElement);
     plugin.settings.tab = id;
-    menuOpen = false;
+    if (menuOpen) { menuOpen = false; wrap.classList.remove('dc-menu-open'); }
     render();
-    const panel = wrap.querySelector('.dc-panel');
-    if (panel && panel.getBoundingClientRect().top < 0) panel.scrollIntoView();
-    if (wrap.classList.contains('is-narrow')) { const t = root.querySelector('.dc-tabs-toggle'); if (t) t.focus(); }
+    scroller().scrollTop = 0;
+    if (fromNav) {
+      const n = wrap.classList.contains('is-narrow') ? wrap.querySelector('.dc-nav-menu') : wrap.querySelector('#dc-tab-' + id);
+      if (n) n.focus();
+    }
     /* remembering the tab is not worth a data.json write per click */
     clearTimeout(tabSaveTimer);
     tabSaveTimer = setTimeout(() => plugin.saveSettings(), 1500);
   }
-  let tabSaveTimer = null;
 
   /* The welcome screen comes first each time the page opens. The data keeps
      loading behind it; a refresh must not rebuild it (that would restart its
@@ -222,9 +249,9 @@ function mountBottomLine(root, ctx) {
     renderWelcome(wrap, {
       onEnter: () => { welcomed = true; render(); },
       onSkip: async () => { plugin.settings.welcome = false; welcomed = true; render(); await plugin.saveSettings(); },
-      onReady: fit,
+      onReady: applyWidth,
     });
-    fit();
+    applyWidth();
   }
 
   function render() {
@@ -241,9 +268,9 @@ function mountBottomLine(root, ctx) {
     if (onboarding && wrap.querySelector('.dc-onb')) return;
     const scrollTop = scroller().scrollTop;
     applyWidth();
-    clear(chrome);
     if (flow) { flow.destroy(); flow = null; }
     clear(wrap);
+    wrap.classList.toggle('dc-menu-open', menuOpen);
     if (!budget || budget.folder === null) return renderEmpty();
     const win = trailingWindow(now(), s.months);
     const m = measure(budget.rows, budget.accounts, budget.categories, { ...win, notCardSpend: s.notCardSpend });
@@ -257,12 +284,13 @@ function mountBottomLine(root, ctx) {
     const sBank = s.bankKind || !banking.kind ? s : { ...s, bankKind: banking.kind };
     const st = buildStatement(m, sBank, ms, { products, vitality });
     if (onboarding) {
-      renderOnboarding(wrap, {
+      const main = el(wrap, 'main', 'dc-main dc-main-solo');
+      renderOnboarding(main, {
         settings: s, budget, detected, measured: m, statement: st,
         save: () => plugin.saveSettings(),
         onDone: () => { render(); scroller().scrollTop = 0; },
       });
-      fit();
+      applyWidth();
       return;
     }
     const pr = buildProducts(st, m, ms, s, now(), products);
@@ -274,13 +302,7 @@ function mountBottomLine(root, ctx) {
     currentProducts = pr.products;
     currentTabs = tabsFor(products);
 
-    renderTop(view);
-    const shell = el(wrap, 'div', 'dc-shell');
-    renderTabs(shell, view);
-    const panel = el(shell, 'div', 'dc-panel');
-    panel.id = 'dc-panel';
-    panel.setAttribute('role', 'tabpanel');
-    panel.setAttribute('aria-labelledby', 'dc-tab-' + tab());
+    const panel = renderShell(view);
     const t = tab();
     if (t === 'overview') renderOverview(panel, view);
     else if (t === 'compare') renderSwitch(panel, view);
@@ -289,29 +311,120 @@ function mountBottomLine(root, ctx) {
     else if (t === 'inputs') renderInputs(panel, view);
     else renderProduct(panel, view, view.P(t));
     renderFoot(panel, view);
-    fit();
+    applyWidth();
     scroller().scrollTop = scrollTop;
   }
 
   function renderEmpty() {
-    const c = el(wrap, 'div', 'dc-empty');
-    el(c, 'h2', null, 'No budget found');
-    el(c, 'p', 'dc-muted', 'This reads the Budget plugin\'s Transactions folder (Transactions/<account>/<YYYY-MM>.md). Set the budget folder in this plugin\'s settings if it lives somewhere unusual.');
+    const main = el(wrap, 'main', 'dc-main dc-main-solo');
+    const c = el(main, 'div', 'dc-empty');
+    el(c, 'h2', 'dc-empty-title', 'No budget found');
+    el(c, 'p', 'dc-empty-text', 'This reads the Budget plugin\'s Transactions folder.');
+    const mb = moreIn(c, 'empty.more');
+    el(mb, 'p', null, 'The notes it reads look like Transactions/<account>/<YYYY-MM>.md. Set the budget folder in this plugin\'s settings if it lives somewhere unusual.');
   }
 
-  // ── header and switcher ──────────────────────────────────────────────
-  function renderTop({ m, st, bankName: bn }) {
-    const h = el(wrap, 'header', 'dc-top');
-    const t = el(h, 'div', 'dc-top-text');
-    const eb = el(t, 'p', 'dc-eyebrow');
-    brandLogo(eb, 'discovery');
-    el(eb, 'span', null, 'Is Discovery Worth It?' + (bn ? ' · ' + bn : ''));
-    el(t, 'h1', 'dc-h1', 'Is it worth it?');
-    el(t, 'p', 'dc-meta', `${monthLabel(m.from)} – ${monthLabel(m.to)} · ${st.window.months} months · ${m.rowsSeen.toLocaleString('en-US').replace(/,/g, ' ')} transactions read`);
-    if (st.window.dataMonths < st.window.months) {
-      el(t, 'p', 'dc-note', `Only ${st.window.dataMonths} of these ${st.window.months} months have Discovery transactions, so the figures are scaled up from those months.`);
+  // ── the shell: rail (or the phone's bar and menu) and the page ───────
+  let lastTab = null;
+  function renderShell(view) {
+    const { m, st, P } = view;
+    const t = tab();
+    const curTab = currentTabs.find(x => x.id === t);
+    const curP = curTab.product ? P(curTab.id) : null;
+    const shell = el(wrap, 'div', 'dc-shell');
+    const nav = el(shell, 'nav', 'dc-nav');
+    nav.setAttribute('aria-label', 'Is Discovery Worth It?');
+    const brand = el(nav, 'div', 'dc-brand');
+    drawMark(brand, 'app', 'dc-brand-mark', 30);
+    const bt = el(brand, 'div', 'dc-brand-text');
+    el(bt, 'span', 'dc-brand-name', 'IS DISCOVERY');
+    el(bt, 'span', 'dc-brand-sub', 'worth it?');
+    /* the phone's bar: the open page, then the menu button */
+    const here = el(nav, 'div', 'dc-nav-current' + (curP ? ' dc-p-' + curP.id : ''));
+    here.setAttribute('aria-hidden', 'true');
+    const hi = el(here, 'span', 'dc-nav-current-icon');
+    if (curP) productLogo(hi, curP.id); else icon(hi, curTab.icon);
+    el(here, 'span', 'dc-nav-current-name', curP ? NAV_NAME[curP.id] : curTab.name);
+    const menuBtn = button(nav, 'dc-nav-menu', null, () => setMenu(!menuOpen), 'menu');
+    menuBtn.setAttribute('aria-expanded', String(menuOpen));
+    menuBtn.setAttribute('aria-label', menuOpen ? 'Close menu' : 'Open menu');
+    menuBtn.setAttribute('aria-controls', 'dc-nav-drawer');
+    const drawer = el(nav, 'div', 'dc-nav-drawer');
+    drawer.id = 'dc-nav-drawer';
+    const dh = el(drawer, 'div', 'dc-nav-drawer-head');
+    el(dh, 'span', 'dc-nav-drawer-title', 'Pages');
+    const close = button(dh, 'dc-nav-close', null, () => setMenu(false), 'x');
+    close.setAttribute('aria-label', 'Close menu');
+    renderTabs(drawer, view);
+    const foot = el(drawer, 'div', 'dc-nav-foot');
+    el(foot, 'p', 'dc-nav-window', `${monthLabel(m.from)} – ${monthLabel(m.to)}`);
+    el(foot, 'p', 'dc-nav-meta', `${st.window.months} months · ${m.rowsSeen.toLocaleString('en-US').replace(/,/g, ' ')} transactions`);
+    const scrim = el(shell, 'div', 'dc-nav-scrim');
+    scrim.addEventListener('click', () => setMenu(false));
+
+    const stage = el(shell, 'div', 'dc-stage');
+    const main = el(stage, 'main', 'dc-main');
+    /* arriving on a page plays its entrance; a repaint of the same page does not */
+    const entering = lastTab !== t;
+    lastTab = t;
+    const content = el(main, 'div', 'dc-content dc-content-' + (curTab.product ? 'product' : t) + (entering ? ' is-entering' : ''));
+    content.id = 'dc-panel';
+    content.setAttribute('role', 'tabpanel');
+    content.setAttribute('aria-labelledby', 'dc-tab-' + t);
+    pageHead(content, view, curTab, curP);
+    if (st.window.dataMonths < st.window.months && (t === 'overview' || curP)) {
+      hint(content, `Only ${st.window.dataMonths} of ${st.window.months} months have Discovery payments, so the rest is scaled up.`, 'info');
     }
-    const seg = el(h, 'div', 'dc-seg');
+    return content;
+  }
+
+  function renderTabs(parent, { P }) {
+    const TABS = currentTabs;
+    const list = el(parent, 'div', 'dc-tabs-list');
+    list.setAttribute('role', 'tablist');
+    list.setAttribute('aria-label', 'Pages');
+    list.setAttribute('aria-orientation', 'vertical');
+    TABS.forEach((t, i) => {
+      if (t.product && !TABS[i - 1].product) el(list, 'p', 'dc-nav-label', 'Your products').setAttribute('aria-hidden', 'true');
+      if (t.id === 'inputs') el(list, 'div', 'dc-nav-gap').setAttribute('aria-hidden', 'true');
+      const p = t.product ? P(t.id) : null;
+      const on = tab() === t.id;
+      const b = button(list, 'dc-tab' + (p ? ' dc-p-' + p.id : '') + (on ? ' is-active' : ''), null, () => show(t.id));
+      b.id = 'dc-tab-' + t.id;
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-controls', 'dc-panel');
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+      const ic = el(b, 'span', 'dc-tab-icon');
+      if (p) productLogo(ic, p.id); else icon(ic, t.icon);
+      el(b, 'span', 'dc-tab-name', p ? NAV_NAME[p.id] : t.name);
+      b.addEventListener('keydown', e => {
+        const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+        const jump = { Home: 0, End: TABS.length - 1 }[e.key];
+        if (!step && jump === undefined) return;
+        e.preventDefault();
+        const next = TABS[jump !== undefined ? jump : (i + step + TABS.length) % TABS.length].id;
+        const wasOpen = menuOpen;
+        show(next);
+        if (wasOpen) setMenu(true);
+        const n = wrap.querySelector('#dc-tab-' + next);
+        if (n) n.focus();
+      });
+    });
+  }
+
+  /* The page's head: a small tracked kicker, the title, one line under it,
+     and Monthly / Yearly on the right. */
+  function pageHead(content, { m, s, st }, curTab, p) {
+    const head = el(content, 'header', 'dc-head');
+    const titles = el(head, 'div', 'dc-head-titles');
+    el(titles, 'p', 'dc-kicker', `${monthLabel(m.from)} – ${monthLabel(m.to)}`);
+    const row = el(titles, 'div', 'dc-title-row');
+    if (p) productLogo(el(row, 'span', 'dc-tile dc-tile-lg dc-p-' + p.id), p.id);
+    el(row, 'h1', 'dc-title', p ? p.name : TITLES[curTab.id]);
+    const sub = p ? SUBTITLE[p.id](s, cur) : SUBS[curTab.id];
+    if (sub) el(titles, 'p', 'dc-sub', sub);
+    const seg = el(head, 'div', 'dc-seg');
     seg.setAttribute('role', 'group');
     seg.setAttribute('aria-label', 'Show amounts');
     for (const [k, label] of [['monthly', 'Monthly'], ['annual', 'Yearly']]) {
@@ -320,308 +433,284 @@ function mountBottomLine(root, ctx) {
     }
   }
 
-  function renderTabs(shell, { st, P, verdicts, sw, products }) {
-    const TABS = currentTabs;
-    const narrow = wrap.classList.contains('is-narrow');
-    const bar = el(narrow ? chrome : shell, 'div', 'dc-tabs' + (menuOpen ? ' is-open' : ''));
-    /* behind the open sheet: a tap on it closes the sheet and does nothing else */
-    if (narrow) el(bar, 'div', 'dc-scrim');
-    const cur = TABS.find(t => t.id === tab());
-    const curP = cur.product ? P(cur.id) : null;
-    const toggle = button(bar, 'dc-tabs-toggle' + (curP ? ' dc-p-' + curP.id : ''), null, () => setMenu(!menuOpen));
-    toggle.setAttribute('aria-expanded', String(menuOpen));
-    toggle.setAttribute('aria-controls', 'dc-tabs-list');
-    /* the open tab sits in the bar the way the active page sits in a dock */
-    const here = el(toggle, 'span', 'dc-dock-cur');
-    const ct = el(here, 'span', 'dc-tile' + (curP ? '' : ' is-plain'));
-    if (curP) productLogo(ct, curP.id); else icon(ct, cur.icon);
-    el(here, 'span', 'dc-tab-name', curP ? curP.short : cur.name);
-    el(here, 'span', 'dc-tabs-toggle-hint', 'All tabs');
-    icon(here, 'chevron-up', 'dc-tabs-chev');
-    const list = el(bar, 'div', 'dc-tabs-list');
-    list.id = 'dc-tabs-list';
-    list.setAttribute('role', 'tablist');
-    list.setAttribute('aria-label', 'Discovery products');
-    TABS.forEach((t, i) => {
-      if ((t.product && !TABS[i - 1].product) || t.id === 'inputs') el(list, 'div', 'dc-tab-sep');
-      const p = t.product ? P(t.id) : null;
-      const b = button(list, 'dc-tab' + (p ? ' dc-p-' + p.id : ''), null, () => show(t.id));
-      b.id = 'dc-tab-' + t.id;
-      b.setAttribute('role', 'tab');
-      b.setAttribute('aria-controls', 'dc-panel');
-      b.setAttribute('aria-selected', String(tab() === t.id));
-      b.tabIndex = tab() === t.id ? 0 : -1;
-      const tile = el(b, 'span', 'dc-tile' + (p ? '' : ' is-plain'));
-      if (p) productLogo(tile, p.id); else icon(tile, t.icon);
-      el(b, 'span', 'dc-tab-name', p ? p.short : t.name);
-      const fig = el(b, 'span', 'dc-tab-fig');
-      if (p && verdicts[p.id]) verdictFig(fig, verdicts[p.id]);
-      else if (p) amt(fig, p.figure, { plus: true });
-      else if (t.id === 'overview' && products.bank && st.chosen) { amt(fig, -st.chosen.gainIfSwitch, { plus: true }); el(fig, 'span', null, ' vs ' + st.chosen.name.split(' ')[0]); }
-      else if (t.id === 'compare') { amt(fig, Math.abs(sw.gain), { plus: true }); el(fig, 'span', null, sw.gain > 0 ? ' to switch' : ' to stay'); }
-      else if (t.id === 'benefits') el(fig, 'span', null, 'What counts for you');
-      else if (t.id === 'flows') el(fig, 'span', null, 'Where money goes');
-      else if (t.id === 'inputs') el(fig, 'span', null, 'Everything you can set');
-      b.addEventListener('keydown', e => {
-        const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
-        const jump = { Home: 0, End: TABS.length - 1 }[e.key];
-        if (!step && jump === undefined) return;
-        e.preventDefault();
-        const next = TABS[jump !== undefined ? jump : (i + step + TABS.length) % TABS.length].id;
-        show(next).then(() => { const n = root.querySelector('#dc-tab-' + next); if (n) n.focus(); });
-      });
+  // ── building blocks: cards, More, hints, section heads ──────────────
+  /* A "More" button and the region it shows and hides, with no redraw. Its
+     open state is kept by key in `open`, so it survives a re-render. The
+     button goes in btnParent; the region at the end of bodyParent (default:
+     the same parent). */
+  let moreSeq = 0;
+  function moreIn(btnParent, key, label, bodyParent) {
+    const id = 'dc-more-' + (++moreSeq);
+    const btn = el(btnParent, 'button', 'dc-more');
+    btn.type = 'button';
+    btn.setAttribute('aria-controls', id);
+    const body = el(bodyParent || btnParent, 'div', 'dc-more-body');
+    body.id = id;
+    const sync = () => {
+      const on = open.has(key);
+      btn.setAttribute('aria-expanded', String(on));
+      clear(btn);
+      el(btn, 'span', null, on ? 'Less' : (label || 'More'));
+      icon(btn, on ? 'chevron-up' : 'chevron-down', 'dc-more-chev');
+      body.hidden = !on;
+    };
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      if (open.has(key)) open.delete(key); else open.add(key);
+      sync();
     });
+    sync();
+    return body;
+  }
+
+  /* A card: a big heading, one short line and its key figure. Anything
+     longer goes in card.more(), behind a More button. o: { title, line, p
+     (product id: its mark and colour), icon, cls, key, tag } */
+  function card(parent, o) {
+    const c = el(parent, o.tag || 'section', 'dc-card' + (o.p ? ' dc-p-' + o.p : '') + (o.cls ? ' ' + o.cls : ''));
+    const head = el(c, 'div', 'dc-card-head');
+    if (o.p) productLogo(el(head, 'span', 'dc-tile'), o.p);
+    else if (o.icon) icon(el(head, 'span', 'dc-tile is-plain'), o.icon);
+    el(head, o.h || 'h2', 'dc-card-title', o.title);
+    const fig = el(c, 'div', 'dc-card-fig');
+    if (o.line) el(c, 'p', 'dc-card-line', o.line);
+    let body = null;
+    return { c, head, fig, more: label => (body || (body = moreIn(c, o.key || 'card.' + o.title, label))) };
+  }
+  /* the big figure and what it is: "R 1 671" then "a year" */
+  function figure(fig, v, opts) {
+    const o = opts || {};
+    if (v === null || v === undefined) el(fig, 'span', 'dc-amt is-zero dc-kpi-value', '—');
+    else if (o.words) amt(fig, Math.abs(v), { cls: 'dc-kpi-value is-plain' });
+    else amt(fig, v, { plus: o.plus, cls: 'dc-kpi-value' });
+    el(fig, 'span', 'dc-per', o.label || perLabel());
+  }
+  function pill(parent, text, tone) {
+    return el(parent, 'span', 'dc-pill' + (tone ? ' is-' + tone : ''), text);
+  }
+  /* one line in a dashed box: a note that matters, kept short */
+  function hint(parent, text, tone) {
+    const h = el(parent, 'div', 'dc-hint' + (tone ? ' is-' + tone : ''));
+    icon(h, tone === 'warn' ? 'triangle-alert' : 'info');
+    el(h, 'span', 'dc-hint-text', text);
+    return h;
+  }
+  /* A section of the page: its title, and a More on the right for the
+     longer words. Returns { sec, head, more() }. */
+  function section(parent, title, key, ic) {
+    const sec = el(parent, 'section', 'dc-section');
+    const head = el(sec, 'div', 'dc-section-head');
+    const h = el(head, 'h2', 'dc-section-title');
+    if (ic) icon(h, ic);
+    el(h, 'span', null, title);
+    let body = null;
+    return { sec, head, more: label => (body || (body = moreIn(head, key, label, sec))) };
+  }
+  /* A smaller heading inside a section, with its own More. */
+  function subHead(parent, title, key) {
+    const head = el(parent, 'div', 'dc-sub-head');
+    el(head, 'h3', 'dc-h3', title);
+    let body = null;
+    return { head, more: label => (body || (body = moreIn(head, key, label, parent))) };
   }
 
   // ── Overview ─────────────────────────────────────────────────────────
   function renderOverview(panel, { s, st, pr, verdicts, products, vitality }) {
     if (!pr.products.length) {
-      el(panel, 'p', 'dc-note dc-empty-note', 'You have not chosen any Discovery products yet. Choose the ones you have on the Inputs tab, under Your Discovery setup.');
+      hint(panel, 'Choose the Discovery products you have on the Inputs tab.', 'info');
       return;
     }
-    const grid = el(panel, 'div', 'dc-ov-grid');
-    /* Prose reads in words, so its amounts carry no sign: "R 181 a month
-       worse off", never "−R 181 against". */
-    const say = (p, text) => p.appendChild(document.createTextNode(text));
-    const sayAmt = (p, n) => el(p, 'span', 'dc-amt' + (Math.abs(per(n)) < 0.5 ? ' is-zero' : n > 0 ? ' is-pos' : ' is-neg'), money(per(Math.abs(n))));
+    const kpis = el(panel, 'div', 'dc-kpis');
     if (products.bank) {
       const alt = st.chosen;
-      const v = el(grid, 'section', 'dc-ov-card dc-ov-verdict dc-p-bank');
-      const vh = el(v, 'h2');
       if (alt) {
         const stay = st.verdict === 'stay';
-        el(vh, 'span', 'dc-name', stay ? 'Discovery Bank is worth keeping' : `${alt.name} would suit you better`);
-        amt(vh, stay ? -alt.gainIfSwitch : alt.gainIfSwitch, { plus: true, cls: 'dc-fig dc-kpi' });
-        /* one story: the central figure, then the careful count (Miles at face
-           value, no flight discounts next year, no gameboard) as a check on it */
-        const central = -alt.gainIfSwitch, cautious = st.cautious.net - alt.net;
-        const careful = ' (each Mile worth only 10c, no flight discounts next year and no gameboard rewards)';
-        const vp = el(v, 'p');
-        if (stay) {
-          say(vp, 'You are about ');
-          sayAmt(vp, central);
-          say(vp, ` ${perLabel()} better off with Discovery Bank than you would be with ${alt.name}, after its fees.`);
-        } else {
-          say(vp, 'You would be about ');
-          sayAmt(vp, -central);
-          say(vp, ` ${perLabel()} better off with ${alt.name} than with Discovery Bank.`);
-        }
-        const cp = el(v, 'p');
-        if (stay && cautious >= 0) {
-          say(cp, `Even if we count carefully${careful}, you are still `);
-          sayAmt(cp, cautious);
-          say(cp, ` ${perLabel()} ahead.`);
-        } else {
-          say(cp, `If we count carefully${careful}, ${cautious >= 0 ? 'Discovery Bank' : alt.name} comes out `);
-          sayAmt(cp, cautious);
-          say(cp, ` ${perLabel()} ahead${stay ? ', so it is close' : ''}.`);
-        }
+        const k = card(kpis, {
+          p: 'bank', cls: 'dc-kpi dc-kpi-hero', key: 'ov.bank',
+          title: stay ? 'Discovery Bank is worth keeping' : `${alt.name} would suit you better`,
+          line: stay ? `Better off than with ${alt.name}, after fees.` : `Better off with ${alt.name} than with Discovery Bank.`,
+        });
+        figure(k.fig, stay ? -alt.gainIfSwitch : alt.gainIfSwitch, { plus: true });
+        const mb = k.more();
+        const cautious = st.cautious.net - alt.net;
+        el(mb, 'p', null, stay && cautious >= 0
+          ? `Counted carefully, you are still ${R(cautious)} ${perLabel()} ahead.`
+          : `Counted carefully, ${cautious >= 0 ? 'Discovery Bank' : alt.name} comes out ${R(cautious)} ${perLabel()} ahead${stay ? ', so it is close' : ''}.`);
+        el(mb, 'p', 'dc-small', 'Carefully means each Mile worth only 10c, no flight discounts next year and no gameboard rewards.');
         const d = st.downgrade;
         if (d) {
-          const dp = el(v, 'p');
-          const off = n => { sayAmt(dp, n); say(dp, ` ${perLabel()} ${n >= 0 ? 'better' : 'worse'} off`); };
-          say(dp, `Staying with Discovery but moving to its cheaper ${d.label} (without the full ${suiteOf(s).label}) would leave you `);
-          off(d.gainIfDowngrade);
-          say(dp, d.gainAfterWatch !== null ? ' today' : '.');
-          if (d.gainAfterWatch !== null) {
-            say(dp, `, and `);
-            off(d.gainAfterWatch);
-            say(dp, ` once your Apple Watch contract ends${d.watchEnds ? ` on ${dayLabel(d.watchEnds)}` : ''}.`);
-          }
-          say(dp, ' See the Bank tab.');
+          const off = n => `${R(n)} ${perLabel()} ${n >= 0 ? 'better' : 'worse'} off`;
+          el(mb, 'p', null, `On Discovery's cheaper ${d.label}, without the full ${suiteOf(s).label}, you would be ${off(d.gainIfDowngrade)}${d.gainAfterWatch !== null ? `, and ${off(d.gainAfterWatch)} once your Apple Watch contract ends${d.watchEnds ? ` on ${dayLabel(d.watchEnds)}` : ''}` : ''}. See the Bank tab.`);
         }
+        const est = st.lines.filter(l => l.group === 'bank' && l.source === 'estimated' && l.annual > 0.5);
+        if (est.length) el(mb, 'p', 'dc-small', `Estimates, not from your statements: ${est.map(l => l.label).join('; ')}.`);
       } else {
-        el(vh, 'span', 'dc-name', 'Discovery Bank: rewards minus fees');
-        amt(vh, st.net, { plus: true, cls: 'dc-fig dc-kpi' });
+        const k = card(kpis, { p: 'bank', cls: 'dc-kpi dc-kpi-hero', title: 'Discovery Bank', line: 'Rewards minus fees.' });
+        figure(k.fig, st.net, { plus: true });
       }
     }
-    const bill = el(grid, 'section', 'dc-ov-card');
-    const bh = el(bill, 'h2');
-    el(bh, 'span', 'dc-name', 'Everything you pay Discovery');
-    amt(bh, -pr.totals.paid, { cls: 'dc-fig dc-kpi' });
-    const bp = el(bill, 'p');
-    say(bp, `${perLabel() === 'a month' ? 'A month' : 'A year'}, for all your Discovery products together. You got `);
-    sayAmt(bp, pr.totals.cash);
-    say(bp, ` ${perLabel()} back in cash from refunds and claims.`);
+    const pay = card(kpis, { icon: 'receipt', cls: 'dc-kpi', key: 'ov.paid', title: 'You pay Discovery', line: `${R(pr.totals.cash)} came back in cash.` });
+    figure(pay.fig, -pr.totals.paid);
+    const pm = pay.more('Each product');
+    billTable(pm, pr);
+    if (products.bank) el(pm, 'p', 'dc-small', 'Bank rewards (Miles, the watch, discounts) are not cash, so they are not here. They are in the Bank figure and on Flows.');
     const vit = st.vitality;
     if (products.health && vitality.health) {
-    const vc = el(grid, 'section', 'dc-ov-card dc-p-health');
-    const vch = el(vc, 'h2');
-    el(vch, 'span', 'dc-name', 'Is Vitality Health worth it?');
-    if (vit.premium !== null) {
-      amt(vch, vit.value - vit.premium, { plus: true, cls: 'dc-fig dc-kpi' });
-      const p = el(vc, 'p');
-      say(p, 'It costs ');
-      sayAmt(p, -vit.premium);
-      say(p, ` ${perLabel()} and gives you about `);
-      sayAmt(p, vit.value);
-      say(p, ` ${perLabel()} back in gym discounts, HealthyFood, flights and other rewards.`);
-    } else {
-      el(vch, 'span', 'dc-fig dc-amt is-zero', '—');
-      el(vc, 'p', null, 'Type your medical aid premium on the Inputs tab, so the Vitality part of the Discovery Health debit order can be worked out.');
+      const vc = card(kpis, { p: 'health', cls: 'dc-kpi', key: 'ov.vitality', title: 'Vitality Health', line: vit.premium !== null ? `Costs ${R(vit.premium)}, gives back ${R(vit.value)}.` : 'Type your medical aid premium on Inputs.' });
+      figure(vc.fig, vit.premium !== null ? vit.value - vit.premium : null, { plus: true });
+      if (vit.premium !== null) el(vc.more(), 'p', null, 'What comes back: gym discounts, HealthyFood, flights and other rewards.');
+      else el(vc.more(), 'p', null, 'With the premium typed, the Vitality part of the Discovery Health debit order can be worked out.');
     }
-    }
-
-    blockHeading(panel, 'Is each one worth it?', 'layout-grid');
-    el(panel, 'p', 'dc-muted', `Each Discovery product compared with what other companies charge. The amount on the right is what you pay for it ${perLabel()}${products.bank ? '; for Discovery Bank, it is its rewards minus its fees' : ''}.`);
-    const list = el(panel, 'div', 'dc-plist');
-    const row = (cls, logo, name, v, fallback, figure, open) => {
-      const r = button(list, 'dc-prow ' + cls, null, open);
-      const tile = el(r, 'span', 'dc-tile');
-      productLogo(tile, logo);
-      const t = el(r, 'span', 'dc-prow-t');
-      el(t, 'span', null, name);
-      if (v) {
-        verdictFig(el(t, 'span', 'dc-prow-v'), v);
-        el(t, 'span', null, verdictLine(v));
-      } else el(t, 'span', null, fallback);
-      if (figure === null) el(r, 'span', 'dc-amt is-zero', '—');
-      else amt(r, figure, { plus: true });
-      icon(r, 'chevron-right', 'dc-chev');
-    };
-    for (const p of pr.products) {
-      row('dc-p-' + p.id, p.id, p.name, verdicts[p.id], p.figureLabel, p.figure, () => show(p.id));
-      if (p.id === 'insure' && verdicts.home) row('dc-p-insure', 'insure', 'Home contents', verdicts.home, '', null, () => show('insure'));
-    }
-
-    blockHeading(panel, 'What you paid and got back in cash', 'receipt');
-    const tbl = el(panel, 'div', 'dc-bill');
-    const head = el(tbl, 'div', 'dc-bill-r dc-bill-h');
-    for (const x of ['Product', 'Paid', 'Back in cash']) el(head, 'span', null, x);
-    for (const p of pr.products) {
-      const r = el(tbl, 'div', 'dc-bill-r');
-      const n = el(r, 'span', 'dc-bill-n');
-      tag(n, p);
-      amt(r, -p.paid);
-      if (p.cashBack >= 0.5) amt(r, p.cashBack, { plus: true }); else el(r, 'span', 'dc-amt is-zero', '–');
-    }
-    const tr = el(tbl, 'div', 'dc-bill-r dc-bill-t');
-    el(tr, 'span', null, 'All products');
-    amt(tr, -pr.totals.paid);
-    amt(tr, pr.totals.cash, { plus: true });
-    if (products.bank) el(panel, 'p', 'dc-note', 'Discovery Bank\'s rewards (Miles, the Apple Watch, discounts) are not cash, so they are not in this table. They are counted in the Discovery Bank figure at the top and on the Flows tab.');
 
     /* benefits turned down on the Benefits tab count for less everywhere */
     const trimmed = BENEFITS.filter(b => st.benefits[b.id] && st.benefits[b.id].available && st.benefits[b.id].level !== 'full' && st.benefits[b.id].full >= 0.5);
     if (trimmed.length) {
-      const nt = el(panel, 'p', 'dc-note dc-weight-note', `${trimmed.map(b => b.label).join(', ')} count${trimmed.length === 1 ? 's' : ''} for less than their full value, because you said you use ${trimmed.length === 1 ? 'it' : 'them'} less. `);
-      button(nt, 'dc-link dc-weight-link', 'Change on Benefits', () => show('benefits'));
+      const h = hint(panel, `${trimmed.length} benefit${trimmed.length === 1 ? ' counts' : 's count'} for less, as you asked.`, 'info');
+      button(h, 'dc-link', 'Change', () => show('benefits'));
     }
 
-    const est = products.bank ? st.lines.filter(l => l.group === 'bank' && l.source === 'estimated' && l.annual > 0.5) : [];
-    if (est.length) el(panel, 'p', 'dc-note', `These parts of the Discovery Bank figure are estimates, not taken from your statements: ${est.map(l => l.label).join('; ')}.`);
+    const sec = section(panel, 'Is each one worth it?', 'ov.each.more', 'layout-grid');
+    el(sec.more(), 'p', null, `Each product against what other companies charge. The figure is what you pay for it ${perLabel()}${products.bank ? '; for the bank it is rewards minus fees' : ''}.`);
+    const grid = el(sec.sec, 'div', 'dc-grid');
+    for (const p of pr.products) {
+      productCard(grid, p.id, p.name, verdicts[p.id], p.figure, p.figureLabel, p.id);
+      if (p.id === 'insure' && verdicts.home) productCard(grid, 'insure', 'Home contents', verdicts.home, null, '', 'insure', 'home');
+    }
     renderDates(panel, pr.dates);
+  }
+
+  /* One product on the Overview: a button to its tab (heading, verdict,
+     figure, one line) and a More with the reason. */
+  function productCard(grid, id, name, v, fig, figLabel, target, key) {
+    const c = el(grid, 'article', 'dc-card dc-pcard dc-p-' + id);
+    const main = button(c, 'dc-pcard-main', null, () => show(target));
+    const head = el(main, 'span', 'dc-card-head');
+    productLogo(el(head, 'span', 'dc-tile'), id);
+    el(head, 'span', 'dc-card-title', name);
+    if (v) pill(head, v.word, v.tone);
+    const f = el(main, 'span', 'dc-card-fig');
+    if (fig === null) {
+      if (v && v.tone === 'none' && v.amount !== null) { el(f, 'span', 'dc-amt is-plain dc-kpi-value', R(v.amount)); el(f, 'span', 'dc-per', 'cover ' + perLabel()); }
+      else el(f, 'span', 'dc-amt is-zero dc-kpi-value', '—');
+    } else figure(f, fig, { plus: true, label: `${String(figLabel || '').toLowerCase().replace(/,$/, '')} ${perLabel()}`.trim() });
+    const words = v ? verdictWords(v) : { lead: figLabel, why: '' };
+    el(main, 'span', 'dc-card-line', words.lead);
+    icon(main, 'chevron-right', 'dc-pcard-chev');
+    if (words.why) el(moreIn(c, 'ov.p.' + (key || id)), 'p', null, words.why);
+  }
+
+  /* Paid and back in cash, per product: the table in the Overview's More. */
+  function billTable(parent, pr) {
+    const wrapT = el(parent, 'div', 'dc-table-wrap');
+    const t = el(wrapT, 'table', 'dc-table');
+    const hr = el(el(t, 'thead'), 'tr');
+    for (const [x, c] of [['Product', ''], ['Paid', 'dc-right'], ['Back in cash', 'dc-right']]) el(hr, 'th', c || null, x);
+    const tb = el(t, 'tbody');
+    for (const p of pr.products) {
+      const r = el(tb, 'tr');
+      tag(el(r, 'td'), p);
+      amt(el(r, 'td', 'dc-right'), -p.paid);
+      const c = el(r, 'td', 'dc-right');
+      if (p.cashBack >= 0.5) amt(c, p.cashBack, { plus: true }); else el(c, 'span', 'dc-amt is-zero', '–');
+    }
+    const tr = el(tb, 'tr', 'dc-row-total');
+    el(tr, 'td', null, 'All products');
+    amt(el(tr, 'td', 'dc-right'), -pr.totals.paid);
+    amt(el(tr, 'td', 'dc-right'), pr.totals.cash, { plus: true });
   }
 
   function renderDates(parent, dates, product) {
     const list = product ? dates.filter(d => d.product === product) : dates;
     if (!list.length) return;
-    blockHeading(parent, 'Dates to watch', 'calendar');
-    const ul = el(parent, 'ul', 'dc-dates');
+    const sec = section(parent, 'Dates to watch', 'dates.' + (product || 'all'), 'calendar');
+    const ul = el(sec.sec, 'ul', 'dc-rows dc-dates');
     for (const d of list) {
-      const li = el(ul, 'li', 'dc-date');
+      const li = el(ul, 'li', 'dc-row dc-date');
       el(li, 'span', 'dc-date-d', dayLabel(d.date));
       const t = el(li, 'span', 'dc-date-t');
       if (!product) { const p = parentProduct(d.product); if (p) tag(t, p); }
       el(t, 'span', null, ' ' + d.text);
     }
   }
+
   // ── Compare: stay with Discovery or switch everything ───────────────
-  /* Written for someone who does not read statements: two boxes (what you
-     pay, what you get back, what it really costs), the answer in one line,
-     then one sentence per product. Every amount is a positive rand amount;
-     the words say which way it goes. The full table waits behind a button. */
+  /* Written for someone who does not read statements: the answer as one
+     card, the two sides (what it really costs), then one card per product.
+     Every amount is a positive rand amount; the words say which way it goes.
+     The reasons and the full table wait behind More. */
   function renderSwitch(panel, { sw, st, rivals, pr, products }) {
-    const R = n => money(per(Math.abs(n)));
     /* the prices are typed in by hand and checked twice a year: say when */
     const age = marketAge(now());
-    const mb = el(panel, 'div', 'dc-market-banner' + (age.stale ? ' is-stale' : ''));
+    const mb = el(panel, 'div', 'dc-market-banner dc-hint' + (age.stale ? ' is-warn is-stale' : ''));
     mb.setAttribute('role', 'status');
-    el(mb, 'p', 'dc-market-line', `Prices as at ${dayLabel(age.asOf)}. Next update by ${monthLabel(age.reviewBy.slice(0, 7))}.`);
-    if (age.stale) el(mb, 'p', 'dc-market-warn', 'These prices may be out of date. Banks, medical aids and insurers change what they charge every year, so check each price with the company before you decide.');
+    icon(mb, age.stale ? 'triangle-alert' : 'calendar');
+    el(mb, 'span', 'dc-hint-text dc-market-line', age.stale ? 'These prices may be out of date.' : `Prices as at ${dayLabel(age.asOf)}.`);
+    const mm = moreIn(mb, 'market.more', 'More', mb);
+    el(mm, 'p', null, `Prices as at ${dayLabel(age.asOf)}. Next update by ${monthLabel(age.reviewBy.slice(0, 7))}.`);
+    if (age.stale) el(mm, 'p', 'dc-market-warn', 'Banks, medical aids and insurers change prices every year. Check each one with the company before you decide.');
     if (!pr.products.length) {
-      el(panel, 'p', 'dc-note dc-empty-note', 'You have not chosen any Discovery products yet, so there is nothing to compare. Choose them on the Inputs tab, under Your Discovery setup.');
+      hint(panel, 'Choose your Discovery products on the Inputs tab to compare them.', 'info');
       return;
     }
     const diff = Math.abs(sw.gain);
     const stayBetter = sw.gain <= 0;
 
+    const ans = card(panel, {
+      icon: 'scale', cls: 'dc-kpi dc-kpi-hero dc-sw-answer' + (diff < 0.5 ? '' : stayBetter ? ' is-stay' : ' is-move'), key: 'sw.answer',
+      title: diff < 0.5 ? 'Both cost about the same' : stayBetter ? 'Staying is cheaper' : 'Moving is cheaper',
+      line: diff < 0.5 ? 'Staying or moving costs the same.' : `Than ${stayBetter ? 'moving everything' : 'staying with Discovery'}.`,
+    });
+    figure(ans.fig, diff, { words: true, label: 'less ' + perLabel() });
+    const am = ans.more();
+    if (sw.assumed.length) {
+      const names = sw.assumed.map(x => x.toLowerCase());
+      const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+      el(am, 'p', null, `No quote yet for ${list}, so both sides use what you pay now. Type quotes on the Inputs tab.`);
+    }
+    el(am, 'p', null, `Moving everything means ${products.bank && st.chosen ? st.chosen.name + ' instead of Discovery Bank, ' : ''}the cheapest medical aid and gap cover that cover what you need, and your own quotes for car and life cover.`);
+    el(am, 'p', 'dc-small', 'Insurance claims are left out, because any insurer pays claims. Cover is never exactly the same, so check each product\'s tab before you move.');
+
     const sides = el(panel, 'div', 'dc-sw-sides');
-    const box = (title, s, win, who, side, items) => {
-      const b = el(sides, 'section', 'dc-sw-side' + (win ? ' is-win' : ''));
-      el(b, 'h3', 'dc-sw-title', title);
-      if (who) el(b, 'p', 'dc-sw-who', who);
-      const line = (label, v, cls) => {
-        const r = el(b, 'div', 'dc-sw-ln' + (cls ? ' ' + cls : ''));
-        el(r, 'span', null, label);
-        const val = el(r, 'span', 'dc-sw-v', R(v));
-        el(val, 'span', 'dc-sw-per', ' ' + perLabel());
-      };
-      line('You pay', s.cost);
-      /* tap "You get back" to see what that money actually is */
-      if (s.benefit >= 0.5) {
-        const key = 'back.box.' + side;
-        const isOpen = open.has(key);
-        const r = button(b, 'dc-sw-ln is-back dc-tap', null, () => { isOpen ? open.delete(key) : open.add(key); render(); });
-        r.setAttribute('aria-expanded', String(isOpen));
-        const lab = el(r, 'span', 'dc-tap-l');
-        el(lab, 'span', null, 'You get back in rewards');
-        icon(lab, isOpen ? 'chevron-down' : 'chevron-right', 'dc-chev');
-        const val = el(r, 'span', 'dc-sw-v', R(s.benefit));
-        el(val, 'span', 'dc-sw-per', ' ' + perLabel());
-        if (isOpen) backBreakdown(b, items);
-      } else line('You get back in rewards', 0, 'is-back');
-      line(s.real >= 0 ? 'Real cost' : 'You come out ahead by', s.real, 'is-real');
-    };
-    /* "compared to what": each box names who it means */
     const movedTo = sw.rows.filter(r => r.kind === 'cost' && r.goName && !r.assumed).map(r => r.goName);
     const kept = sw.rows.filter(r => r.kind === 'cost' && r.assumed).map(r => r.label.toLowerCase());
     const names = xs => (xs.length > 1 ? xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1] : xs[0] || '');
     const sideItems = k => sw.rows.filter(r => r.kind === 'benefit').flatMap(r => r[k] || []);
-    box('If you stay with Discovery', sw.stay, diff >= 0.5 && stayBetter, `${names(pr.products.map(p => p.name))}, as you have them now.`, 'stay', sideItems('stayItems'));
-    box('If you move everything', sw.go, diff >= 0.5 && !stayBetter, movedTo.length ? `To ${names(movedTo)}${kept.length ? `. ${names(kept).replace(/^./, x => x.toUpperCase())} stay${kept.length > 1 ? '' : 's'} at today's price until you get a quote` : ''}.` : '', 'go', sideItems('goItems'));
+    const side = (title, x, win, who, key, items) => {
+      const k = card(sides, { icon: key === 'stay' ? 'anchor' : 'shuffle', cls: 'dc-sw-side' + (win ? ' is-win' : ''), key: 'sw.side.' + key, title, line: `Pay ${R(x.cost)}, get ${R(x.benefit)} back.` });
+      if (win) pill(k.head, 'Cheaper', 'good');
+      figure(k.fig, x.real, { words: true, label: (x.real >= 0 ? 'real cost ' : 'ahead ') + perLabel() });
+      const m = k.more('What comes back');
+      if (who) el(m, 'p', 'dc-small', who);
+      if (x.benefit >= 0.5) backBreakdown(m, items);
+    };
+    side('Stay with Discovery', sw.stay, diff >= 0.5 && stayBetter, `${names(pr.products.map(p => p.name))}, as you have them now.`, 'stay', sideItems('stayItems'));
+    side('Move everything', sw.go, diff >= 0.5 && !stayBetter, movedTo.length ? `To ${names(movedTo)}${kept.length ? `. ${names(kept).replace(/^./, x => x.toUpperCase())} stay${kept.length > 1 ? '' : 's'} at today's price until you get a quote` : ''}.` : '', 'go', sideItems('goItems'));
 
-    el(panel, 'p', 'dc-sw-banner' + (diff < 0.5 ? '' : stayBetter ? ' is-stay' : ' is-move'),
-      diff < 0.5 ? 'Both cost about the same.'
-        : `✔ ${stayBetter ? 'Staying' : 'Moving everything'} costs you ${R(diff)} ${perLabel()} less.`);
-    if (sw.assumed.length) {
-      const names = sw.assumed.map(x => x.toLowerCase());
-      const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
-      el(panel, 'p', 'dc-note', `${list.charAt(0).toUpperCase() + list.slice(1)} ${names.length > 1 ? 'have' : 'has'} no quote yet, so both sides use what you pay now. Type quotes on the Inputs tab to compare ${names.length > 1 ? 'them' : 'it'} properly.`);
-    }
-
-    blockHeading(panel, 'Where the difference comes from', 'arrow-left-right');
-    el(panel, 'p', 'dc-muted', `Amounts are ${perLabel()}.`);
-    const why = el(panel, 'div', 'dc-sw-why');
+    const why = section(panel, 'Where the difference comes from', 'sw.why', 'arrow-left-right');
+    el(why.more(), 'p', null, `Amounts are ${perLabel()}. Each card says which way that product leans.`);
+    const grid = el(why.sec, 'div', 'dc-grid');
     const LOGO = { bank: 'bank', medical: 'health', car: 'insure', gap: 'gap', life: 'life' };
     for (const g of sw.groups) {
-      const item = el(why, 'div', 'dc-sw-item');
-      const name = el(item, 'span', 'dc-sw-name');
-      productLogo(el(name, 'span', 'dc-tile'), LOGO[g.id]);
-      el(name, 'span', null, g.label);
-      const text = el(item, 'p', 'dc-sw-text');
-      const lead = Math.abs(g.saving) < 0.5 ? null : g.saving > 0 ? `Moving is ${R(g.saving)} better.` : `Staying is ${R(g.saving)} better.`;
-      if (lead) el(text, 'strong', 'dc-sw-lead ' + (g.saving > 0 ? 'is-move' : 'is-stay'), lead + ' ');
-      text.appendChild(document.createTextNode(switchReason(g, R, !!lead)));
+      const even = Math.abs(g.saving) < 0.5;
+      const k = card(grid, { p: LOGO[g.id], cls: 'dc-sw-item', h: 'h3', key: 'sw.g.' + g.id, title: g.label, line: switchReason(g, R, !even) || 'No difference yet.' });
+      if (!even) pill(k.head, g.saving > 0 ? 'Move' : 'Stay', g.saving > 0 ? 'check' : 'good');
+      if (even) el(k.fig, 'span', 'dc-amt is-zero dc-kpi-value', 'Same');
+      else figure(k.fig, g.saving, { words: true, label: `better to ${g.saving > 0 ? 'move' : 'stay'}` });
     }
 
     renderRivals(panel, rivals);
 
-    const all = open.has('sw.table');
-    button(panel, 'dc-link', all ? 'Hide the amounts' : 'Show every amount', () => { all ? open.delete('sw.table') : open.add('sw.table'); render(); }, all ? 'chevron-down' : 'chevron-right');
-    if (all) switchTable(panel, sw);
-
-    el(panel, 'p', 'dc-note', `"Moving everything" means ${products.bank && st.chosen ? st.chosen.name + ' instead of Discovery Bank, ' : ''}the cheapest medical aid and gap cover that cover what you need, and your own quotes for car and life cover. Insurance claims are left out, because any insurer pays claims. Cover is never exactly the same, so check each product's tab before you move.`);
+    const all = section(panel, 'Every amount', 'sw.table.sec', 'table');
+    switchTable(all.more('Show the table'), sw);
   }
 
   /* The top five competitors for each product, beside what Discovery costs
-     you now. Plain lines, not a table: name and what you get on the left,
-     what it costs and how it compares with Discovery on the right. */
+     you now: one row each (name, one line, how it compares); the costs and
+     what comes back wait behind its More. */
   function renderRivals(panel, rivals) {
     if (!rivals.length) return;
-    const R = n => money(per(Math.abs(n)));
-    blockHeading(panel, 'Discovery next to its top competitors', 'layout-grid');
-    el(panel, 'p', 'dc-muted', `For each product, what Discovery costs you now and what the five closest competitors cost. "Real cost" is what you pay less what you get back. Amounts are ${perLabel()}.`);
+    const top = section(panel, 'Discovery next to its competitors', 'rv.more', 'layout-grid');
+    el(top.more(), 'p', null, `For each product, what Discovery costs you now and what the five closest competitors cost. Real cost is what you pay less what you get back. Amounts are ${perLabel()}.`);
     const LOGO = { bank: 'bank', medical: 'health', car: 'insure', gap: 'gap', life: 'life' };
     const NOTE = {
       medical: 'Discovery\'s real cost counts the Vitality rewards you get back; the other medical aids have no Vitality.',
@@ -630,57 +719,48 @@ function mountBottomLine(root, ctx) {
       life: 'Life cover is priced per person: get a quote for the same cover.',
     };
     for (const sec of rivals) {
-      const h = el(panel, 'h3', 'dc-h3 dc-rv-h');
-      productLogo(el(h, 'span', 'dc-tile'), LOGO[sec.id]);
-      el(h, 'span', null, sec.label);
-      if (NOTE[sec.id]) el(panel, 'p', 'dc-muted', NOTE[sec.id]);
-      const list = el(panel, 'div', 'dc-rv');
+      const c = el(top.sec, 'div', 'dc-card dc-rv-card dc-p-' + LOGO[sec.id]);
+      const head = el(c, 'div', 'dc-card-head');
+      productLogo(el(head, 'span', 'dc-tile'), LOGO[sec.id]);
+      el(head, 'h3', 'dc-card-title', sec.label);
+      if (NOTE[sec.id]) el(moreIn(head, 'rv.note.' + sec.id, 'More', c), 'p', null, NOTE[sec.id]);
+      const list = el(c, 'ul', 'dc-rows dc-rv');
       const d = sec.discovery;
-      const you = el(list, 'div', 'dc-rv-row is-you');
-      const yl = el(you, 'div', 'dc-rv-l');
-      el(yl, 'span', 'dc-rv-name', d.name);
-      el(yl, 'span', 'dc-rv-what', 'What you have now');
-      const yn = el(you, 'div', 'dc-rv-nums');
-      el(yn, 'span', null, `Costs ${R(d.pay)}`);
-      const dOpen = d.back >= 0.5 && backTap(yn, `back.${sec.id}.discovery`, `Gives back ${R(d.back)}`);
-      el(yn, 'span', 'dc-rv-real', d.real >= 0 ? `Real cost ${R(d.real)}` : `You come out ${R(d.real)} ahead`);
-      if (dOpen) backBreakdown(list, d.items);
+      const row = (cls, name, line, figText, figCls, key, fill) => {
+        const li = el(list, 'li', 'dc-row dc-rv-row' + cls);
+        const l = el(li, 'div', 'dc-rv-l');
+        el(l, 'span', 'dc-rv-name', name);
+        if (line) el(l, 'span', 'dc-rv-what' + (line.miss ? ' is-miss' : ''), line.text);
+        el(li, 'span', 'dc-rv-cmp ' + (figCls || ''), figText);
+        fill(moreIn(li, key, 'More', li));
+      };
+      row(' is-you', d.name, { text: 'What you have now' }, d.real >= 0 ? `${R(d.real)} real cost` : `${R(d.real)} ahead`, 'is-plain', `rv.${sec.id}.d`, m => {
+        el(m, 'p', null, `Costs ${R(d.pay)}. Gives back ${R(d.back)}.`);
+        if (d.back >= 0.5) backBreakdown(m, d.items);
+      });
       sec.rivals.forEach((r, ri) => {
-        const row = el(list, 'div', 'dc-rv-row');
-        const l = el(row, 'div', 'dc-rv-l');
-        el(l, 'span', 'dc-rv-name', r.name + (r.quoted ? ' (your quote)' : ''));
-        if (r.what) el(l, 'span', 'dc-rv-what', r.what);
-        if (r.misses.length) el(l, 'span', 'dc-rv-miss', 'Does not cover: ' + r.misses.map(id => (NEEDS.find(n => n.id === id) || { label: id }).label.toLowerCase()).join(', '));
-        const n = el(row, 'div', 'dc-rv-nums');
-        if (r.pay === null) {
-          el(n, 'span', 'dc-rv-none', 'No published price');
-          if (r.quoteUnder) el(n, 'span', 'dc-rv-cmp', `Worth it if a quote is under ${money(r.quoteUnder)} a month`);
-          return;
-        }
-        el(n, 'span', null, `Costs ${R(r.pay)}`);
-        const rOpen = r.back >= 0.5 && backTap(n, `back.${sec.id}.${ri}`, `Gives back ${R(r.back)}`);
-        const gap = r.real - d.real;
-        el(n, 'span', 'dc-rv-cmp ' + (Math.abs(per(gap)) < 0.5 ? '' : gap < 0 ? 'is-cheaper' : 'is-dearer'),
-          Math.abs(per(gap)) < 0.5 ? 'About the same as Discovery' : `${R(gap)} ${gap < 0 ? 'cheaper' : 'more'} than Discovery`);
-        if (rOpen) backBreakdown(list, r.items);
+        const missing = r.misses.length ? 'Does not cover ' + r.misses.map(id => (NEEDS.find(n => n.id === id) || { label: id }).label.toLowerCase()).join(', ') : '';
+        const line = missing ? { text: missing, miss: true } : r.what ? { text: r.what } : null;
+        const gap = r.pay === null ? null : r.real - d.real;
+        const fig = r.pay === null ? 'No published price'
+          : Math.abs(per(gap)) < 0.5 ? 'About the same' : `${R(gap)} ${gap < 0 ? 'cheaper' : 'more'}`;
+        const cls = r.pay === null || Math.abs(per(gap)) < 0.5 ? 'is-zero' : gap < 0 ? 'is-cheaper' : 'is-dearer';
+        row('', r.name + (r.quoted ? ' (your quote)' : ''), line, fig, cls, `rv.${sec.id}.${ri}`, m => {
+          if (missing && r.what) el(m, 'p', 'dc-small', r.what);
+          if (r.pay === null) {
+            if (r.quoteUnder) el(m, 'p', null, `Worth it if a quote is under ${money(r.quoteUnder)} a month.`);
+            return;
+          }
+          el(m, 'p', null, `Costs ${R(r.pay)}. Gives back ${R(r.back)}. Real cost ${R(r.real)}.`);
+          if (r.back >= 0.5) backBreakdown(m, r.items);
+        });
       });
     }
-  }
-
-  /* "Gives back R X" as a tap target; returns whether it is open. */
-  function backTap(parent, key, text) {
-    const isOpen = open.has(key);
-    const b = button(parent, 'dc-tap dc-rv-back', null, () => { isOpen ? open.delete(key) : open.add(key); render(); });
-    b.setAttribute('aria-expanded', String(isOpen));
-    const lab = el(b, 'span', 'dc-tap-l', text);
-    icon(lab, isOpen ? 'chevron-down' : 'chevron-right', 'dc-chev');
-    return isOpen;
   }
 
   /* What the money that comes back actually is: how much is cash, then each
      kind (Miles, discounts, the watch…) with what it means and its items. */
   function backBreakdown(parent, items) {
-    const R = n => money(per(Math.abs(n)));
     const box = el(parent, 'div', 'dc-bk');
     const kinds = byKind(items);
     const total = items.reduce((t, i) => t + i.annual, 0);
@@ -688,7 +768,7 @@ function mountBottomLine(root, ctx) {
     el(box, 'p', 'dc-bk-sum', Math.abs(per(total)) < 0.5 ? 'Nothing comes back.'
       : Math.abs(per(total - cash)) < 0.5 ? 'All of this is cash in your account.'
         : Math.abs(per(cash)) < 0.5 ? 'None of this is cash. It is only worth something when you use it.'
-          : `Only ${R(cash)} ${perLabel()} of this is cash in your account. The rest is only worth something when you use it.`);
+          : `Only ${R(cash)} ${perLabel()} of this is cash. The rest is only worth something when you use it.`);
     for (const k of kinds) {
       const g = el(box, 'div', 'dc-bk-grp is-' + k.kind);
       const head = el(g, 'div', 'dc-bk-head');
@@ -709,120 +789,126 @@ function mountBottomLine(root, ctx) {
     const row = k => g.rows.find(r => r.key === k);
     const vit = row('vitality') || row('vitality.rewards');
     const drive = row('drive');
-    if (g.id === 'bank') return g.saving <= 0 ? 'Discovery\'s rewards are worth more than its extra fees.' : `${row('bank').goName} costs less once you count the rewards.`;
+    if (g.id === 'bank') return g.saving <= 0 ? 'Its rewards are worth more than its extra fees.' : `${row('bank').goName} costs less once you count the rewards.`;
     if (g.id === 'medical') {
       const m = row('medical');
       if (!m || m.assumed) return 'No other plan is priced for your family yet.';
       const cheaper = m.stay - m.go;
-      if (cheaper >= 0.5) return `${m.goName} is ${R(cheaper)} cheaper${vit ? (g.saving <= 0 ? ', but you would lose Vitality.' : ', even after losing Vitality.') : '.'}`;
-      return `${m.goName}, the cheapest plan that covers what you need, costs ${R(cheaper)} more${vit ? ', and you would lose Vitality' : ''}.`;
+      if (cheaper >= 0.5) return `${m.goName} is ${R(cheaper)} cheaper${vit ? (g.saving <= 0 ? ', but you lose Vitality.' : ', even without Vitality.') : '.'}`;
+      return `${m.goName} costs ${R(cheaper)} more${vit ? ', and you lose Vitality' : ''}.`;
     }
     if (g.id === 'car') {
       const c = row('car');
-      if (!c || c.assumed) return (drive ? 'You would lose the Vitality Drive fuel rewards. ' : '') + 'There is no car quote yet.';
+      if (!c || c.assumed) return 'There is no car quote yet.';
       const cheaper = c.stay - c.go;
-      return `Your quote from ${c.goName} is ${R(cheaper)} ${cheaper >= 0 ? 'cheaper' : 'more'}${drive ? ', but you would lose the Drive fuel rewards' : ''}.`;
+      return `Your ${c.goName} quote is ${R(cheaper)} ${cheaper >= 0 ? 'cheaper' : 'more'}${drive ? ', less the Drive rewards' : ''}.`;
     }
     if (g.id === 'gap') {
       const x = row('gap');
       return x.go < x.stay ? `${x.goName} is cheaper.` : 'Discovery\'s gap cover is cheaper.';
     }
     const l = row('life');
-    if (!l || l.assumed) return decided ? '' : 'No difference yet: there is no quote.';
-    return `Your quote from ${l.goName} ${l.go < l.stay ? 'is cheaper' : 'costs more'}.`;
+    if (!l || l.assumed) return decided ? '' : 'There is no quote yet.';
+    return `Your ${l.goName} quote ${l.go < l.stay ? 'is cheaper' : 'costs more'}.`;
   }
 
-  /* Every amount behind the boxes, for whoever wants to check them. */
-  function switchTable(panel, sw) {
-    const t = el(panel, 'div', 'dc-cmp is-market is-3 dc-sw');
-    const head = el(t, 'div', 'dc-cmp-r dc-cmp-h');
-    for (const x of ['', 'Stay', 'Move']) el(head, 'span', null, x);
+  /* Every amount behind the cards, for whoever wants to check them. */
+  function switchTable(parent, sw) {
+    const w = el(parent, 'div', 'dc-table-wrap');
+    const t = el(w, 'table', 'dc-table dc-sw-table');
+    const hr = el(el(t, 'thead'), 'tr');
+    for (const [x, c] of [['', ''], ['Stay', 'dc-right'], ['Move', 'dc-right']]) el(hr, 'th', c || null, x);
+    const tb = el(t, 'tbody');
     const line = r => {
-      const row = el(t, 'div', 'dc-cmp-r');
-      const nm = el(row, 'span', 'dc-cmp-name');
+      const row = el(tb, 'tr');
+      const nm = el(row, 'td', 'dc-cell-name');
       el(nm, 'span', null, r.label);
       const sub = [r.goName, r.goNote].filter(Boolean).join(' · ');
-      if (sub) el(nm, 'span', 'dc-cmp-sub', 'If you move: ' + sub);
-      for (const v of [r.stay, r.go]) el(row, 'span', 'dc-amt' + (r.assumed && v === r.go && r.go === r.stay ? ' is-assumed' : ''), money(per(v)));
+      if (sub) el(nm, 'span', 'dc-cell-sub', 'If you move: ' + sub);
+      for (const v of [r.stay, r.go]) el(el(row, 'td', 'dc-right'), 'span', 'dc-amt is-plain' + (r.assumed && v === r.go && r.go === r.stay ? ' is-assumed' : ''), money(per(v)));
     };
     const sum = (label, a, b, cls) => {
-      const row = el(t, 'div', 'dc-cmp-r ' + cls);
-      el(row, 'span', null, label);
-      for (const v of [a, b]) el(row, 'span', 'dc-amt', money(per(v)));
+      const row = el(tb, 'tr', cls);
+      el(row, 'td', null, label);
+      for (const v of [a, b]) el(el(row, 'td', 'dc-right'), 'span', 'dc-amt is-plain', money(per(v)));
     };
     const part = (title, kind) => {
-      el(el(t, 'div', 'dc-cmp-r dc-sw-grp'), 'span', null, title);
+      el(el(tb, 'tr', 'dc-row-group'), 'td', null, title).setAttribute('colspan', '3');
       for (const r of sw.rows.filter(x => x.kind === kind)) line(r);
     };
     part('You pay', 'cost');
-    sum('Total you pay', sw.stay.cost, sw.go.cost, 'dc-sw-sub');
+    sum('Total you pay', sw.stay.cost, sw.go.cost, 'dc-row-sub');
     part('You get back in rewards', 'benefit');
-    sum('Total you get back', sw.stay.benefit, sw.go.benefit, 'dc-sw-sub');
-    sum('Real cost (pay minus get back)', sw.stay.real, sw.go.real, 'is-you dc-sw-net');
+    sum('Total you get back', sw.stay.benefit, sw.go.benefit, 'dc-row-sub');
+    sum('Real cost (pay minus get back)', sw.stay.real, sw.go.real, 'dc-row-total');
   }
 
   // ── Flows ────────────────────────────────────────────────────────────
   function renderFlows(panel, { pr }) {
-    const h = el(panel, 'h2', 'dc-flows-h2');
-    el(h, 'span', 'dc-name', 'Where the money goes');
-    amt(h, pr.totals.flowNet, { plus: true, cls: 'dc-fig' });
-    const p = el(panel, 'p', 'dc-muted');
-    p.appendChild(document.createTextNode(`You pay Discovery `));
-    amt(p, pr.totals.paid, { cls: 'is-neg' });
-    p.appendChild(document.createTextNode(` ${perLabel()} and get `));
-    amt(p, pr.totals.value, { cls: 'is-pos' });
-    p.appendChild(document.createTextNode(` ${perLabel()} back in cash and rewards. Tap a product to follow its money; its own tab shows where each amount comes from.`));
-    flow = mountFlow(panel, { products: pr.products, totals: pr.totals, per, perLabel, onOpen: id => show(id) });
+    const kpis = el(panel, 'div', 'dc-kpis');
+    const a = card(kpis, { icon: 'arrow-up-right', cls: 'dc-kpi', title: 'Paid to Discovery', line: 'Every product you have.' });
+    figure(a.fig, -pr.totals.paid);
+    const b = card(kpis, { icon: 'arrow-down-left', cls: 'dc-kpi', title: 'Back to you', line: 'Cash and rewards.' });
+    figure(b.fig, pr.totals.value, { plus: true });
+    const c = card(kpis, { icon: 'scale', cls: 'dc-kpi', title: 'Back minus paid', line: 'Tap a product below.' });
+    figure(c.fig, pr.totals.flowNet, { plus: true });
+    const sec = el(panel, 'section', 'dc-card dc-flow-card');
+    flow = mountFlow(sec, { products: pr.products, totals: pr.totals, per, perLabel, onOpen: id => show(id), open });
   }
 
   // ── a product tab ────────────────────────────────────────────────────
   function renderProduct(panel, view, p) {
-    const sec = el(panel, 'section', 'dc-ch dc-p-' + p.id);
-    sec.setAttribute('aria-labelledby', 'dc-h-' + p.id);
-    const head = el(sec, 'div', 'dc-ch-head');
-    const tile = el(head, 'span', 'dc-tile');
-    productLogo(tile, p.id);
-    const titles = el(head, 'div', 'dc-ch-titles');
-    const h2 = el(titles, 'h2', 'dc-ch-h2');
-    h2.id = 'dc-h-' + p.id;
-    el(h2, 'span', 'dc-name', p.name);
-    amt(h2, p.figure, { plus: true, cls: 'dc-fig' });
-    const sub = el(titles, 'p', 'dc-ch-sub');
-    el(sub, 'span', null, SUBTITLE[p.id](view.s, view));
-    el(sub, 'span', null, `${p.figureLabel} ${perLabel()}`);
-    const body = el(sec, 'div', 'dc-ch-body');
-    const jump = el(body, 'div', 'dc-jump');
-    const anchors = {};
-    for (const [k, label, ic] of [['figures', 'The numbers', 'scale'], ['tx', 'Transactions', 'receipt'], ['inputs', 'Settings', 'sliders-horizontal']]) {
-      button(jump, 'dc-jump-btn', label, () => { if (anchors[k]) anchors[k].scrollIntoView({ block: 'start' }); }, ic);
+    const kpis = el(panel, 'div', 'dc-kpis');
+    const k = card(kpis, { p: p.id, cls: 'dc-kpi', title: String(p.figureLabel).replace(/,$/, ''), line: p.paid >= 0.5 ? `You pay ${R(p.paid)}.` : 'Nothing paid in this period.' });
+    figure(k.fig, p.figure, { plus: true });
+    const v = view.verdicts[p.id];
+    if (v) {
+      const words = verdictWords(v);
+      const vk = card(kpis, { icon: 'scale', cls: 'dc-kpi dc-kpi-verdict is-' + v.tone, key: 'pv.' + p.id, title: v.word, line: words.lead });
+      if (v.amount === null) el(vk.fig, 'span', 'dc-amt is-zero dc-kpi-value', '—');
+      else if (v.tone === 'quote') { el(vk.fig, 'span', 'dc-amt is-plain dc-kpi-value', money(v.amount)); el(vk.fig, 'span', 'dc-per', 'quote a month'); }
+      else figure(vk.fig, v.tone === 'good' ? v.amount : Math.abs(v.amount), { plus: v.tone === 'good', words: v.tone !== 'good' });
+      if (words.why) el(vk.more(), 'p', null, words.why);
     }
-    anchors.figures = blockHeading(body, 'The numbers', 'scale');
-    ({ bank: figuresBank, health: figuresHealth, gap: figuresGap, insure: figuresInsure, life: figuresLife })[p.id](body, view, p);
-    anchors.tx = blockHeading(body, 'Transactions', 'receipt');
-    renderTransactions(body, p);
-    anchors.inputs = blockHeading(body, 'Settings', 'sliders-horizontal');
-    INPUTS[p.id](body, view, {});
-    renderDates(body, view.pr.dates, p.id);
+    if (p.backSum >= 0.5) {
+      const bk = card(kpis, { icon: 'arrow-down-left', cls: 'dc-kpi', title: 'Back to you', line: 'Cash and rewards.' });
+      figure(bk.fig, p.backSum, { plus: true });
+    }
+    const jump = el(panel, 'div', 'dc-chips dc-jump');
+    const anchors = {};
+    for (const [key, label, ic] of [['figures', 'The numbers', 'scale'], ['tx', 'Transactions', 'receipt'], ['inputs', 'Settings', 'sliders-horizontal']]) {
+      button(jump, 'dc-chip dc-jump-btn', label, () => { if (anchors[key]) anchors[key].scrollIntoView({ block: 'start' }); }, ic);
+    }
+    const fig = section(panel, 'The numbers', 'pf.' + p.id, 'scale');
+    anchors.figures = fig.sec;
+    const fbody = el(fig.sec, 'div', 'dc-card dc-p-' + p.id + ' dc-figs');
+    ({ bank: figuresBank, health: figuresHealth, gap: figuresGap, insure: figuresInsure, life: figuresLife })[p.id](fbody, view, p, fig);
+    const tx = section(panel, 'Transactions', 'pt.' + p.id, 'receipt');
+    anchors.tx = tx.sec;
+    renderTransactions(tx.sec, p);
+    const set = section(panel, 'Settings', 'ps.' + p.id, 'sliders-horizontal');
+    anchors.inputs = set.sec;
+    const host = el(set.sec, 'div', 'dc-card dc-notes-host dc-p-' + p.id);
+    notesToggle(set.head, host, 'notes.' + p.id);
+    INPUTS[p.id](host, view, {});
+    renderDates(panel, view.pr.dates, p.id);
   }
 
-  function figuresBank(c, { st }) {
+  function figuresBank(c, { st }, p, sec) {
     const ms = st.milesStatement;
     if (ms) {
-      const p = el(c, 'p', 'dc-muted');
-      p.appendChild(document.createTextNode(`We read your Discovery Miles statement (${ms.rows.toLocaleString('en-US').replace(/,/g, ' ')} entries, ${monthLabel(ms.from)} – ${monthLabel(ms.to)}). When you spent your Miles, each was worth R ${ms.spentValue ? ms.spentValue.toFixed(3).replace('.', ',') : '0,10'}. You spent `));
-      amt(p, st.cardSpend, { cls: 'is-plain' });
-      p.appendChild(document.createTextNode(` ${perLabel()} on the card.`));
+      el(sec.more(), 'p', null, `Read from your Miles statement: ${ms.rows.toLocaleString('en-US').replace(/,/g, ' ')} entries, ${monthLabel(ms.from)} – ${monthLabel(ms.to)}. Each Mile you spent was worth R ${ms.spentValue ? ms.spentValue.toFixed(3).replace('.', ',') : '0,10'}. You spent ${R(st.cardSpend)} ${perLabel()} on the card.`);
     }
     group(c, 'What the bank costs you', st.lines.filter(l => l.group === 'cost'));
     total(c, `Fees ${perLabel()}`, -st.cost, true);
-    group(c, 'What you would lose if you left the bank', st.lines.filter(l => l.group === 'bank'));
+    group(c, 'What you would lose if you left', st.lines.filter(l => l.group === 'bank'));
     total(c, `Rewards minus fees, ${perLabel()}`, st.net);
     renderCompare(c, st);
     renderDowngrade(c, st);
-    el(c, 'h3', 'dc-h3', 'You keep these at any bank');
-    el(c, 'p', 'dc-muted', 'These come with the medical aid and Discovery Insure (or any Discovery account), so they are not counted when comparing banks.');
+    const k = subHead(c, 'You keep these at any bank', 'bank.keep');
+    el(k.more(), 'p', null, 'These come with the medical aid and Discovery Insure (or any Discovery account), so they are not counted when comparing banks.');
     for (const l of st.lines.filter(x => x.group === 'stays' && !/^healthy|^travel\.health|^activeRewards/.test(x.key))) lineRow(c, l);
-    el(c, 'h3', 'dc-h3', 'Any bank would charge or pay these');
+    subHead(c, 'Any bank would charge or pay these', 'bank.any');
     for (const l of st.lines.filter(x => x.group === 'elsewhere')) lineRow(c, l);
   }
 
@@ -835,15 +921,15 @@ function mountBottomLine(root, ctx) {
       plainLine(c, 'Discovery Health debit order', -p.medicalYear, 'measured', 'Type your medical aid and gap cover amounts on the Inputs tab to see what this pays for.');
     }
     total(c, `Discovery Health costs ${perLabel()}`, -p.paid, true);
-    if (p.splitNote) el(c, 'p', 'dc-note', p.splitNote);
-    if (p.note) el(c, 'p', 'dc-note', p.note);
+    const notes = [p.splitNote, p.note].filter(Boolean);
+    if (notes.length) { const m = moreIn(c, 'health.pay.notes', 'Notes'); for (const n of notes) el(m, 'p', null, n); }
     el(c, 'p', 'dc-grp', 'Paid back');
-    plainLine(c, 'Claims Discovery Health paid back to you', p.refunds, 'measured', 'Money back for doctor and pharmacy bills you paid yourself first (DISC MEMB on your statements).', true);
-    el(c, 'h3', 'dc-h3', 'Is Vitality Health worth it?');
-    el(c, 'p', 'dc-muted', 'This has nothing to do with the bank: you keep these whichever bank you use.');
+    plainLine(c, 'Claims paid back to you', p.refunds, 'measured', 'Money back for doctor and pharmacy bills you paid yourself first (DISC MEMB on your statements).', true);
+    const vh = subHead(c, 'Is Vitality Health worth it?', 'health.vit');
+    el(vh.more(), 'p', null, 'This has nothing to do with the bank: you keep these whichever bank you use.');
     const v = st.vitality;
     if (v.premium !== null) plainLine(c, 'Vitality Health fee', -v.premium, 'entered', 'The Vitality part of the Discovery Health debit order.');
-    plainLine(c, 'Gym discount (what you saved)', v.gymSaving, 'measured', 'What Virgin Active or Planet Fitness would cost without the Vitality discount, less what you pay now.', true);
+    plainLine(c, 'Gym discount', v.gymSaving, 'measured', 'What Virgin Active or Planet Fitness would cost without the Vitality discount, less what you pay now.', true);
     weightNote(c, 'gym', v.gymSavingFull, v.gymSaving);
     for (const k of ['healthyFood.health', 'healthyCare.health', 'travel.health', 'activeRewards', 'activeRewards.basic']) {
       const l = st.lines.find(x => x.key === k);
@@ -857,8 +943,8 @@ function mountBottomLine(root, ctx) {
     renderNeeds(c, cmp);
     const needLabel = id => (NEEDS.find(n => n.id === id) || { label: id }).label.toLowerCase();
     renderMarket(c, {
-      title: 'Compared with other medical aids',
-      intro: `2026 prices for ${fam} (change the family on the Inputs tab). If you leave Discovery Health you also lose Vitality Health, so what Vitality is worth to you after its fee (${money(per(cmp.vitalityNet), { plus: true })} ${perLabel()}) is added to the other medical aids' cost. Discovery's own cheaper plans keep Vitality.`,
+      key: 'mk.health', title: 'Compared with other medical aids', line: `2026 prices for ${fam}.`,
+      intro: `Change the family on the Inputs tab. If you leave Discovery Health you also lose Vitality Health, so what Vitality is worth to you after its fee (${money(per(cmp.vitalityNet), { plus: true })} ${perLabel()}) is added to the other medical aids' cost. Discovery's own cheaper plans keep Vitality.`,
       you: 'Discovery Health (now)', cmp, lostLabel: 'Vitality you lose',
       name: r => r.scheme + ' ' + r.plan,
       sub: r => [r.misses.length ? 'does not cover ' + r.misses.map(needLabel).join(', ') : '', r.unsure.length ? 'not sure about ' + r.unsure.map(needLabel).join(', ') : '', r.gapExtra >= 0.5 ? `gap cover costs ${money(per(r.gapExtra))} ${perLabel()} more on this plan (included)` : '', r.network, r.dayToDay].filter(Boolean).join(' · '),
@@ -871,16 +957,20 @@ function mountBottomLine(root, ctx) {
   const MARK = { yes: '✓', limited: '◐', no: '✗', unknown: '?' };
   const MARK_TEXT = { yes: 'covered', limited: 'covered, with limits', no: 'not covered', unknown: 'not confirmed' };
   function renderNeeds(c, cmp) {
-    el(c, 'h3', 'dc-h3', 'Does it cover what you need?');
-    el(c, 'p', 'dc-muted', `${cmp.needs.map(n => n.label).join(', ')}. Choose which matter to you, and whether your hospital is in each plan's list, on the Inputs tab. ✓ covered · ◐ covered with limits · ✗ not covered · ? not sure.`);
+    const h = subHead(c, 'Does it cover what you need?', 'needs.more');
+    el(c, 'p', 'dc-card-line', '✓ covered · ◐ with limits · ✗ not covered · ? not sure');
+    const mb = h.more();
+    el(mb, 'p', null, `${cmp.needs.map(n => n.label).join(', ')}. Choose which matter to you, and whether your hospital is in each plan's list, on the Inputs tab.`);
+    const notes = cmp.own && cmp.own.coverNote ? cmp.own.coverNote : null;
+    if (notes) el(mb, 'p', 'dc-small', 'Your plan: ' + NEEDS.filter(n => notes[n.id]).map(n => `${n.label}: ${notes[n.id]}`).join(' · '));
     const t = el(c, 'div', 'dc-needs');
     t.style.setProperty('--n', String(cmp.needs.length));
-    const h = el(t, 'div', 'dc-needs-r dc-cmp-h');
-    el(h, 'span', null, 'Plan');
+    const head = el(t, 'div', 'dc-needs-r dc-cmp-h');
+    el(head, 'span', null, 'Plan');
     for (const n of cmp.needs) {
-      const x = el(h, 'span');
+      const x = el(head, 'span');
       x.title = n.label + ': ' + n.hint;
-      el(x, 'span', 'dc-n-long', n.label.replace(/^Your (\w)/, (_, c) => c.toUpperCase()));
+      el(x, 'span', 'dc-n-long', n.label.replace(/^Your (\w)/, (_, ch) => ch.toUpperCase()));
       el(x, 'span', 'dc-n-short', n.short || n.label);
     }
     const line = (name, cover, cls) => {
@@ -895,19 +985,17 @@ function mountBottomLine(root, ctx) {
     };
     if (cmp.own) line(cmp.own.scheme + ' ' + cmp.own.plan + ' (now)', cmp.own.cover, 'is-you');
     for (const r of cmp.rows) line(r.scheme + ' ' + r.plan, r.cover, r.likeForLike ? '' : 'is-miss');
-    const notes = cmp.own && cmp.own.coverNote ? cmp.own.coverNote : null;
-    if (notes) el(c, 'p', 'dc-note', 'Your plan: ' + NEEDS.filter(n => notes[n.id]).map(n => `${n.label} — ${notes[n.id]}`).join(' · '));
   }
 
   function figuresGap(c, view, p) {
     plainLine(c, 'Gap cover', -p.paid, p.inDebit ? 'entered' : 'measured', p.note || 'Your gap cover debit orders.');
     plainLine(c, 'Claims paid to you', p.claims, 'measured', p.claims ? 'INSGAPCLA payments on your statements.' : 'None in this period.', true);
     total(c, `Claims minus cost, ${perLabel()}`, p.net);
-    if (p.claims) el(c, 'p', 'dc-note', 'One big claim can make a year look unusual. In most years gap cover costs money and pays nothing back; it is there for the year something big happens.');
+    if (p.claims) el(moreIn(c, 'gap.claims', 'Why this year may look unusual'), 'p', null, 'One big claim can make a year look unusual. In most years gap cover costs money and pays nothing back; it is there for the year something big happens.');
     const cmp = compareGap(p, plugin.settings);
     if (cmp) renderMarket(c, {
-      title: 'Compared with other gap cover',
-      intro: '2026 family prices, for families whose oldest member is under 45; most charge more after that, so type your own quote on the Inputs tab. Gap cover pays what the medical aid does not when you are in hospital. Discovery Gap Cover is only for Discovery Health members, so if you leave the medical aid it has to go too. The others work with any medical aid.',
+      key: 'mk.gap', title: 'Compared with other gap cover', line: '2026 family prices, oldest member under 45.',
+      intro: 'Most charge more after 45, so type your own quote on the Inputs tab. Gap cover pays what the medical aid does not when you are in hospital. Discovery Gap Cover is only for Discovery Health members, so if you leave the medical aid it has to go too. The others work with any medical aid.',
       you: 'Discovery Gap Cover (now)', cmp,
       name: r => r.provider + ' ' + r.plan, sub: r => r.cover || '',
       foot: 'A cheaper option usually pays out less. Check how much more than the medical aid rate each one pays, the yearly limit per person, and whether it pays the amounts the medical aid makes you pay yourself. If you are without gap cover for 90 days or more, a new one makes you wait before it pays.',
@@ -920,11 +1008,11 @@ function mountBottomLine(root, ctx) {
     const drive = st.lines.find(l => l.key === 'fuel.drive');
     if (drive) lineRow(c, drive);
     plainLine(c, 'Claims paid to you', p.claims, 'measured', p.claims ? 'INSURE CLA payments on your statements.' : 'None in this period.', true);
-    total(c, `What came back minus what you paid, ${perLabel()}`, p.net);
+    total(c, `Back minus paid, ${perLabel()}`, p.net);
     const cmp = compareInsure(p, plugin.settings);
     if (cmp) renderMarket(c, {
-      title: 'Compared with other car insurers',
-      intro: `Car insurance depends on the car, the drivers and where you live, so nobody publishes a price for you. Full cover for one car costs about R980 a month in the Western Cape, R1 371 in Gauteng and R800–R1 400 across the country (Hippo via Pineapple, March 2026). Type a quote for the same cars and cover on the Inputs tab. Until then, each insurer shows the most it could charge a month and still beat Discovery, after its own rewards and the Vitality Drive rewards you would lose (${money(per(cmp.driveValue))} ${perLabel()}).`,
+      key: 'mk.insure', title: 'Compared with other car insurers', line: 'Nobody publishes a price for you: get quotes.',
+      intro: `Car insurance depends on the car, the drivers and where you live. Full cover for one car costs about R980 a month in the Western Cape, R1 371 in Gauteng and R800–R1 400 across the country (Hippo via Pineapple, March 2026). Type a quote for the same cars and cover on the Inputs tab. Until then, each insurer shows the most it could charge a month and still beat Discovery, after its own rewards and the Vitality Drive rewards you would lose (${money(per(cmp.driveValue))} ${perLabel()}).`,
       you: 'Discovery Insure (now)', cmp, lostLabel: 'Their rewards', lost: r => r.rewards,
       name: r => r.name, sub: r => r.rewardNote || '',
       foot: 'Compare the same things: the same excess (what you pay yourself on a claim), car hire, and the same drivers.',
@@ -934,26 +1022,20 @@ function mountBottomLine(root, ctx) {
 
   function renderHome(c) {
     const h = compareHome(plugin.settings);
-    el(c, 'h3', 'dc-h3', 'Home contents');
     if (!h) {
-      el(c, 'p', 'dc-muted', 'Type what you pay for household contents insurance on the Inputs tab (0 if you have none) to compare it.');
+      subHead(c, 'Home contents', 'home.none');
+      el(c, 'p', 'dc-card-line', 'Type what you pay for contents cover on Inputs (0 if none).');
       return;
-    }
-    if (h.range) {
-      const r = el(c, 'div', 'dc-ln');
-      const main = el(r, 'span', 'dc-ln-main');
-      el(main, 'span', null, `Cover for ${money(h.contents)} of contents, from most insurers`);
-      el(main, 'span', 'dc-badge is-estimated', SOURCE.estimated);
-      el(main, 'span', 'dc-ln-note', `About R${HOME_RANGE.low}–R${HOME_RANGE.high} a month for every R100 000 of contents, depending on your suburb, security and excess. Source: ${h.range.source}.`);
-      el(r, 'span', 'dc-amt is-plain', `${money(h.range.low)}–${money(h.range.high)} a month`);
     }
     const none = !(h.current.monthly > 0);
     const value = h.contents !== null ? money(h.contents) : null;
     renderMarket(c, {
-      title: none ? 'Not insured: what cover would cost' : 'Compared with other insurers',
+      key: 'mk.home', title: none ? 'Home contents: not insured' : 'Home contents',
+      line: none ? 'What cover would cost.' : 'Against what you pay today.',
       intro: none
-        ? `Your household contents are not insured, so if a burglary, fire or burst geyser damages your things, you pay to replace them. ${value ? `Prices are for ${value} of contents` : 'Type what your things would cost to replace on the Inputs tab to see prices'}. If you rent, you only need contents cover; the building is the landlord's.`
+        ? `If a burglary, fire or burst geyser damages your things, you pay to replace them. ${value ? `Prices are for ${value} of contents` : 'Type what your things would cost to replace on the Inputs tab to see prices'}. If you rent, you only need contents cover; the building is the landlord's.`
         : `Prices are for ${value || 'the contents value you typed'}, against what you pay today.`,
+      extra: h.range ? `Most insurers charge about R${HOME_RANGE.low}–R${HOME_RANGE.high} a month for every R100 000 of contents (${money(h.range.low)}–${money(h.range.high)} a month for ${money(h.contents)}), depending on your suburb, security and excess. Source: ${h.range.source}.` : '',
       you: none ? 'No cover today' : 'Your cover (now)', cmp: h, lostLabel: 'Their rewards', lost: r => r.rewards,
       name: r => r.name, sub: r => [r.per100k ? `about ${money(r.per100k)} a month per R100 000` : '', r.rewardNote].filter(Boolean).join(' · '),
       vsLabel: none ? 'A year' : null, vs: none ? r => (r.annual === null ? null : -r.annual) : null,
@@ -967,33 +1049,22 @@ function mountBottomLine(root, ctx) {
     } else if (p.paid) {
       plainLine(c, 'Life cover cost', -p.paid, 'measured', 'Discovery Life debit orders on your statements.');
     } else {
-      el(c, 'p', 'dc-muted', 'There is no Discovery Life payment in your bank transactions. If it comes off your salary, type it on the Inputs tab.');
+      el(c, 'p', 'dc-card-line', 'No Discovery Life payment in your bank. If it is off your salary, type it on Inputs.');
     }
-    if (p.cover) {
-      const r = el(c, 'div', 'dc-ln');
-      const main = el(r, 'span', 'dc-ln-main');
-      el(main, 'span', null, 'Amount you are covered for');
-      el(main, 'span', 'dc-badge is-entered', SOURCE.entered);
-      el(r, 'span', 'dc-amt is-plain', money(p.cover));
-    }
+    if (p.cover) plainLine(c, 'Amount you are covered for', p.cover, 'entered', '', false, true, true);
     const cmp = compareLife(p, plugin.settings);
     if (!cmp) return;
     if (cmp.employer.monthly >= 0.5) {
       plainLine(c, 'Your employer pays', cmp.employer.annual, 'entered', `The cover costs ${money(cmp.total.monthly, { cents: true })} a month in all; you pay ${money(cmp.total.monthly - cmp.employer.monthly, { cents: true })} of it.`, true);
     }
     if (cmp.payback) plainLine(c, 'Group Risk PayBack', cmp.payback, 'entered', 'Money paid back to you, so your share costs less.', true);
-    else el(c, 'p', 'dc-note', 'From 1 January 2026, if your employer\'s scheme offers Group Risk PayBack, Diamond members get up to 15% of the yearly cost back after a Vitality Health Check. If you get it, type it on the Inputs tab.');
+    else el(moreIn(c, 'life.payback', 'About Group Risk PayBack'), 'p', null, 'From 1 January 2026, if your employer\'s scheme offers Group Risk PayBack, Diamond members get up to 15% of the yearly cost back after a Vitality Health Check. If you get it, type it on the Inputs tab.');
     if (cmp.lifeOnly) {
-      const r = el(c, 'div', 'dc-ln');
-      const main = el(r, 'span', 'dc-ln-main');
-      el(main, 'span', null, 'Life cover alone on a policy of your own');
-      el(main, 'span', 'dc-badge is-estimated', SOURCE.estimated);
-      el(main, 'span', 'dc-ln-note', `For your cover amount and age, if you are healthy and do not smoke (smokers pay 50–100% more). Cover for severe illness and lost income would cost extra. Source: ${cmp.lifeOnly.source}.`);
-      el(r, 'span', 'dc-amt is-plain', `${money(cmp.lifeOnly.low)}–${money(cmp.lifeOnly.high)} a month`);
+      plainLine(c, 'Life cover alone, own policy', null, 'estimated', `For your cover amount and age, if you are healthy and do not smoke (smokers pay 50–100% more). Cover for severe illness and lost income would cost extra. Source: ${cmp.lifeOnly.source}.`, false, false, false, `${money(cmp.lifeOnly.low)}–${money(cmp.lifeOnly.high)} a month`);
     }
     renderMarket(c, {
-      title: 'Compared with a policy of your own',
-      intro: `Cover through your employer needs no medical tests up to a set amount, and stops when you leave the job (you can then usually keep similar cover without new tests). A policy of your own is all yours to pay, so for the same cover (life, severe illness and lost income together) it has to cost less than your share: ${money(cmp.current.monthly)} a month. Type a quote for the same cover on the Inputs tab.`,
+      key: 'mk.life', title: 'Compared with a policy of your own', line: `It must cost less than your share: ${money(cmp.current.monthly)} a month.`,
+      intro: 'Cover through your employer needs no medical tests up to a set amount, and stops when you leave the job (you can then usually keep similar cover without new tests). A policy of your own is all yours to pay, so for the same cover (life, severe illness and lost income together) it has to cost less than your share. Type a quote for the same cover on the Inputs tab.',
       you: 'Through your employer, your share (now)', cmp, lostLabel: 'Their rewards', lost: r => r.rewards,
       name: r => r.name, sub: r => [r.example, r.rewardNote].filter(Boolean).join(' · '),
       foot: 'Compare the same things: the same cover amounts, how long the income cover waits before it pays and how long it pays, and the same list of severe illnesses.',
@@ -1001,13 +1072,6 @@ function mountBottomLine(root, ctx) {
   }
 
   // ── lines, totals and blocks ─────────────────────────────────────────
-  function blockHeading(parent, title, ic) {
-    const h = el(parent, 'h3', 'dc-blk-h');
-    icon(h, ic);
-    el(h, 'span', null, title);
-    return h;
-  }
-
   function group(c, title, lines) {
     el(c, 'p', 'dc-grp', title);
     for (const l of lines) lineRow(c, l);
@@ -1019,32 +1083,20 @@ function mountBottomLine(root, ctx) {
     amt(t, v, { plus: v > 0 });
   }
 
-  /* A verdict in a line: its word in its tone, then the figure behind it —
-     ahead of the market (good), what a switch saves (check, over), the
-     quote that would match (quote, a month) or what cover costs (none). */
-  function verdictFig(parent, v) {
-    el(parent, 'span', 'dc-vd is-' + v.tone, v.word);
-    if (v.amount === null) return;
-    parent.appendChild(document.createTextNode(' '));
-    if (v.tone === 'good') amt(parent, v.amount, { plus: true });
-    else if (v.tone === 'quote') el(parent, 'span', 'dc-amt is-plain', `under ${money(v.amount)}/m`);
-    else if (v.tone === 'none') el(parent, 'span', 'dc-amt is-plain', `${money(per(-v.amount))} ${perLabel()}`);
-    else amt(parent, v.amount, { cls: 'is-plain' });
-  }
-
-  /* What the amount beside the verdict word means, in words, then why. */
-  function verdictLine(v) {
+  /* A verdict in words: the lead (what the amount means) for the card's one
+     line, and the reason for its More. */
+  function verdictWords(v) {
     const a = v.amount === null ? null : `${money(per(Math.abs(v.amount)))} ${perLabel()}`;
     let lead = '';
     /* 'good' also covers a gain too small to switch for */
-    if (a !== null && v.tone === 'good' && v.vs) lead = v.amount >= 0 ? `You are ${a} better off than with ${v.vs}.` : `${v.vs} is only ${a} cheaper, too little to switch for.`;
-    else if (a !== null && v.tone === 'check') lead = `${v.vs} could save you about ${a}.`;
-    else if (a !== null && v.tone === 'over') lead = v.id === 'bank' ? `Moving to ${v.vs} would leave you ${a} better off.` : `Your quote from ${v.vs} is ${a} cheaper.`;
+    if (a !== null && v.tone === 'good' && v.vs) lead = v.amount >= 0 ? `${a} better off than with ${v.vs}.` : `${v.vs} is only ${a} cheaper.`;
+    else if (a !== null && v.tone === 'check') lead = `${v.vs} could save you ${a}.`;
+    else if (a !== null && v.tone === 'over') lead = v.id === 'bank' ? `${a} better off with ${v.vs}.` : `Your ${v.vs} quote is ${a} cheaper.`;
     /* a break-even quote is always a monthly premium */
-    else if (v.amount !== null && v.tone === 'quote') lead = `A quote under ${money(v.amount)} a month would beat what you pay now.`;
+    else if (v.amount !== null && v.tone === 'quote') lead = `A quote under ${money(v.amount)} a month wins.`;
     else if (a !== null && v.tone === 'none') lead = `About ${a} would insure them.`;
-    /* "not insured" reads first, then what cover would cost */
-    return (v.tone === 'none' ? v.why + ' ' + lead : lead + ' ' + v.why).trim();
+    if (!lead) return { lead: v.why, why: '' };
+    return v.tone === 'none' ? { lead: v.why, why: lead } : { lead, why: v.why };
   }
 
   function tag(parent, p) {
@@ -1054,33 +1106,57 @@ function mountBottomLine(root, ctx) {
     return t;
   }
 
-  /* A figure that is not a statement line: label, source, note, amount. */
-  function plainLine(parent, label, v, source, note, plus, raw) {
-    const r = el(parent, 'div', 'dc-ln');
-    const main = el(r, 'span', 'dc-ln-main');
-    el(main, 'span', null, label);
-    el(main, 'span', 'dc-badge is-' + source, SOURCE[source]);
-    if (note) el(main, 'span', 'dc-ln-note', note);
-    amt(r, v, { plus, raw });
+  /* A line with an amount; tap it for where the figure comes from (its
+     note and its source). Built whole; the note shows and hides without a
+     redraw. raw: v is already for the period shown (a monthly debit, a
+     cover amount). text: words in place of the amount. */
+  let lineSeq = 0;
+  function expandLine(parent, o) {
+    const isOpen = open.has(o.key);
+    const row = el(parent, 'div', 'dc-line' + (isOpen ? ' is-open' : ''));
+    const hasBody = !!(o.note || o.source || o.fill);
+    /* nothing to show under it: a plain row, not a button */
+    const head = hasBody ? button(row, 'dc-line-head', null, null) : el(row, 'div', 'dc-line-head is-static');
+    const lab = el(head, 'span', 'dc-line-label');
+    el(lab, 'span', null, o.label);
+    if (o.text) el(head, 'span', 'dc-amt is-plain', o.text);
+    else if (o.v !== null && o.v !== undefined) {
+      const v = o.raw ? o.v : per(o.v);
+      el(head, 'span', 'dc-amt ' + (o.plainAmt ? 'is-plain' : Math.abs(v) < 0.5 ? 'is-zero' : v > 0 ? 'is-pos' : 'is-neg'), money(v, { plus: o.plus && !o.plainAmt }));
+    }
+    if (!hasBody) return row;
+    const ch = icon(head, 'chevron-down', 'dc-chev');
+    const body = el(row, 'div', 'dc-line-body');
+    body.id = 'dc-line-' + (++lineSeq);
+    head.setAttribute('aria-controls', body.id);
+    if (o.source) el(body, 'span', 'dc-badge is-' + o.source, SOURCE[o.source]);
+    if (o.note) el(body, 'p', 'dc-line-note', o.note);
+    if (o.fill) o.fill(body);
+    const sync = () => {
+      const on = open.has(o.key);
+      head.setAttribute('aria-expanded', String(on));
+      row.classList.toggle('is-open', on);
+      body.hidden = !on;
+      ch.classList.toggle('is-up', on);
+    };
+    head.addEventListener('click', e => { e.preventDefault(); if (open.has(o.key)) open.delete(o.key); else open.add(o.key); sync(); });
+    sync();
+    return row;
+  }
+
+  /* A figure that is not a statement line: label, amount; its source and
+     note in the tap-open body. */
+  function plainLine(parent, label, v, source, note, plus, raw, plainAmt, text) {
+    return expandLine(parent, { key: 'pl.' + label, label, v, source, note, plus, raw, plainAmt, text });
   }
 
   function lineRow(parent, l) {
     const sign = l.sign || 1;
-    const isOpen = open.has(l.key);
-    const row = el(parent, 'div', 'dc-line' + (isOpen ? ' is-open' : ''));
-    const head = button(row, 'dc-line-head', null, () => { isOpen ? open.delete(l.key) : open.add(l.key); render(); });
-    head.setAttribute('aria-expanded', String(isOpen));
-    const lab = el(head, 'span', 'dc-line-label');
-    el(lab, 'span', null, l.label);
-    el(lab, 'span', 'dc-badge is-' + l.source, SOURCE[l.source]);
-    const v = sign * per(l.annual);
-    el(head, 'span', 'dc-amt ' + (Math.abs(v) < 0.5 ? 'is-zero' : v > 0 ? 'is-pos' : 'is-neg'), money(v, { plus: sign > 0 }));
-    icon(head, isOpen ? 'chevron-down' : 'chevron-right', 'dc-chev');
+    const row = expandLine(parent, {
+      key: l.key, label: l.label, v: sign * l.annual, plus: sign > 0, source: l.source, note: l.detail,
+      fill: l.rateKeys.length ? b => { const g = el(b, 'div', 'dc-fgrid'); for (const k of l.rateKeys) rateInput(g, k); } : null,
+    });
     if (l.benefit && (l.weight < 1 || l.available === false)) weightNote(row, l.benefit, l.full, l.annual, l.available);
-    if (!isOpen) return;
-    const body = el(row, 'div', 'dc-line-body');
-    el(body, 'p', 'dc-muted', l.detail);
-    for (const k of l.rateKeys) rateInput(body, k);
   }
 
   /* A figure that counts for less than it is worth because of what you said
@@ -1090,25 +1166,21 @@ function mountBottomLine(root, ctx) {
   function weightNote(parent, id, full, counted, available) {
     const b = cur && cur.st.benefits[id];
     if (!b) return;
-    const open = available === undefined ? b.available : available;
-    if (open && (b.level === 'full' || !(Math.abs(full) >= 0.5))) return;
-    const n = el(parent, 'div', 'dc-line-weight' + (open ? '' : ' is-blocked'));
-    const R = v => money(per(Math.abs(v)));
-    if (!open) {
-      el(n, 'span', 'dc-weight-text', 'Not available with your setup.' + (b.reason || b.note ? ' ' + (b.reason || b.note) : ''));
-    } else {
-      el(n, 'span', 'dc-weight-text', `Counts ${R(counted)} of ${R(full)} ${perLabel()}, because you said ${LEVEL_WORDS[b.level] || 'you use it less'}.`);
-    }
-    button(n, 'dc-link dc-weight-link', 'Change on Benefits', () => show('benefits'));
+    const isOn = available === undefined ? b.available : available;
+    if (isOn && (b.level === 'full' || !(Math.abs(full) >= 0.5))) return;
+    const n = el(parent, 'div', 'dc-line-weight' + (isOn ? '' : ' is-blocked'));
+    el(n, 'span', 'dc-weight-text', isOn ? `Counts ${R(counted)} of ${R(full)}: you use it ${b.level === 'half' ? 'sometimes' : 'not at all'}.` : 'Not available with your setup.');
+    button(n, 'dc-link dc-weight-link', 'Change', () => show('benefits'));
   }
 
   // ── transactions ─────────────────────────────────────────────────────
   function renderTransactions(parent, p) {
     const txs = p.transactions;
     if (!txs.length) {
-      el(parent, 'p', 'dc-muted', p.id === 'life' && p.monthly ? 'Nothing here: the cost comes off your salary before it reaches the bank.' : 'No transactions for this product in this period.');
+      hint(parent, p.id === 'life' && p.monthly ? 'None: it comes off your salary.' : 'None in this period.', 'info');
       return;
     }
+    const box = el(parent, 'div', 'dc-card dc-txs-card');
     const all = open.has('tx.' + p.id);
     const shown = all ? txs : txs.slice(0, TX_SHOWN);
     let month = null, ul = null;
@@ -1116,8 +1188,8 @@ function mountBottomLine(root, ctx) {
       const ym = t.date.slice(0, 7);
       if (ym !== month) {
         month = ym;
-        el(parent, 'p', 'dc-tx-month', monthLabel(ym));
-        ul = el(parent, 'ul', 'dc-txs');
+        el(box, 'p', 'dc-subhead dc-tx-month', monthLabel(ym));
+        ul = el(box, 'ul', 'dc-txs');
       }
       const li = el(ul, 'li', 'dc-tx');
       const main = el(li, 'span', 'dc-tx-main');
@@ -1130,18 +1202,28 @@ function mountBottomLine(root, ctx) {
       else amt(li, t.amount, { raw: true, cents: true, plus: t.amount > 0 });
     }
     if (txs.length > TX_SHOWN) {
-      button(parent, 'dc-link', all ? 'Show the latest only' : `Show all ${txs.length}`, () => { all ? open.delete('tx.' + p.id) : open.add('tx.' + p.id); render(); }, all ? 'chevron-down' : 'chevron-right');
+      button(box, 'dc-link', all ? 'Show the latest only' : `Show all ${txs.length}`, () => { all ? open.delete('tx.' + p.id) : open.add('tx.' + p.id); render(); }, all ? 'chevron-up' : 'chevron-down');
     }
   }
 
   // ── comparison and downgrade (Bank tab) ──────────────────────────────
   function renderCompare(c, st) {
     if (!st.alternatives.length) return;
-    el(c, 'h3', 'dc-h3', 'Compared with other banks');
-    el(c, 'p', 'dc-muted', `What each bank would cost and give back on your card spend of ${money(per(st.cardSpend))} ${perLabel()}${st.cardSpendSource === 'statement' ? ' (as counted on your Miles statement; payments and debit orders from the card account earn nothing)' : ''}. Tap a bank to compare with it on the Overview.`);
+    const h = subHead(c, 'Compared with other banks', 'bank.cmp');
+    el(c, 'p', 'dc-card-line', `On your card spend of ${R(st.cardSpend)} ${perLabel()}. Tap one to compare with it.`);
+    const mb = h.more();
+    if (st.cardSpendSource === 'statement') el(mb, 'p', null, 'Card spend as counted on your Miles statement; payments and debit orders from the card account earn nothing.');
+    const chosen = st.alternatives.find(a => st.chosen && a.id === st.chosen.id);
+    if (chosen && chosen.note) el(mb, 'p', null, chosen.note);
+    for (const a of st.alternatives) {
+      if (a.breakEven === null || !a.partners.some(p => !p.known)) continue;
+      const names = a.partners.filter(p => !p.known).map(p => p.label).join(' and ');
+      el(mb, 'p', null, `${a.name} would only match Discovery if it paid ${pct(a.breakEven, 0)} back on ${names} (${pct(a.breakEvenCautious, 0)} counted carefully). Look it up in the ${a.app} app and type it on Inputs.`);
+    }
+    if (!mb.firstChild) el(mb, 'p', null, 'Fees and rewards for the same card spend at each bank.');
     const t = el(c, 'div', 'dc-cmp');
-    const h = el(t, 'div', 'dc-cmp-r dc-cmp-h');
-    for (const [x, cls] of [['Bank', ''], ['Fees', 'c-fees'], ['Rewards', 'c-rew'], ['Rewards minus fees', ''], ['If you moved', '']]) el(h, 'span', cls || null, x);
+    const head = el(t, 'div', 'dc-cmp-r dc-cmp-h');
+    for (const [x, cls] of [['Bank', ''], ['Fees', 'c-fees'], ['Rewards', 'c-rew'], ['Rewards minus fees', ''], ['If you moved', '']]) el(head, 'span', cls || null, x);
     const d = el(t, 'div', 'dc-cmp-r is-you');
     el(d, 'span', null, 'Discovery Bank (now)');
     amt(d, -st.cost, { cls: 'c-fees' });
@@ -1157,24 +1239,22 @@ function mountBottomLine(root, ctx) {
       amt(r, a.net, { plus: true });
       amt(r, a.gainIfSwitch, { plus: true });
     }
-    const chosen = st.alternatives.find(a => st.chosen && a.id === st.chosen.id);
-    if (chosen && chosen.note) el(c, 'p', 'dc-note', chosen.note);
-    for (const a of st.alternatives) {
-      if (a.breakEven === null || !a.partners.some(p => !p.known)) continue;
-      const names = a.partners.filter(p => !p.known).map(p => p.label).join(' and ');
-      el(c, 'p', 'dc-note', `${a.name} would only match Discovery if it paid ${pct(a.breakEven, 0)} back on ${names} (${pct(a.breakEvenCautious, 0)} if we count carefully). It does not publish your rate, so look it up in the ${a.app} app and type it on the Inputs tab.`);
-    }
   }
 
   /* Another provider's price for the same thing, beside Discovery's. A row
      with no price shows the quote that would match (car insurance). */
   function renderMarket(c, o) {
     const { cmp } = o;
-    el(c, 'h3', 'dc-h3', o.title);
-    el(c, 'p', 'dc-muted', o.intro);
+    const h = subHead(c, o.title, o.key);
+    if (o.line) el(c, 'p', 'dc-card-line', o.line);
+    const mb = h.more();
+    if (o.intro) el(mb, 'p', null, o.intro);
+    if (o.extra) el(mb, 'p', null, o.extra);
+    if (!o.vs) el(mb, 'p', 'dc-small', `"${o.vsLabel || 'If you moved'}" is how much better (+) or worse (−) off you would be ${perLabel()}.`);
+    if (o.foot) el(mb, 'p', 'dc-small', o.foot);
     const t = el(c, 'div', 'dc-cmp is-market' + (o.lostLabel ? '' : ' is-3'));
-    const h = el(t, 'div', 'dc-cmp-r dc-cmp-h');
-    for (const [x, cls] of [['Option', ''], ['A month', ''], ...(o.lostLabel ? [[o.lostLabel, 'c-lost']] : []), [o.vsLabel || 'If you moved', '']]) el(h, 'span', cls || null, x);
+    const head = el(t, 'div', 'dc-cmp-r dc-cmp-h');
+    for (const [x, cls] of [['Option', ''], ['A month', ''], ...(o.lostLabel ? [[o.lostLabel, 'c-lost']] : []), [o.vsLabel || 'If you moved', '']]) el(head, 'span', cls || null, x);
     const d = el(t, 'div', 'dc-cmp-r is-you');
     el(d, 'span', null, o.you);
     amt(d, -cmp.current.monthly, { raw: true });
@@ -1199,29 +1279,48 @@ function mountBottomLine(root, ctx) {
       else if (r.breakEven) el(row, 'span', 'dc-amt is-zero is-words', `pays if under ${money(r.breakEven)} a month`);
       else el(row, 'span', 'dc-amt is-zero', '—');
     }
-    el(c, 'p', 'dc-note', (o.vs ? '' : `"${o.vsLabel || 'If you moved'}" is how much better (+) or worse (−) off you would be ${perLabel()}.`) + (o.foot ? ' ' + o.foot : ''));
   }
 
   function renderDowngrade(c, st) {
     const d = st.downgrade;
     if (!d) return;
     const suite = suiteOf(plugin.settings).label;
-    el(c, 'h3', 'dc-h3', 'Or stay with Discovery, on a cheaper account');
-    el(c, 'p', 'dc-muted', `Swap the full ${suite} for just the ${d.label}, and keep Vitality Money. The changes to your rewards are listed below.`);
-    const row = (label, v) => {
-      const r = el(c, 'div', 'dc-ln');
-      el(r, 'span', 'dc-ln-main', label);
-      amt(r, v, { plus: v > 0 });
-    };
+    const h = subHead(c, 'Or stay, on a cheaper account', 'bank.down');
+    el(c, 'p', 'dc-card-line', `The ${d.label} instead of the full ${suite}.`);
+    const mb = h.more();
+    el(mb, 'p', null, `Swap the full ${suite} for just the ${d.label}, and keep Vitality Money. The changes to your rewards are listed below.`);
+    if (d.gainAfterWatch !== null) {
+      el(mb, 'p', null, `Once your Apple Watch contract ends${d.watchEnds ? ` on ${dayLabel(d.watchEnds)}` : ''}, the Suite no longer gives you the watch, so the cheaper account would leave you ${d.gainAfterWatch >= 0 ? `${R(d.gainAfterWatch)} ${perLabel()} better off` : `${R(d.gainAfterWatch)} ${perLabel()} worse off`}, unless you take a new watch.`);
+    }
+    const row = (label, v, note) => plainLine(c, label, v, null, note, v > 0);
     row(`${suite} fees you would stop paying`, st.cost);
     row(`${d.label} fee`, -d.fees);
-    row(`Fees per payment (about ${Math.round(d.payments)} debit orders and payments a year; the Suite includes them)`, -d.payt);
+    row('Fees per payment', -d.payt, `About ${Math.round(d.payments)} debit orders and payments a year; the Suite includes them.`);
     for (const ch of d.changes) row(ch.label, ch.delta);
-    total(c, `Better or worse off than with the ${suite}, ${perLabel()}`, d.gainIfDowngrade);
-    if (d.gainAfterWatch !== null) {
-      el(c, 'p', 'dc-note', `Once your Apple Watch contract ends${d.watchEnds ? ` on ${dayLabel(d.watchEnds)}` : ''}, the Suite no longer gives you the watch, so the cheaper account would leave you ${d.gainAfterWatch >= 0 ? `${money(per(d.gainAfterWatch))} ${perLabel()} better off` : `${money(per(-d.gainAfterWatch))} ${perLabel()} worse off`}, unless you take a new watch.`);
-    }
+    total(c, `Against the ${suite}, ${perLabel()}`, d.gainIfDowngrade);
   }
+
+  /* The notes under a set of fields (where a figure comes from, what to
+     type) wait behind one Notes button per card. */
+  function notesToggle(btnParent, host, key) {
+    if (!host.id) host.id = 'dc-notes-' + (++moreSeq);
+    const btn = el(btnParent, 'button', 'dc-more dc-notes-btn');
+    btn.type = 'button';
+    btn.setAttribute('aria-controls', host.id);
+    const sync = () => {
+      const on = open.has(key);
+      btn.setAttribute('aria-expanded', String(on));
+      host.classList.toggle('is-notes', on);
+      clear(btn);
+      el(btn, 'span', null, on ? 'Hide notes' : 'Notes');
+      icon(btn, on ? 'chevron-up' : 'chevron-down', 'dc-more-chev');
+    };
+    btn.addEventListener('click', e => { e.preventDefault(); if (open.has(key)) open.delete(key); else open.add(key); sync(); });
+    sync();
+    return btn;
+  }
+  /* a longer explanation among the fields: shown with the notes */
+  const fnote = (parent, text) => el(parent, 'p', 'dc-fnote', text);
 
   // ── inputs: one builder per product, used on its tab and on Inputs ───
   function field(parent, label, unit, hint) {
@@ -1358,7 +1457,7 @@ function mountBottomLine(root, ctx) {
     else delete store.period;
   };
   const staleNote = (parent, period, what) => {
-    el(parent, 'p', 'dc-note', `${what} typed for ${period.split('..').map(monthLabel).join(' – ')}, not this period. Typing a new one here clears them.`);
+    el(parent, 'p', 'dc-warn', `${what} typed for ${period.split('..').map(monthLabel).join(' – ')}, not this period. Typing a new one here clears them.`);
   };
 
   /* who is on the medical aid, and which Discovery Health plan: the plan
@@ -1391,24 +1490,24 @@ function mountBottomLine(root, ctx) {
       el(c, 'p', 'dc-grp', 'Miles');
       if (ms) {
         const files = budget.miles.files.map(p => p.slice(p.lastIndexOf('/') + 1));
-        el(c, 'p', 'dc-muted', `We read ${files.join(', ')} (${ms.rows.toLocaleString('en-US').replace(/,/g, ' ')} entries). Anything you type below is used instead.`);
+        fnote(c, `We read ${files.join(', ')} (${ms.rows.toLocaleString('en-US').replace(/,/g, ' ')} entries). Anything you type below is used instead.`);
       } else {
-        el(c, 'p', 'dc-muted', 'Bank statements do not show Miles. In Discovery Bank online, go to Discovery Miles → Download transactions and save the file anywhere in this vault; it is read automatically. Or type the totals for this period below.');
+        fnote(c, 'Bank statements do not show Miles. In Discovery Bank online, go to Discovery Miles → Download transactions and save the file anywhere in this vault; it is read automatically. Or type the totals for this period below.');
       }
       g = el(c, 'div', 'dc-fgrid');
       for (const [k, label, unit] of MILES_INPUTS) numField(g, label, unit, s.actualMiles, k, stampWindow(s.actualMiles, k, st));
       if (st.actualStale) staleNote(c, st.actualStale, 'These Miles were');
-      el(c, 'p', 'dc-fld-h','If you type a HealthyFood or HealthyCare total, it is split between the bank\'s part and Vitality Health\'s part using the published percentages.');
+      fnote(c, 'If you type a HealthyFood or HealthyCare total, it is split between the bank\'s part and Vitality Health\'s part using the published percentages.');
       rateInput(g, 'mileValue');
       el(c, 'p', 'dc-grp', 'Vitality Travel receipts');
-      el(c, 'p', 'dc-muted', 'Each flight receipt (eReceipt) shows "Total base rate" and "Total Discovery discount". Add them up for all the flights booked in this period.');
+      fnote(c, 'Each flight receipt (eReceipt) shows "Total base rate" and "Total Discovery discount". Add them up for all the flights booked in this period.');
       s.travel = s.travel || {};
       g = el(c, 'div', 'dc-fgrid');
       numField(g, 'Total Discovery discount', 'R', s.travel, 'discount', stampWindow(s.travel, 'discount', st));
       numField(g, 'Total base rate (full fares)', 'R', s.travel, 'baseFare', stampWindow(s.travel, 'baseFare', st));
       if (s.travel.period && s.travel.period !== `${st.window.from}..${st.window.to}`) {
         staleNote(c, s.travel.period, 'These totals were');
-        el(c, 'p', 'dc-fld-h', 'Until you do, their discount percentages are used on this period\'s Vitality Travel payments.');
+        fnote(c, 'Until you do, their discount percentages are used on this period\'s Vitality Travel payments.');
       }
       el(c, 'p', 'dc-grp', 'Other banks');
       for (const a of st.alternatives) {
@@ -1419,7 +1518,7 @@ function mountBottomLine(root, ctx) {
         altInput(ag, a, 'backPct', 'Rewards on card spend (%)');
         altInput(ag, a, 'capMonthly', 'Most rewards a month (R, 0 = no limit)');
         a.partners.forEach((p, i) => altInput(ag, a, 'partner' + i, `${p.label}: cash back (%), up to ${money(p.capMonthly)} a month`));
-        if (a.source) el(box, 'p', 'dc-fld-h', a.source);
+        if (a.source) fnote(box, a.source);
       }
       el(c, 'p', 'dc-grp', 'The cheaper Discovery account');
       g = el(c, 'div', 'dc-fgrid');
@@ -1461,7 +1560,7 @@ function mountBottomLine(root, ctx) {
         el(t, 'span', 'dc-fld-h', n.hint);
       }
       el(c, 'p', 'dc-grp', 'Is your hospital on each plan\'s list?');
-      el(c, 'p', 'dc-muted', 'Check each plan\'s list of hospitals for planned operations. At a hospital not on the list, most plans pay less or make you pay part yourself.');
+      fnote(c, 'Check each plan\'s list of hospitals for planned operations. At a hospital not on the list, most plans pay less or make you pay part yourself.');
       s.health.cover = s.health.cover || {};
       const hg = el(c, 'div', 'dc-fgrid');
       for (const p of HEALTH_PLANS) {
@@ -1494,7 +1593,7 @@ function mountBottomLine(root, ctx) {
       numField(g, 'Vitality Drive rewards this period, if you know them', 'R', plugin.settings.actualMiles, 'fuelDriveCash', stampWindow(plugin.settings.actualMiles, 'fuelDriveCash', st), 'From the Insure app: cash paid or Insure Funder Account deposits. Replaces the estimate.');
       if (st.actualStale && plugin.settings.actualMiles.fuelDriveCash !== undefined) staleNote(c, st.actualStale, 'The Drive rewards were');
       el(c, 'p', 'dc-grp', 'Quotes from other insurers');
-      el(c, 'p', 'dc-muted', 'For the same cars, drivers and cover. Most give a quote online in a few minutes.');
+      fnote(c, 'For the same cars, drivers and cover. Most give a quote online in a few minutes.');
       quoteInputs(c, 'insure', INSURERS, a => a.name, () => null);
       const s = plugin.settings;
       s.home = s.home || {};
@@ -1515,23 +1614,27 @@ function mountBottomLine(root, ctx) {
       numField(g, 'Your age', 'years', s.life, 'age', null, 'Used to price life cover alone on a policy of your own.');
       numField(g, 'Group Risk PayBack received', 'R/year', s.life, 'payback', null, 'If your employer\'s scheme pays it: find it in the Discovery app under Group Risk.');
       el(c, 'p', 'dc-grp', 'Quotes for a policy of your own');
-      el(c, 'p', 'dc-muted', 'For the same life, severe illness and income cover, all together.');
+      fnote(c, 'For the same life, severe illness and income cover, all together.');
       quoteInputs(c, 'life', LIFE_OFFERS, o => o.name, o => o.monthly);
     },
   };
 
+  /* An Inputs card: a product's (or the page's) mark, heading and figure,
+     with a Notes toggle for the hints under the fields. */
+  function inputCard(panel, title, p, figureV, key) {
+    const sec = el(panel, 'section', 'dc-card dc-ch dc-notes-host' + (p ? ' dc-p-' + p : ''));
+    const head = el(sec, 'div', 'dc-card-head');
+    if (p) productLogo(el(head, 'span', 'dc-tile'), p);
+    else icon(el(head, 'span', 'dc-tile is-plain'), 'sliders-horizontal');
+    el(head, 'h2', 'dc-card-title', title);
+    if (figureV !== null && figureV !== undefined) amt(head, figureV, { plus: true, cls: 'dc-head-fig' });
+    notesToggle(head, sec, key);
+    return el(sec, 'div', 'dc-ch-body');
+  }
+
   function renderInputs(panel, view) {
-    const h = el(panel, 'h2', 'dc-flows-h2');
-    el(h, 'span', 'dc-name', 'Inputs');
-    el(panel, 'p', 'dc-muted', 'Everything you can set, by product. The same inputs sit at the bottom of each product\'s tab.');
     renderSetup(panel, view);
-    const gen = el(panel, 'section', 'dc-ch dc-p-none');
-    const gh = el(gen, 'div', 'dc-ch-head');
-    const gt = el(gh, 'span', 'dc-tile is-plain');
-    icon(gt, 'sliders-horizontal');
-    const gtt = el(gh, 'div', 'dc-ch-titles');
-    el(gtt, 'h2', 'dc-ch-h2', 'For the whole page');
-    const gb = el(gen, 'div', 'dc-ch-body');
+    const gb = inputCard(panel, 'For the whole page', null, null, 'notes.page');
     const g = el(gb, 'div', 'dc-fgrid');
     const s = plugin.settings;
     const { f: mf, hint } = field(g, 'Months to look back');
@@ -1546,31 +1649,43 @@ function mountBottomLine(root, ctx) {
     csel.value = view.st.chosen ? view.st.chosen.id : '';
     csel.addEventListener('change', async () => { s.compareWith = csel.value; await save(); });
     for (const p of view.pr.products) {
-      const sec = el(panel, 'section', 'dc-ch dc-p-' + p.id);
-      const head = el(sec, 'div', 'dc-ch-head');
-      const tile = el(head, 'span', 'dc-tile');
-      productLogo(tile, p.id);
-      const titles = el(head, 'div', 'dc-ch-titles');
-      const h2 = el(titles, 'h2', 'dc-ch-h2');
-      el(h2, 'span', 'dc-name', p.name);
-      amt(h2, p.figure, { plus: true, cls: 'dc-fig' });
-      const body = el(sec, 'div', 'dc-ch-body');
+      const body = inputCard(panel, p.name, p.id, p.figure, 'notes.in.' + p.id);
       INPUTS[p.id](body, view, { onInputsPage: true });
     }
+  }
+
+  /* A question with a few answers, as real radios in a fieldset (the
+     legend is the question). onPick(value) runs when one is chosen. */
+  let radioSeq = 0;
+  function radios(parent, legend, options, value, onPick, cls) {
+    const box = el(parent, 'fieldset', 'dc-radios' + (cls ? ' ' + cls : ''));
+    el(box, 'legend', 'dc-fld-l', legend);
+    const list = el(box, 'div', 'dc-radios-opts');
+    const name = 'dc-radio-' + (++radioSeq);
+    for (const o of options) {
+      const lab = el(list, 'label', 'dc-radio' + (o.value === value ? ' is-on' : ''));
+      const inp = el(lab, 'input', 'dc-radio-in');
+      inp.type = 'radio';
+      inp.name = name;
+      inp.value = o.value;
+      inp.checked = o.value === value;
+      el(lab, 'span', 'dc-radio-l', o.label);
+      inp.addEventListener('change', () => { if (inp.checked) onPick(o.value); });
+    }
+    return box;
   }
 
   /* Your Discovery setup: the answers to the first-run questions, one place
      to change any of them. */
   function renderSetup(panel, view) {
     const s = plugin.settings;
-    const { detected, banking, products, vitality } = view;
-    const sec = el(panel, 'section', 'dc-ch dc-p-none dc-setup');
-    const head = el(sec, 'div', 'dc-ch-head');
-    icon(el(head, 'span', 'dc-tile is-plain'), 'sliders-horizontal');
-    const titles = el(head, 'div', 'dc-ch-titles');
-    el(titles, 'h2', 'dc-ch-h2', 'Your Discovery setup');
-    const body = el(sec, 'div', 'dc-ch-body');
-    el(body, 'p', 'dc-muted', 'What you have decides which tabs show and which benefits count. Tick the products you have; the line under each says what your budget shows.');
+    const { detected, banking, products, vitality, st } = view;
+    const body = inputCard(panel, 'Your Discovery setup', null, null, 'notes.setup');
+    /* what Discovery sets some rewards by; unanswered counts the lower figure */
+    const cond = s.conditions || {};
+    const setCond = async (k, v) => { s.conditions = { ...s.conditions, [k]: v }; await save(); };
+    body.parentNode.classList.add('dc-setup');
+    fnote(body, 'What you have decides which tabs show and which benefits count. The note under each product says what your budget shows.');
 
     const list = el(body, 'div', 'dc-setup-prods');
     for (const id of PRODUCT_IDS) {
@@ -1617,6 +1732,13 @@ function mountBottomLine(root, ctx) {
       }
       yesNo(g, 'money', 'Vitality Money', banking.vitalityMoney ? 'Vitality Money premiums show in your budget.' : 'No Vitality Money premium shows in your budget.');
       if (vitality.money) statusSelect(g, 'money', 'Bank score (Vitality Money status)');
+      if (st.mileSource === 'statement') {
+        const { f, hint: mh } = field(body, 'How you spend your Miles');
+        el(f, 'span', 'dc-card-line', 'Read from your Miles statement.');
+        mh('Your Miles statement shows what your Miles bought, so there is nothing to choose.');
+      } else {
+        radios(body, 'How do you spend your Miles?', MILES_USE, s.milesUse || '', async v => { s.milesUse = v; await save(); }, 'dc-miles-use');
+      }
     }
     if (products.health) {
       el(body, 'p', 'dc-grp', 'Discovery Health');
@@ -1625,31 +1747,40 @@ function mountBottomLine(root, ctx) {
       if (vitality.health) statusSelect(g, 'health', 'Health score (Vitality Health status)');
       planSelect(g);
       membersFields(g);
+      if (vitality.health) {
+        radios(body, 'Vitality Age and a Vitality Health Check in the last 12 months?', CHECKS, cond.checks || '', v => setCond('checks', v));
+        radios(body, 'At Virgin Active or Planet Fitness 36 times a year or more?', YES_NO, cond.gym36 === true ? 'yes' : cond.gym36 === false ? 'no' : '', v => setCond('gym36', v === 'yes'));
+      }
     }
     if (products.insure) {
       el(body, 'p', 'dc-grp', 'Discovery Insure');
       const g = el(body, 'div', 'dc-fgrid');
       yesNo(g, 'drive', 'Vitality Drive');
       if (vitality.drive) statusSelect(g, 'drive', 'Car score (Vitality Drive status)');
+      radios(body, 'Which Discovery Insure plan are you on?', INSURE_PLANS, cond.insurePlan || '', v => setCond('insurePlan', v));
+      radios(body, 'Does Discovery Insure also cover your home?', HOME_COVER, cond.homeCover || '', v => setCond('homeCover', v));
     }
     const again = el(body, 'div', 'dc-setup-again');
-    button(again, 'dc-btn-quiet dc-ask-again', 'Ask me the questions again', async () => { s.onboarded = false; await plugin.saveSettings(); render(); });
+    button(again, 'dc-btn', 'Ask me the questions again', async () => { s.onboarded = false; await plugin.saveSettings(); render(); });
     el(again, 'span', 'dc-fld-h', 'Goes through the first-run questions again, with your answers filled in.');
   }
 
   function renderBenefitsTab(panel, view) {
-    renderBenefits(panel, { s: view.s, st: view.st, save, rerender: render, period: period() });
+    renderBenefits(panel, { s: view.s, st: view.st, save, rerender: render, period: period(), milesUse: MILES_USE });
   }
 
   function renderFoot(panel, { m, st }) {
-    const f = el(panel, 'div', 'dc-foot');
+    const f = el(panel, 'footer', 'dc-foot');
+    const line = el(f, 'div', 'dc-foot-line');
+    el(line, 'span', null, 'A calculator, not financial advice.');
+    const mb = moreIn(line, 'foot.more', 'More', f);
+    el(mb, 'p', null, 'Some figures are estimates; each product tab shows the rate behind them. Discovery changes its rates every year.');
     const excl = Object.entries(m.excludedFromSpend).filter(([, v]) => Math.abs(v) >= 1);
     if (excl.length && tab() === 'bank') {
       const scale = 12 / st.window.months;
-      el(f, 'p', null, `Paid from the card account but not card purchases (transfers, savings and the categories you listed in settings), ${perLabel()}: ` +
+      el(mb, 'p', null, `Paid from the card account but not card purchases (transfers, savings and the categories you listed in settings), ${perLabel()}: ` +
         excl.map(([k, v]) => `${k} ${money(per(v * scale))}`).join(' · ') + '.');
     }
-    el(f, 'p', null, 'Some figures are estimates; each product tab shows the rate behind them. Discovery changes its rates every year. This is a calculator, not financial advice.');
   }
 
   return {

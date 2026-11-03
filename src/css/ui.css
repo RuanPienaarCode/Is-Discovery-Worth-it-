@@ -1,66 +1,49 @@
-/* The page's own additions (src/bottom-line.js): the Compare price banner,
-   the "counts for less" note under a weighted line, Your Discovery setup on
-   the Inputs tab, and the empty notes. Structural only: layout, wrapping and
-   tap targets. Colour and finish come from the restyle. Every rule is under
-   a dc- class; buttons are set at (0,2,1) to beat Obsidian's own `button`. */
+/* The page's own small pieces (src/bottom-line.js): the Compare price
+   banner, Your Discovery setup on the Inputs tab, and the one-question
+   radios (How do you spend your Miles?). Tokens from src/styles.css. Every
+   rule is under a dc- class; buttons are set at (0,2,1) to beat Obsidian's
+   own `button`. */
 
 /* ── Compare: when the prices were last checked ──────── */
-.dc-market-banner {
-  margin: 0 0 14px;
-  padding: 10px 14px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 10px;
-  background: var(--background-secondary);
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-.dc-market-banner .dc-market-line { margin: 0; font-size: var(--font-ui-small); color: var(--text-muted); line-height: 1.45; }
-.dc-market-banner .dc-market-warn { margin: 6px 0 0; font-weight: 600; line-height: 1.45; color: var(--color-orange); }
-.dc-market-banner.is-stale { border-color: var(--color-orange); }
-
-/* ── a benefit that counts for less (or not at all) ──── */
-.dc-line-weight {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 12px;
-  padding: 0 0 6px 26px;
-  font-size: var(--font-ui-smaller);
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-.dc-line-weight .dc-weight-text { flex: 1 1 14em; min-width: 0; overflow-wrap: break-word; word-break: break-word; }
-.dc-line-weight.is-blocked .dc-weight-text { color: var(--color-orange); }
-.dc-page button.dc-weight-link { flex: none; min-height: 44px; padding: 0 2px; font-size: var(--font-ui-smaller); }
-.dc-weight-note { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; }
+.dc-market-banner .dc-market-line { color: var(--dc-text-2); }
+.dc-market-banner .dc-market-warn { font-weight: 600; color: var(--dc-amber); }
+.dc-market-banner > .dc-more { margin-left: auto; }
 
 /* ── Inputs: Your Discovery setup ────────────────────── */
-.dc-setup { margin-bottom: 18px; }
-.dc-setup-prods { display: flex; flex-direction: column; margin-top: 8px; }
+.dc-setup-prods { display: flex; flex-direction: column; margin-top: 4px; }
 .dc-setup-prod {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   min-height: 44px;
-  padding: 10px 0;
-  border-top: 1px solid var(--background-modifier-border);
+  padding: 11px 0;
+  border-top: 1px solid var(--dc-line);
   cursor: pointer;
 }
 .dc-setup-prod:first-child { border-top: 0; }
-.dc-setup-prod .dc-check { flex: none; width: 22px; height: 22px; margin: 1px 0 0; }
+.dc-setup-prod .dc-check { flex: none; width: 20px; height: 20px; margin: 1px 0 0; }
 .dc-setup-prod-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: break-word; word-break: break-word; }
-.dc-setup-again { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 18px; }
-.dc-page button.dc-btn-quiet {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
-  font-size: var(--font-ui-small);
-  font-weight: 600;
-}
+.dc-setup-prod-t .dc-fld-l { font-size: 14px; color: var(--dc-text); }
+.dc-setup-again { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 16px; }
 
-/* ── empty notes ─────────────────────────────────────── */
-.dc-empty-note, .dc-fl-empty { margin: 12px 0; line-height: 1.5; }
+/* ── a question with a few answers: real radios ──────── */
+.dc-radios { min-width: 0; margin: 14px 0 0; padding: 0; border: 0; }
+.dc-radios > legend { padding: 0; margin: 0 0 8px; }
+.dc-radios-opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 8px; }
+.dc-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--dc-line-2);
+  border-radius: 10px;
+  background: var(--dc-surface-2);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.dc-radio.is-on { border-color: var(--dc-accent); background: rgba(var(--dc-accent-rgb), 0.1); }
+.dc-radio input.dc-radio-in { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--dc-navy-2); cursor: pointer; }
+.dc-radio-l { min-width: 0; }
+.dc-radio input.dc-radio-in:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }

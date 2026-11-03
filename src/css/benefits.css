@@ -1,229 +1,163 @@
-/* The Benefits page (src/ui-benefits.js). Every rule sits under .dc-ben.
-   Short by default: each card is a big heading, one line, the answer and
-   two big figures; everything else waits behind "More". Obsidian's theme
-   variables throughout, so it follows light and dark. The narrow layout
-   hangs on the page's own .is-narrow / .is-phone classes (set from its
-   width in bottom-line.js): container queries and color-mix() need iOS 16,
-   and the floor here is iOS 15. No :has(): the chosen answer is an .is-on
-   class the script sets. Tap targets are 44px or more. */
+/* The Benefits page (src/ui-benefits.js), in the page's look (tokens from
+   src/styles.css). Every rule sits under .dc-ben. Short by default: each
+   card is a big heading, one line, the answer and two figures; everything
+   else waits behind "More". The page's own head (src/bottom-line.js) gives
+   the title and its one line, so the module's own heading and lead are not
+   shown twice. The narrow layout hangs on the page's .is-narrow / .is-phone
+   classes: container queries and color-mix() need iOS 16, and the floor here
+   is iOS 15. No :has(): the chosen answer is an .is-on class the script sets.
+   Tap targets are 44px or more. */
 
-.dc-ben {
-  min-width: 0;
-  color: var(--text-normal);
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-  font-variant-numeric: tabular-nums;
-}
+.dc-ben { display: flex; flex-direction: column; gap: 24px; min-width: 0; color: var(--dc-text); }
 .dc-ben *, .dc-ben *::before, .dc-ben *::after { box-sizing: border-box; }
 .dc-ben [hidden] { display: none; }
+.dc-ben .dc-ben-h, .dc-ben .dc-ben-lead { display: none; }
+.dc-ben .dc-ben-empty { padding: 12px 14px; border: 1px dashed var(--dc-line-2); border-radius: var(--dc-radius-sm); color: var(--dc-text-2); font-size: 13px; }
 
-.dc-ben .dc-ben-h { margin: 0 0 4px; font-size: 1.6em; font-weight: 750; line-height: 1.2; }
-.dc-ben .dc-ben-lead { margin: 0 0 14px; color: var(--text-muted); line-height: 1.4; }
-.dc-ben .dc-ben-empty {
-  margin: 8px 0 0;
-  padding: 14px 16px;
-  border: 1px dashed var(--background-modifier-border);
-  border-radius: 10px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-/* ── the two figures ─────────────────────────────────── */
-.dc-ben .dc-ben-figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+/* ── the two figures, as KPI tiles ───────────────────── */
+.dc-ben .dc-ben-figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .dc-ben .dc-ben-fig {
+  position: relative;
   min-width: 0;
-  padding: 14px 16px;
-  border: 1px solid var(--background-modifier-border);
-  border-left-width: 4px;
-  border-radius: 12px;
-  background: var(--background-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 22px 22px;
+  border: 1px solid var(--dc-line);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow);
+  overflow: hidden;
 }
-.dc-ben .dc-ben-fig.is-offer { border-left-color: var(--text-faint); }
-.dc-ben .dc-ben-fig.is-got { border-left-color: var(--color-green); background: var(--background-secondary); }
-.dc-ben .dc-ben-fig-t { margin: 0; font-size: var(--font-ui-small); font-weight: 600; color: var(--text-muted); }
-.dc-ben .dc-ben-fig-v { margin: 2px 0 0; line-height: 1.1; }
-.dc-ben .dc-ben-fig-n { font-size: 2.2em; font-weight: 800; white-space: nowrap; }
-.dc-ben .dc-ben-fig.is-got .dc-ben-fig-n { color: var(--color-green); }
-.dc-ben .dc-ben-fig.is-got.is-zero .dc-ben-fig-n { color: var(--text-muted); }
-.dc-ben .dc-ben-fig-per { font-size: var(--font-ui-small); color: var(--text-muted); white-space: nowrap; }
-.dc-ben .dc-ben-fig-sub { margin: 4px 0 0; font-size: var(--font-ui-smaller); color: var(--text-muted); line-height: 1.3; }
+.dc-ben .dc-ben-fig::after { content: ''; position: absolute; left: 22px; right: 22px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--dc-line-2); }
+.dc-ben .dc-ben-fig.is-got::after { background: var(--dc-pos); }
+.dc-ben .dc-ben-fig-t { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dc-muted); }
+.dc-ben .dc-ben-fig-v { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; line-height: 1.1; }
+.dc-ben .dc-ben-fig-n { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
+.dc-ben .dc-ben-fig.is-got .dc-ben-fig-n { color: var(--dc-pos); }
+.dc-ben .dc-ben-fig.is-got.is-zero .dc-ben-fig-n { color: var(--dc-muted); }
+.dc-ben .dc-ben-fig-per { font-size: 12px; color: var(--dc-muted); white-space: nowrap; }
+.dc-ben .dc-ben-fig-sub { font-size: 13px; color: var(--dc-muted); line-height: 1.35; }
 
 /* ── groups and cards ────────────────────────────────── */
-.dc-ben .dc-ben-group { margin-top: 28px; }
-.dc-ben .dc-ben-group-h {
-  margin: 0 0 10px;
-  font-size: var(--font-ui-small);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-}
-.dc-ben .dc-ben-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.dc-ben .dc-ben-group { display: flex; flex-direction: column; gap: 12px; }
+.dc-ben .dc-ben-group-h { font-size: 18px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; }
+.dc-ben .dc-ben-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 14px; align-items: start; }
 .dc-ben .dc-ben-card {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 14px;
-  background: var(--background-primary);
+  gap: 12px;
+  padding: 20px 22px;
+  border: 1px solid var(--dc-line);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow);
 }
 .dc-ben .dc-ben-card-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.dc-ben .dc-ben-mark { flex: none; display: inline-flex; width: 32px; height: 32px; }
-.dc-ben .dc-ben-mark .dc-art { width: 100%; height: 100%; }
-.dc-ben .dc-ben-card-h { margin: 0; min-width: 0; font-size: 1.3em; font-weight: 750; line-height: 1.2; }
-/* the one line: never more than one, cut with an ellipsis if it must be */
-.dc-ben .dc-ben-one {
-  margin: -4px 0 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--text-muted);
-  font-size: var(--font-ui-small);
-  line-height: 1.35;
-}
-
-/* ── the three answers: real radios in labels ────────── */
-.dc-ben .dc-ben-seg {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 10px;
-  background: var(--background-secondary);
-}
-.dc-ben .dc-ben-opt {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 44px;
-  display: flex;
-  align-items: stretch;
-  margin: 0;
-  border-radius: 7px;
-  cursor: pointer;
-}
-/* the radio stays in the page for the keyboard and screen readers; the
-   label's text is what shows */
-.dc-ben input.dc-ben-in {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-.dc-ben .dc-ben-opt-t {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
+.dc-ben .dc-ben-mark {
+  flex: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  padding: 6px 4px;
-  border-radius: 7px;
-  text-align: center;
-  line-height: 1.2;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: linear-gradient(160deg, rgba(var(--dc-accent-rgb), 0.2), rgba(var(--dc-accent-rgb), 0.05));
 }
-.dc-ben .dc-ben-opt-l { font-size: var(--font-ui-small); font-weight: 600; }
-.dc-ben .dc-ben-sug { font-size: var(--font-ui-smaller); font-weight: 500; color: var(--text-muted); }
-.dc-ben .dc-ben-opt.is-on .dc-ben-opt-t { background: var(--interactive-accent); color: var(--text-on-accent); }
-.dc-ben .dc-ben-opt.is-on .dc-ben-sug { color: var(--text-on-accent); opacity: 0.85; }
+.dc-ben .dc-ben-mark .dc-art { width: 22px; height: 22px; }
+.dc-ben .dc-ben-card-h { margin: 0; min-width: 0; font-size: 17px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; }
+/* the one line: never more than one, cut with an ellipsis if it must be */
+.dc-ben .dc-ben-one { margin: -6px 0 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--dc-muted); font-size: 13.5px; line-height: 1.4; }
+
+/* ── the three answers: real radios in labels ────────── */
+.dc-ben .dc-ben-seg { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--dc-line); border-radius: 12px; background: var(--dc-surface-2); }
+.dc-ben .dc-ben-opt { position: relative; flex: 1 1 0; min-width: 0; min-height: 44px; display: flex; align-items: stretch; margin: 0; border-radius: 9px; cursor: pointer; }
+/* the radio stays in the page for the keyboard and screen readers; the
+   label's text is what shows */
+.dc-ben input.dc-ben-in { position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.dc-ben .dc-ben-opt-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 6px 4px; border-radius: 9px; text-align: center; line-height: 1.2; transition: background 160ms ease, color 160ms ease; }
+.dc-ben .dc-ben-opt-l { font-size: 12.5px; font-weight: 700; }
+.dc-ben .dc-ben-sug { font-size: 10.5px; font-weight: 600; color: var(--dc-muted); }
+.dc-ben .dc-ben-opt.is-on .dc-ben-opt-t { background: linear-gradient(180deg, var(--dc-navy-2), var(--dc-navy)); color: #ffffff; box-shadow: 0 6px 16px -8px rgba(17, 75, 138, 0.9); }
+.dc-ben .dc-ben-opt.is-on .dc-ben-sug { color: rgba(255, 255, 255, 0.85); }
 @media (hover: hover) {
-  .dc-ben .dc-ben-opt:hover .dc-ben-opt-t { background: var(--background-modifier-hover); }
-  .dc-ben .dc-ben-opt.is-on:hover .dc-ben-opt-t { background: var(--interactive-accent-hover, var(--interactive-accent)); }
+  .dc-ben .dc-ben-opt:hover .dc-ben-opt-t { background: rgba(var(--dc-accent-rgb), 0.08); }
+  .dc-ben .dc-ben-opt.is-on:hover .dc-ben-opt-t { background: linear-gradient(180deg, var(--dc-navy-2), var(--dc-navy)); }
 }
 .dc-ben input.dc-ben-in:disabled { cursor: progress; }
 
+/* ── Spending your Miles: how, as four real radios ───── */
+.dc-ben .dc-ben-how { min-width: 0; margin: 0; padding: 0; border: 0; }
+.dc-ben .dc-ben-how-l { padding: 0; margin: 0 0 8px; font-size: 12.5px; font-weight: 700; color: var(--dc-text-2); }
+.dc-ben .dc-ben-how-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.dc-ben .dc-ben-how-opt { display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; padding: 6px 10px; border: 1px solid var(--dc-line-2); border-radius: 10px; background: var(--dc-surface-2); font-size: 12.5px; font-weight: 600; line-height: 1.25; cursor: pointer; }
+.dc-ben .dc-ben-how-opt.is-on { border-color: var(--dc-accent); background: rgba(var(--dc-accent-rgb), 0.12); }
+.dc-ben input.dc-ben-how-in { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--dc-navy-2); cursor: pointer; }
+.dc-ben .dc-ben-how-t { min-width: 0; }
+.dc-page.is-phone .dc-ben .dc-ben-how-opts { grid-template-columns: minmax(0, 1fr); }
+
 /* ── the two amounts: big figures, tiny labels ───────── */
 .dc-ben .dc-ben-worth { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.dc-ben .dc-ben-amt { min-width: 0; display: flex; flex-direction: column; gap: 0; }
-.dc-ben .dc-ben-amt-l {
-  font-size: var(--font-ui-smaller);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-}
-.dc-ben .dc-ben-amt-n { font-size: 1.45em; font-weight: 750; white-space: nowrap; line-height: 1.15; }
-.dc-ben .dc-ben-amt.is-full .dc-ben-amt-n { color: var(--text-muted); }
-.dc-ben .dc-ben-amt.is-got .dc-ben-amt-n { color: var(--color-green); }
-.dc-ben .dc-ben-amt.is-got.is-zero .dc-ben-amt-n { color: var(--text-muted); }
+.dc-ben .dc-ben-amt { min-width: 0; display: flex; flex-direction: column; }
+.dc-ben .dc-ben-amt-l { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--dc-muted); }
+.dc-ben .dc-ben-amt-n { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; line-height: 1.2; }
+.dc-ben .dc-ben-amt.is-full .dc-ben-amt-n { color: var(--dc-text-2); }
+.dc-ben .dc-ben-amt.is-got .dc-ben-amt-n { color: var(--dc-pos); }
+.dc-ben .dc-ben-amt.is-got.is-zero .dc-ben-amt-n { color: var(--dc-muted); }
 
 /* ── More: the rest of the words ─────────────────────── */
 .dc-ben button.dc-ben-more {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
-  min-width: 44px;
-  margin: -6px 0 -10px -8px;
-  padding: 0 8px;
+  min-height: 30px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 6px;
-  background: none;
+  border-radius: 999px;
+  background: rgba(var(--dc-accent-rgb), 0.1);
   box-shadow: none;
   height: auto;
   font: inherit;
-  font-size: var(--font-ui-small);
-  font-weight: 600;
-  color: var(--text-accent, var(--interactive-accent));
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dc-accent-ink);
   white-space: normal;
   cursor: pointer;
 }
-.dc-ben .dc-ben-more-body { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--background-modifier-border); }
+.dc-page.is-narrow .dc-ben button.dc-ben-more { min-height: 44px; min-width: 44px; padding: 0 16px; }
+.dc-ben .dc-ben-more-body { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px dashed var(--dc-line-2); }
 .dc-ben .dc-ben-more-body[hidden] { display: none; }
-.dc-ben .dc-ben-offer { margin: 0; font-size: var(--font-ui-small); line-height: 1.5; }
-.dc-ben .dc-ben-small { margin: 0; font-size: var(--font-ui-smaller); color: var(--text-muted); line-height: 1.4; }
-.dc-ben .dc-ben-why {
-  margin: 0;
-  padding: 8px 10px;
-  border-left: 3px solid var(--interactive-accent);
-  border-radius: 0 6px 6px 0;
-  background: var(--background-secondary);
-  font-size: var(--font-ui-small);
-  line-height: 1.45;
-}
+.dc-ben .dc-ben-offer { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--dc-text-2); }
+.dc-ben .dc-ben-small { margin: 0; font-size: 12px; color: var(--dc-muted); line-height: 1.4; }
+.dc-ben .dc-ben-why { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--dc-surface-2); box-shadow: inset 3px 0 0 var(--dc-accent); font-size: 13px; line-height: 1.45; color: var(--dc-text-2); }
 
 /* ── not available with your setup ───────────────────── */
-.dc-ben .dc-ben-off {
-  margin-top: 28px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 14px;
-  background: var(--background-primary);
-}
-.dc-ben .dc-ben-off-sum {
-  display: list-item;
-  min-height: 44px;
-  padding: 12px 16px;
-  font-weight: 650;
-  cursor: pointer;
-  border-radius: 14px;
-}
-.dc-ben .dc-ben-off-list { margin: 0; padding: 0 16px 8px; list-style: none; }
-.dc-ben .dc-ben-off-item { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 12px 0; border-top: 1px solid var(--background-modifier-border); }
-.dc-ben .dc-ben-off-h { margin: 0; font-size: 1.15em; font-weight: 700; line-height: 1.25; }
+.dc-ben .dc-ben-off { border: 1px solid var(--dc-line); border-radius: var(--dc-radius); background: var(--dc-surface); }
+.dc-ben .dc-ben-off-sum { display: list-item; min-height: 44px; padding: 13px 18px; font-size: 13.5px; font-weight: 700; color: var(--dc-text-2); cursor: pointer; border-radius: var(--dc-radius); }
+.dc-ben .dc-ben-off-list { margin: 0; padding: 0 18px 8px; list-style: none; }
+.dc-ben .dc-ben-off-item { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 12px 0; border-top: 1px solid var(--dc-line); }
+.dc-ben .dc-ben-off-h { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.25; }
 .dc-ben .dc-ben-off-item .dc-ben-one { margin: 0; white-space: normal; }
 
 /* ── focus rings: :focus-visible needs iOS 15.4, so it stands alone and an
    older WebKit gets :focus in the fallback below ─────── */
-.dc-ben input.dc-ben-in:focus-visible + .dc-ben-opt-t { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
-.dc-ben .dc-ben-off-sum:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
-.dc-ben button.dc-ben-more:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 0; }
+.dc-ben input.dc-ben-in:focus-visible + .dc-ben-opt-t { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
+.dc-ben input.dc-ben-how-in:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
+.dc-ben .dc-ben-off-sum:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: -2px; }
+.dc-ben button.dc-ben-more:focus-visible { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
 @supports not selector(:focus-visible) {
-  .dc-ben input.dc-ben-in:focus + .dc-ben-opt-t { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
-  .dc-ben .dc-ben-off-sum:focus { outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
-  .dc-ben button.dc-ben-more:focus { outline: 2px solid var(--interactive-accent); outline-offset: 0; }
+  .dc-ben input.dc-ben-in:focus + .dc-ben-opt-t { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
+  .dc-ben .dc-ben-off-sum:focus { outline: 2px solid var(--dc-accent-ink); outline-offset: -2px; }
+  .dc-ben button.dc-ben-more:focus { outline: 2px solid var(--dc-accent-ink); outline-offset: 2px; }
 }
 
 /* ── narrow: one column of cards; a phone stacks the figures ─ */
-.dc-page.is-narrow .dc-ben .dc-ben-cards { grid-template-columns: minmax(0, 1fr); }
-.dc-page.is-phone .dc-ben .dc-ben-figs { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.dc-page.is-phone .dc-ben .dc-ben-fig-n { font-size: 2em; }
-.dc-page.is-phone .dc-ben .dc-ben-card { padding: 14px 12px; }
+.dc-page.is-narrow .dc-ben { gap: 20px; }
+.dc-page.is-narrow .dc-ben .dc-ben-card { padding: 16px; }
+.dc-page.is-narrow .dc-ben .dc-ben-fig { padding: 14px 16px 18px; }
+.dc-page.is-narrow .dc-ben .dc-ben-fig::after { left: 16px; right: 16px; }
+.dc-page.is-phone .dc-ben .dc-ben-figs { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.dc-page.is-phone .dc-ben .dc-ben-fig-n { font-size: 28px; }
 .dc-page.is-phone .dc-ben .dc-ben-seg { gap: 2px; padding: 3px; }
 .dc-page.is-phone .dc-ben .dc-ben-opt-t { padding: 6px 2px; }
