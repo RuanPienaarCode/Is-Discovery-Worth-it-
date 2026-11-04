@@ -71,7 +71,7 @@ Until the plugin is in Obsidian's community directory, install it by hand:
 
 1. Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/RuanPienaarCode/Is-Discovery-Worth-it-/releases/latest).
 2. Put them in `<your vault>/.obsidian/plugins/discovery-worth-it/`.
-3. In Obsidian, open *Settings*, then *Community plugins*, and turn on **Is Discovery Worth It?**. Open it from the calculator icon in the ribbon, or with the command palette.
+3. In Obsidian, open *Settings*, then *Community plugins*, and turn on **Is Discovery Worth It**. Open it from the calculator icon in the ribbon, or with the command palette.
 
 Each release's files carry a build attestation, so you can check they were built from this repository:
 
