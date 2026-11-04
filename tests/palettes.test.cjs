@@ -8,13 +8,14 @@
    3. no coloured glows in the palettes' own rules;
    4. applyPalette puts exactly one palette's classes on the page, none for
       the default, and an unknown id falls back to the default;
-   5. the default palette is the page's own colours until Ruan picks. */
+   5. Meadow is the default (Ruan's pick, 4 Nov 2026); the Discovery colours
+      are the base with no class, still offered. */
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.join(__dirname, '..');
-const { PALETTES, DEFAULT_PALETTE, paletteOf, applyPalette } = require('../src/palettes');
+const { PALETTES, BASE_PALETTE, DEFAULT_PALETTE, paletteOf, applyPalette } = require('../src/palettes');
 const { DEFAULT_SETTINGS } = require('../src/constants');
 const css = fs.readFileSync(path.join(root, 'src/css/palettes.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
@@ -41,9 +42,10 @@ const NEED = ['--dc-bg', '--dc-rail', '--dc-surface', '--dc-surface-2', '--dc-su
   ...['bank', 'health', 'gap', 'insure', 'life'].flatMap(k => [`--c-${k}`, `--c-${k}-ink`, `--c-${k}-rgb`])];
 const PRODUCTS = ['bank', 'health', 'gap', 'insure', 'life'];
 
-assert.strictEqual(DEFAULT_PALETTE, 'discovery');
-assert.strictEqual(DEFAULT_SETTINGS.palette, DEFAULT_PALETTE, 'the default palette stays the page\'s own colours');
-assert.strictEqual(PALETTES[0].id, DEFAULT_PALETTE);
+assert.strictEqual(DEFAULT_PALETTE, 'meadow', 'Meadow is the default');
+assert.strictEqual(DEFAULT_SETTINGS.palette, DEFAULT_PALETTE, 'a new install gets the default palette');
+assert.strictEqual(BASE_PALETTE, 'discovery');
+assert.strictEqual(PALETTES[0].id, BASE_PALETTE, 'the Discovery colours are still offered');
 assert.strictEqual(new Set(PALETTES.map(p => p.id)).size, PALETTES.length, 'palette ids are unique');
 assert.ok(PALETTES.length >= 6, 'the current colours and five new palettes');
 
@@ -103,7 +105,9 @@ assert.deepStrictEqual([...pg.s].sort(), ['dc-pal', 'dc-pal-graphite']);
 applyPalette(pg, 'discovery');
 assert.deepStrictEqual([...pg.s], []);
 applyPalette(pg, 'no-such-palette');
-assert.deepStrictEqual([...pg.s], []);
+assert.deepStrictEqual([...pg.s].sort(), ['dc-pal', 'dc-pal-meadow'], 'an unknown id falls back to Meadow');
+applyPalette(pg, undefined);
+assert.deepStrictEqual([...pg.s].sort(), ['dc-pal', 'dc-pal-meadow'], 'no saved palette means Meadow');
 assert.strictEqual(paletteOf(undefined), DEFAULT_PALETTE);
 
 console.log(`palettes OK (${PALETTES.length - 1} palettes, ${checked} contrast pairs)`);

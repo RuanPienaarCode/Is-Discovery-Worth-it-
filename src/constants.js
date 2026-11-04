@@ -185,9 +185,9 @@ const DEFAULT_SETTINGS = {
   period: 'annual',
   /* The welcome screen when the page opens; "Skip this next time" turns it off. */
   welcome: true,
-  /* The page's colours: a palette id from src/palettes.js ('discovery' =
-     the page's own colours). */
-  palette: 'discovery',
+  /* The page's colours: a palette id from src/palettes.js. Meadow by
+     default; 'discovery' = the page's original Discovery colours. */
+  palette: 'meadow',
 };
 
 module.exports = { VIEW_TYPE, VERB_PREFIX, RULES, SHOP_TAGS, NOT_SPEND_TYPES, STATUSES, DEFAULT_SETTINGS };

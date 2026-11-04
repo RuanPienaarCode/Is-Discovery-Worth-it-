@@ -20,7 +20,7 @@
                    Overview and Inputs)
      ?welcome=0    skip the welcome screen (also skipped by ?tab= and ?check=)
      ?pal=sunrise  a colour palette (src/palettes.js: discovery, sunrise,
-                   meadow, onyx, plum, graphite)
+                   meadow (the default), onyx, plum, graphite)
      ?mobile=1     an iPhone: Obsidian's is-mobile + is-phone classes, and the
                    notch and home-bar insets an iPhone 11 reports (portrait or
                    landscape by the window's shape)
