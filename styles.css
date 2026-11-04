@@ -1897,7 +1897,7 @@
 
 /* the chart: as wide as the pane, up to its own max-width (set inline) */
 .dc-trend .dc-trend-figure { min-width: 0; }
-.dc-trend svg.dc-trend-chart { display: block; width: 100%; height: auto; overflow: visible; }
+.dc-trend svg.dc-trend-chart { display: block; margin: 0 auto; width: 100%; height: auto; overflow: visible; }
 .dc-trend .dc-trend-zero { stroke: var(--dc-line-2); stroke-width: 1; }
 .dc-trend .dc-trend-paid { fill: var(--dc-muted); }
 .dc-trend .dc-trend-back { fill: var(--dc-accent); }

@@ -18,9 +18,9 @@ const NAMES = { bank: 'Bank', health: 'Health', gap: 'Gap cover', insure: 'Insur
 const ORDER = ['bank', 'health', 'gap', 'insure', 'life'];
 
 /* the chart's grid, in viewBox units: 8 quarters fit 320 wide */
-const COL = 40, BAR = 13, BAR_GAP = 3, TOP = 12, PLOT_H = 150, LABEL_H = 38, MIN_COLS = 4;
+const COL = 40, BAR = 13, BAR_GAP = 3, TOP = 12, PLOT_H = 150, LABEL_H = 38, MAX_COLS = 8;
 /* the chart grows with the pane up to this many times its viewBox width */
-const MAX_SCALE = 1.4;
+const MAX_SCALE = 1.8;
 
 /* which products the chart shows ('all' or a product id), kept while the
    page re-renders */
@@ -86,9 +86,12 @@ function chartLayout(trend, which) {
   const y = v => TOP + ((hi - fin(v)) / (hi - lo)) * PLOT_H;
   const zeroY = y(0);
   const bar = v => { const top = y(Math.max(0, fin(v))); return { y: r1(top), h: r1(Math.max(0, zeroY - top)) }; };
-  const width = Math.max(qs.length, MIN_COLS) * COL;
-  const left = (width - qs.length * COL) / 2;
-  const cols = figs.map((f, i) => ({ x: left + i * COL, paid: bar(f.paid), back: bar(f.back), after: { y: r1(y(f.after)) } }));
+  /* always the full 8-quarter width: fewer quarters get wider columns, so
+     the chart fills its card instead of sitting small in a corner, and the
+     text keeps its size */
+  const width = Math.max(qs.length, MAX_COLS) * COL;
+  const w = qs.length ? width / qs.length : COL;
+  const cols = figs.map((f, i) => ({ x: i * w, w, paid: bar(f.paid), back: bar(f.back), after: { y: r1(y(f.after)) } }));
   return { width, height: TOP + PLOT_H + LABEL_H, zeroY: r1(zeroY), cols };
 }
 
@@ -100,27 +103,27 @@ function drawChart(parent, trend, which, fmt) {
   const s = svg(parent, 'svg', { class: 'dc-trend-chart', viewBox: `0 0 ${L.width} ${L.height}`, width: L.width, height: L.height, role: 'img', 'aria-label': chartLabel(trend, which, fmt), focusable: 'false' });
   s.style.maxWidth = Math.round(L.width * MAX_SCALE) + 'px';
   svg(s, 'line', { class: 'dc-trend-zero', x1: 0, x2: L.width, y1: L.zeroY, y2: L.zeroY });
-  const pad = (COL - 2 * BAR - BAR_GAP) / 2;
   let year = null;
   L.cols.forEach((c, i) => {
     const q = qs[i];
     const f = figuresOf(q, which);
     const g = svg(s, 'g', { class: 'dc-trend-col' + (q.rough ? ' is-rough' : '') });
     svg(g, 'title', null, `${q.label}: you paid ${fmt(f.paid)}, ${fmt(f.back)} came back, ${resultText(f.after, fmt)} after rewards${q.rough ? ` (rough: ${q.months} of its 3 months have statements)` : ''}.`);
+    const pad = (c.w - 2 * BAR - BAR_GAP) / 2;
     svg(g, 'rect', { class: 'dc-trend-paid', x: r1(c.x + pad), y: c.paid.y, width: BAR, height: c.paid.h, rx: 2 });
     svg(g, 'rect', { class: 'dc-trend-back', x: r1(c.x + pad + BAR + BAR_GAP), y: c.back.y, width: BAR, height: c.back.h, rx: 2 });
     const base = TOP + PLOT_H;
-    svg(g, 'text', { class: 'dc-trend-q', x: c.x + COL / 2, y: base + 16, 'text-anchor': 'middle' }, q.short);
-    if (q.year !== year) svg(g, 'text', { class: 'dc-trend-y', x: c.x + COL / 2, y: base + 33, 'text-anchor': 'middle' }, q.year);
+    svg(g, 'text', { class: 'dc-trend-q', x: c.x + c.w / 2, y: base + 16, 'text-anchor': 'middle' }, q.short);
+    if (q.year !== year) svg(g, 'text', { class: 'dc-trend-y', x: c.x + c.w / 2, y: base + 33, 'text-anchor': 'middle' }, q.year);
     year = q.year;
   });
   /* the marker line for after rewards, over the bars */
   if (L.cols.length > 1) {
-    svg(s, 'polyline', { class: 'dc-trend-line', points: L.cols.map(c => `${c.x + COL / 2},${c.after.y}`).join(' ') });
+    svg(s, 'polyline', { class: 'dc-trend-line', points: L.cols.map(c => `${c.x + c.w / 2},${c.after.y}`).join(' ') });
   }
   L.cols.forEach((c, i) => {
     const after = figuresOf(qs[i], which).after;
-    svg(s, 'circle', { class: 'dc-trend-dot ' + (after >= 0.5 ? 'is-better' : after <= -0.5 ? 'is-worse' : 'is-same') + (qs[i].rough ? ' is-rough' : ''), cx: c.x + COL / 2, cy: c.after.y, r: 4 });
+    svg(s, 'circle', { class: 'dc-trend-dot ' + (after >= 0.5 ? 'is-better' : after <= -0.5 ? 'is-worse' : 'is-same') + (qs[i].rough ? ' is-rough' : ''), cx: c.x + c.w / 2, cy: c.after.y, r: 4 });
   });
   return s;
 }
