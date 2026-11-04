@@ -11,7 +11,11 @@
    6. the button reset undoes Obsidian's `button { white-space: nowrap }`,
       which made labels run over their amounts on a phone;
    7. the built styles.css is the source stylesheets joined, unchanged
-      (src/styles.css, then src/css/*.css in name order). */
+      (src/styles.css, then src/css/*.css in name order);
+   8. Obsidian's --view-bottom-spacing is only used bare, never inside
+      calc()/max()/min()/clamp(): on a phone Obsidian sets it to a unitless
+      0, calc(24px + 0) is invalid, and an invalid padding shorthand drops
+      every side (the page lost all its padding at 375px). */
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -53,6 +57,16 @@ for (const r of rules) {
   // 5. scoped: every selector in the list names a dc- class
   for (const one of r.sel.split(',')) {
     assert.ok(/\.dc-/.test(one) || /\.dc[-\w]*/.test(one), `global selector "${one.trim()}" — scope it to a dc- class`);
+  }
+  // 8. --view-bottom-spacing is never used in arithmetic, or as one part
+  //    of a shorthand
+  for (const decl of r.body.split(';')) {
+    const i = decl.indexOf(':');
+    if (i < 0) continue;
+    const value = decl.slice(i + 1).trim();
+    if (!/--view-bottom-spacing\b/.test(value)) continue;
+    assert.ok(!/\b(calc|max|min|clamp)\(/.test(value), `${r.sel} { ${decl.trim()} }: --view-bottom-spacing inside a math function — Obsidian sets it to a unitless 0 on a phone, which makes the declaration invalid; use it bare (as .dc-main::after does)`);
+    assert.ok(/^var\(\s*--view-bottom-spacing\b[^()]*(\([^()]*\)[^()]*)*\)$/.test(value), `${r.sel} { ${decl.trim()} }: --view-bottom-spacing must be the whole value, not one part of a shorthand`);
   }
 }
 

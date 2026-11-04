@@ -232,10 +232,16 @@
 }
 .dc-main { flex: 1 1 auto; min-width: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
 .dc-main.dc-main-solo { height: 100%; }
+/* room for Obsidian's floating phone navbar and the home bar. On a phone
+   Obsidian sets --view-bottom-spacing to a unitless 0, and calc(24px + 0)
+   is invalid: it makes the whole padding shorthand invalid, so every side
+   fell to 0. So the variable is only ever used bare, as a spacer's height
+   (valid for 0, a length or a calc), and never added to anything. */
+.dc-main::after { content: ""; display: block; height: var(--view-bottom-spacing, var(--safe-area-inset-bottom, 0px)); }
 .dc-content {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 28px 28px calc(60px + var(--view-bottom-spacing, var(--safe-area-inset-bottom, 0px)));
+  padding: 28px 28px 60px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -264,8 +270,6 @@
   gap: 14px;
   padding: 12px 12px 16px;
   padding-left: max(12px, var(--safe-area-inset-left, 0px));
-  /* clear Obsidian's floating phone navbar, not just the home bar */
-  padding-bottom: max(16px, calc(var(--view-bottom-spacing, var(--safe-area-inset-bottom, 0px)) + 8px));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   background: var(--dc-rail);
@@ -275,6 +279,9 @@
   visibility: hidden;
 }
 .dc-page.is-narrow.dc-menu-open .dc-nav-drawer { transform: none; visibility: visible; }
+/* clear Obsidian's floating phone navbar, not just the home bar: a spacer,
+   as .dc-main::after (see there); the margin takes back the drawer's gap */
+.dc-page.is-narrow .dc-nav-drawer::after { content: ""; flex: none; height: var(--view-bottom-spacing, var(--safe-area-inset-bottom, 0px)); margin-top: -14px; }
 .dc-page.is-narrow.dc-menu-ready .dc-nav-drawer { transition: transform 260ms var(--dc-ease), visibility 0s linear 260ms; }
 .dc-page.is-narrow.dc-menu-ready.dc-menu-open .dc-nav-drawer { transition: transform 260ms var(--dc-ease), visibility 0s; }
 @supports (overscroll-behavior: contain) { .dc-page.is-narrow .dc-nav-drawer { overscroll-behavior: contain; } }
@@ -287,7 +294,7 @@
 .dc-page.is-narrow.dc-menu-open .dc-nav-scrim { opacity: 1; visibility: visible; }
 .dc-page.is-narrow.dc-menu-ready .dc-nav-scrim { transition: opacity 260ms ease, visibility 0s linear 260ms; }
 .dc-page.is-narrow.dc-menu-ready.dc-menu-open .dc-nav-scrim { transition: opacity 260ms ease, visibility 0s; }
-.dc-page.is-narrow .dc-content { padding: 18px 16px calc(24px + var(--view-bottom-spacing, var(--safe-area-inset-bottom, 0px))); gap: 20px; }
+.dc-page.is-narrow .dc-content { padding: 18px 16px 24px; gap: 20px; }
 .is-phone .dc-page.is-narrow .dc-content { padding-right: max(16px, var(--safe-area-inset-right, 0px)); }
 
 /* light theme: a white rail, as Learning Hub's */

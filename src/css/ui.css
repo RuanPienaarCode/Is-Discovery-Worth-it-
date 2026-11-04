@@ -69,6 +69,14 @@
 /* what a section card's figure is: "R 7 189 you pay a year" */
 .dc-head-fig-wrap { display: inline-flex; align-items: baseline; gap: 4px; margin-left: auto; white-space: nowrap; }
 @media (max-width: 420px) { .dc-head-fig-wrap { flex-basis: 100%; margin-left: 0; } }
+/* an Inputs card head also holds the notes button: let it wrap, so the
+   figure takes a line of its own under the title instead of squeezing the
+   title to nothing and pushing the button off the side */
+@media (max-width: 420px) {
+  .dc-notes-host > .dc-card-head { flex-wrap: wrap; }
+  .dc-notes-host > .dc-card-head > .dc-head-fig-wrap { order: 1; }
+  .dc-notes-host > .dc-card-head > .dc-notes-btn { margin-left: auto; }
+}
 /* a need's name in the cover grid wraps instead of being cut off */
 .dc-needs-r.dc-cmp-h > span:not(:first-child) { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; word-break: break-word; line-height: 1.15; }
 .dc-page.is-phone .dc-needs-r.dc-cmp-h { letter-spacing: 0; font-size: 9px; }
