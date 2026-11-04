@@ -44,7 +44,8 @@ const SVG = 'http://www.w3.org/2000/svg';
 const cls = n => (n.attrs.class || '').split(' ');
 
 // 1. every mark
-for (const key of ['app', 'bank', 'health', 'gap', 'insure', 'life', 'rewards', 'miles']) {
+const BENEFIT_MARKS = ['card', 'groceries', 'pharmacy', 'fuel', 'flights', 'exercise', 'gym', 'watch', 'savings', 'spend'];
+for (const key of ['app', 'bank', 'health', 'gap', 'insure', 'life', 'rewards', 'miles', ...BENEFIT_MARKS]) {
   assert.ok(art.MARKS[key], `mark ${key} exists`);
   const svg = art.drawMark(null, key);
   assert.strictEqual(svg.tagName, 'svg');
@@ -56,8 +57,19 @@ for (const key of ['app', 'bank', 'health', 'gap', 'insure', 'life', 'rewards', 
   assert.ok(nodes.length > 2, `${key}: has shapes`);
   for (const n of nodes) {
     assert.strictEqual(n.ns, SVG, `${key}: every node is SVG`);
-    assert.ok(!['text', 'image', 'use', 'foreignObject'].includes(n.tagName), `${key}: no ${n.tagName} in a mark`);
+    assert.ok(!['text', 'image', 'use', 'foreignObject', 'mask', 'clipPath', 'filter'].includes(n.tagName), `${key}: no ${n.tagName} in a mark`);
+    /* colour from CSS only: every paint is currentColor or none */
+    for (const a of ['fill', 'stroke']) if (n.attrs[a]) assert.ok(['currentColor', 'none'].includes(n.attrs[a]), `${key}: ${a}=${n.attrs[a]} is not currentColor`);
   }
+  /* a handful of shapes, so it stays crisp and cheap to build */
+  assert.ok(nodes.length - 1 <= 7, `${key}: at most 7 shapes (has ${nodes.length - 1})`);
+}
+/* the Benefits cards each name a mark of their own kind */
+{
+  const { MARK_OF } = (() => { const o = Module._load; Module._load = function (r, ...x) { return r === 'obsidian' ? { setIcon() {} } : o.call(this, r, ...x); }; try { return require(path.join(root, 'src/ui-benefits.js')); } finally { Module._load = o; } })();
+  for (const k of BENEFIT_MARKS) assert.ok(Object.values(MARK_OF).includes(k), `a Benefits card uses the ${k} mark`);
+  const css = fs.readFileSync(path.join(root, 'src/css/art.css'), 'utf8');
+  for (const k of BENEFIT_MARKS) assert.ok(new RegExp('\\.dc-art-' + k + '\\b[^{]*\\{[^}]*color:').test(css), `art.css colours the ${k} mark`);
 }
 assert.ok(cls(art.drawMark(null, 'nope')).includes('dc-art-app'), 'an unknown key falls back to the app mark');
 
@@ -97,7 +109,9 @@ assert.ok(all.some(n => n.attrs['aria-label'] === 'Welcome' && n.tagName === 'h1
 assert.ok(text.includes('Is Discovery worth what you pay?'), 'subtitle');
 assert.ok(text.includes('Let\'s find out'), 'primary button');
 const pic = all.find(n => cls(n).includes('dc-hello-art'));
-assert.ok(pic && pic.getAttribute('viewBox') === '0 0 400 340' && pic.getAttribute('aria-hidden') === 'true', 'welcome picture');
-for (const id of art.PRODUCTS) assert.ok(pic.all().some(n => cls(n).includes('dc-art-' + id)), `welcome shows the ${id} mark`);
+assert.ok(pic && pic.getAttribute('viewBox') === '0 0 400 300' && pic.getAttribute('aria-hidden') === 'true', 'welcome picture');
+for (const id of art.PRODUCTS) assert.ok(pic.all().some(n => cls(n).includes('dc-art-' + id) && cls(n).includes('dc-hello-coin')), `welcome drops a ${id} coin into the pan`);
+assert.ok(pic.all().some(n => cls(n).includes('dc-hello-coin') && cls(n).includes('is-cost')), 'welcome drops the cost coin');
+assert.ok(pic.all().some(n => cls(n).includes('dc-hello-tick')) && pic.all().some(n => cls(n).includes('dc-hello-ask')), 'the question at the pivot and its tick');
 assert.ok(!pic.all().some(n => n.tagName === 'text' && n.textContent !== 'R'), 'the only text in the picture is the rand sign');
 setTimeout(() => { assert.strictEqual(ready, 1, 'onReady still once after the timer'); console.log('art OK'); }, 200);

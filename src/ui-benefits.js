@@ -34,17 +34,18 @@ const MILES_USE = [
   { value: 'none', label: 'I don\'t spend them' },
 ];
 
-/* The plugin's own mark for a benefit, where one fits. */
+/* The plugin's own mark for each kind of benefit (src/art.js). */
 const MARK_OF = {
-  miles: 'miles',
-  milesPlus: 'miles',
-  healthyFood: 'health',
-  healthyCare: 'health',
-  gym: 'rewards',
-  gameboard: 'rewards',
-  appleWatch: 'rewards',
-  fuel: 'insure',
-  interest: 'bank',
+  miles: 'card',
+  milesPlus: 'spend',
+  healthyFood: 'groceries',
+  healthyCare: 'pharmacy',
+  gym: 'gym',
+  gameboard: 'exercise',
+  appleWatch: 'watch',
+  fuel: 'fuel',
+  flights: 'flights',
+  interest: 'savings',
 };
 
 const isLevel = v => v === 'full' || v === 'half' || v === 'none';
