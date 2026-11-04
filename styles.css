@@ -1151,6 +1151,102 @@
 .dc-page.is-phone .dc-ben .dc-ben-seg { gap: 2px; padding: 3px; }
 .dc-page.is-phone .dc-ben .dc-ben-opt-t { padding: 6px 2px; }
 
+/* "How to get more out of Discovery" (src/ui-levers.js), in the page's look
+   (tokens from src/styles.css and src/css/palettes.css). Every rule sits
+   under .dc-lev. Each card is a big title, one line and a figure; what to do
+   waits behind the "What to do" button. iOS 15 floor: no :has(), no
+   color-mix(), no container queries; the narrow and touch layouts hang on
+   the page's .is-narrow / .is-phone / .is-touch classes. Tap targets are
+   44px there. No glows. */
+
+.dc-lev { display: flex; flex-direction: column; gap: 14px; min-width: 0; color: var(--dc-text); }
+.dc-lev *, .dc-lev *::before, .dc-lev *::after { box-sizing: border-box; }
+.dc-lev [hidden] { display: none; }
+.dc-lev .dc-lev-h { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; }
+.dc-lev .dc-lev-none { margin: 0; padding: 12px 14px; border: 1px dashed var(--dc-line-2); border-radius: var(--dc-radius-sm); color: var(--dc-text-2); font-size: 13.5px; line-height: 1.45; }
+
+.dc-lev .dc-lev-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 14px; align-items: start; }
+.dc-lev .dc-lev-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 20px;
+  border: 1px solid var(--dc-line);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow);
+}
+.dc-lev .dc-lev-title { margin: 0; min-width: 0; font-size: 17px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; overflow-wrap: anywhere; word-break: break-word; }
+.dc-lev .dc-lev-line { margin: 0; color: var(--dc-muted); font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; word-break: break-word; }
+.dc-lev .dc-lev-fig { margin: 2px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; line-height: 1.1; }
+.dc-lev .dc-lev-amt { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; color: var(--dc-pos); }
+.dc-lev .dc-lev-per { font-size: 12px; color: var(--dc-muted); white-space: nowrap; }
+
+/* the named "What to do" button and what it opens */
+.dc-lev button.dc-lev-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  margin: 2px 0 0;
+  padding: 0 12px;
+  border: 1px solid var(--dc-line);
+  border-radius: 999px;
+  background: var(--dc-surface-2);
+  color: var(--dc-accent-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: normal;
+  text-align: left;
+  box-shadow: none;
+  cursor: pointer;
+}
+.dc-lev .dc-lev-chev { display: inline-flex; align-items: center; }
+.dc-lev .dc-lev-chev .dc-icon { display: inline-flex; width: 14px; height: 14px; }
+.dc-lev .dc-lev-chev svg { width: 14px; height: 14px; }
+.dc-lev .dc-lev-body { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 8px; background: var(--dc-surface-2); box-shadow: inset 3px 0 0 var(--dc-line-2); }
+.dc-lev .dc-lev-body[hidden] { display: none; }
+.dc-lev .dc-lev-how,
+.dc-lev .dc-lev-needs { margin: 0; font-size: 13px; line-height: 1.45; color: var(--dc-text-2); overflow-wrap: anywhere; word-break: break-word; }
+.dc-lev .dc-lev-how { color: var(--dc-text); }
+
+/* "All ways to get more" under the Overview's top three */
+.dc-lev button.dc-lev-all {
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--dc-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dc-accent-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: normal;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.dc-lev button.dc-lev-btn:focus-visible { outline: 2px solid var(--dc-accent); outline-offset: 2px; }
+.dc-lev button.dc-lev-all:focus-visible { outline: 2px solid var(--dc-accent); outline-offset: 2px; }
+@media (hover: hover) {
+  .dc-lev button.dc-lev-btn:hover { background: rgba(var(--dc-accent-rgb), 0.08); }
+  .dc-lev button.dc-lev-all:hover { background: rgba(var(--dc-accent-rgb), 0.08); }
+}
+
+/* narrow and touch: 44px tap targets, tighter cards */
+.dc-page.is-narrow .dc-lev .dc-lev-card { padding: 16px; }
+.dc-page.is-narrow .dc-lev button.dc-lev-btn,
+.dc-page.is-touch .dc-lev button.dc-lev-btn { min-height: 44px; padding: 0 16px; }
+.dc-page.is-narrow .dc-lev button.dc-lev-all,
+.dc-page.is-touch .dc-lev button.dc-lev-all { min-height: 44px; padding: 0 16px; }
+.dc-page.is-phone .dc-lev .dc-lev-cards { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.dc-page.is-phone .dc-lev .dc-lev-amt { font-size: 24px; }
+
 /* The first-run questions (src/onboarding.js). Every rule sits under
    .dc-onb. One column that works down to 320px; tap targets are 44px or
    more. Colours are the page's tokens and the .dc-p-* product colours from
@@ -1777,6 +1873,61 @@
 .dc-page.is-touch button.dc-seg-btn,
 .dc-page.is-touch .dc-ben button.dc-ben-more { min-width: 44px; }
 
+/* "Over time" (src/ui-trend.js): the trend card on Flows. Every rule sits
+   under .dc-trend. Colours are the --dc-* tokens, so each palette and both
+   themes carry through. iOS 15 floor: no color-mix, :has or container
+   queries. */
+.dc-trend { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dc-trend .dc-trend-title { margin: 0; font-size: 18px; line-height: 1.3; color: var(--dc-text); }
+.dc-trend .dc-trend-line { margin: 0; font-size: 14px; line-height: 1.5; color: var(--dc-text-2); }
+.dc-trend .dc-trend-per { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--dc-muted); }
+
+/* the product buttons */
+.dc-trend .dc-trend-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.dc-page .dc-trend button.dc-trend-chip[aria-pressed="true"] { border-color: var(--dc-accent); background: rgba(var(--dc-accent-rgb), 0.14); color: var(--dc-text); }
+
+/* the legend */
+.dc-trend .dc-trend-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--dc-text-2); }
+.dc-trend .dc-trend-key { display: inline-flex; align-items: center; gap: 6px; }
+.dc-trend .dc-trend-swatch { display: inline-block; flex: 0 0 auto; width: 12px; height: 12px; border-radius: 3px; }
+.dc-trend .dc-trend-swatch.is-paid { background: var(--dc-muted); }
+.dc-trend .dc-trend-swatch.is-back { background: var(--dc-accent); }
+.dc-trend .dc-trend-swatch.is-after { width: 16px; height: 2px; border-radius: 1px; background: var(--dc-text); }
+.dc-trend .dc-trend-swatch.is-rough { background: var(--dc-muted); opacity: 0.4; }
+
+/* the chart: as wide as the pane, up to its own max-width (set inline) */
+.dc-trend .dc-trend-figure { min-width: 0; }
+.dc-trend svg.dc-trend-chart { display: block; width: 100%; height: auto; overflow: visible; }
+.dc-trend .dc-trend-zero { stroke: var(--dc-line-2); stroke-width: 1; }
+.dc-trend .dc-trend-paid { fill: var(--dc-muted); }
+.dc-trend .dc-trend-back { fill: var(--dc-accent); }
+.dc-trend .dc-trend-col.is-rough .dc-trend-paid,
+.dc-trend .dc-trend-col.is-rough .dc-trend-back { opacity: 0.4; }
+.dc-trend .dc-trend-line { fill: none; stroke: var(--dc-text); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.dc-trend .dc-trend-dot { stroke: var(--dc-surface); stroke-width: 2; fill: var(--dc-text); }
+.dc-trend .dc-trend-dot.is-better { fill: var(--dc-pos); }
+.dc-trend .dc-trend-dot.is-worse { fill: var(--dc-neg); }
+.dc-trend .dc-trend-dot.is-rough { opacity: 0.55; }
+.dc-trend .dc-trend-q { fill: var(--dc-text-2); font-size: 13px; font-weight: 600; }
+.dc-trend .dc-trend-y { fill: var(--dc-muted); font-size: 11px; }
+
+/* the numbers behind the button */
+.dc-trend .dc-trend-numbers[hidden] { display: none; }
+.dc-trend .dc-trend-caption { caption-side: top; text-align: left; padding: 9px 12px 2px; font-size: 12.5px; color: var(--dc-muted); }
+.dc-trend .dc-trend-table th.dc-trend-qcell { font-family: inherit; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--dc-text); border-bottom: 1px solid var(--dc-line); white-space: normal; }
+.dc-trend .dc-trend-rough { display: block; font-weight: 400; font-size: 12px; color: var(--dc-muted); }
+.dc-trend .dc-trend-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dc-trend .dc-trend-num.is-better { color: var(--dc-pos); }
+.dc-trend .dc-trend-num.is-worse { color: var(--dc-neg); }
+.dc-trend .dc-trend-table tr.is-rough .dc-trend-num { color: var(--dc-text-2); }
+
+/* 44px targets on a narrow pane or a touch screen */
+.dc-page.is-narrow .dc-trend button.dc-trend-chip,
+.dc-page.is-narrow .dc-trend button.dc-trend-more,
+.dc-page.is-touch .dc-trend button.dc-trend-chip,
+.dc-page.is-touch .dc-trend button.dc-trend-more { min-height: 44px; }
+.dc-page.is-narrow .dc-trend .dc-trend-num { white-space: normal; }
+
 /* The page's own small pieces (src/bottom-line.js): the Compare price
    banner, Your Discovery setup on the Inputs tab, and the one-question
    radios (How do you spend your Miles?). Tokens from src/styles.css. Every
@@ -1860,3 +2011,25 @@
 .dc-needs-r.dc-cmp-h > span:not(:first-child) { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; word-break: break-word; line-height: 1.15; }
 .dc-page.is-phone .dc-needs-r.dc-cmp-h { letter-spacing: 0; font-size: 9px; }
 .dc-page.is-phone .dc-needs-r.dc-cmp-h > span:not(:first-child) { letter-spacing: 0; }
+
+/* ── the primary button (one per screen, never a glow) ── */
+.dc-page button.dc-btn.dc-btn-primary { border-color: var(--dc-navy-2); background: var(--dc-navy-2); color: #ffffff; }
+@media (hover: hover) { .dc-page button.dc-btn.dc-btn-primary:hover { border-color: var(--dc-accent-ink); } }
+
+/* ── the example household ───────────────────────────── */
+/* "Try it with example data" on the empty screen: a full 44px target */
+.dc-empty button.dc-btn.dc-example-go { min-height: 44px; margin-top: 6px; }
+/* the strip on every page while the example is on: its words, then the way out */
+.dc-hint.dc-example-strip { margin-bottom: 0; border-style: solid; border-color: rgba(var(--dc-accent-rgb), 0.5); background: rgba(var(--dc-accent-rgb), 0.07); color: var(--dc-text); font-weight: 600; }
+.dc-example-strip > button.dc-btn.dc-example-leave { margin-left: auto; }
+
+/* ── Report a wrong price, and Save a summary note ───── */
+.dc-page button.dc-link.dc-report { align-self: flex-start; margin-top: 4px; }
+.dc-market-banner > button.dc-link.dc-report { margin-top: 0; }
+.dc-page button.dc-link.dc-report .dc-icon { display: inline-flex; width: 14px; height: 14px; }
+.dc-page button.dc-link.dc-report svg { width: 14px; height: 14px; }
+.dc-page button.dc-btn.dc-summary-save { align-self: flex-start; margin-top: 8px; }
+
+/* ── "Over time" as one line on the Overview ─────────── */
+.dc-hint.dc-trend-strip { margin-bottom: 0; }
+.dc-trend-strip > button.dc-link { margin-left: auto; }

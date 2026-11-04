@@ -32,6 +32,12 @@ const { STATUSES } = require('./constants');
 const rates = require('./rates');
 
 const { renderBenefits, cancelRefocus } = require('./ui-benefits');
+const { computeLevers } = require('./levers');
+const { renderLevers } = require('./ui-levers');
+const { buildTrend } = require('./trend');
+const { renderTrend } = require('./ui-trend');
+const { summaryMarkdown } = require('./summary-note');
+const { wrongPriceUrl } = require('./wrong-price');
 
 const SOURCE = { measured: 'From your statements', statement: 'From your Miles statement', estimated: 'Estimate', entered: 'You entered' };
 const MILES_INPUTS = [
@@ -100,6 +106,12 @@ const HOME_COVER = [{ value: 'both', label: 'Building and contents' }, { value: 
 /* a product's name in the rail */
 const NAV_NAME = { bank: 'Bank', health: 'Health', gap: 'Gap cover', insure: 'Insure', life: 'Life' };
 const TX_SHOWN = 30;
+/* the heading over the habits and answers that would make Discovery worth
+   more (src/levers.js). The two package-switch levers are left out: those
+   figures are calculations that live on the Bank tab, not suggestions. */
+const LEVERS_HEADING = 'Ways to get more from what you have';
+const NOT_ADVICE = new Set(['downgrade', 'upgrade']);
+const TOP_LEVERS = 3;
 /* how you spend your Miles (settings.milesUse): one line each */
 const MILES_USE = [
   { value: 'dday', label: 'On Ð-Day (the 15th of each month)' },
@@ -175,6 +187,18 @@ function mountBottomLine(root, ctx) {
   const detection = () => {
     if (!detectedCache) detectedCache = { detected: detectProducts(budget), banking: detectBanking(budget) };
     return detectedCache;
+  };
+
+  /* What costs more than a render: the levers (the statement built again
+     once per lever) and the trend (every quarter measured). Worked out only
+     when a page or the summary note asks, and kept on the budget object
+     until the budget is read again or an answer that changes them does. */
+  const settingsKey = s => JSON.stringify(s, (k, v) => (k === 'tab' || k === 'period' || k === 'welcome' || k === 'palette' || k === 'realSettings' ? undefined : v)) + '|' + now().toDateString();
+  const memo = (name, make) => {
+    const key = settingsKey(plugin.settings);
+    const box = budget.memo || (budget.memo = {});
+    if (!box[name] || box[name].key !== key) box[name] = { key, value: make() };
+    return box[name].value;
   };
 
   /* The layout follows the pane's own width (a sidebar or a phone), not the
@@ -345,7 +369,8 @@ function mountBottomLine(root, ctx) {
     const s = plugin.settings;
     /* the first-run questions: built once and left alone (a refresh must not
        restart them), until they are finished or skipped */
-    const onboarding = !!budget && budget.folder !== null && !s.onboarded;
+    /* the example household is already answered: its page never asks */
+    const onboarding = !!budget && budget.folder !== null && !s.onboarded && !s.sample;
     root.classList.toggle('dc-onboarding', onboarding);
     if (onboarding && wrap.querySelector('.dc-onb')) return;
     const scrollTop = scroller().scrollTop;
@@ -353,7 +378,7 @@ function mountBottomLine(root, ctx) {
     if (flow) { flow.destroy(); flow = null; }
     clear(wrap);
     wrap.classList.toggle('dc-menu-open', menuOpen);
-    if (!budget || budget.folder === null) return renderEmpty();
+    if (!budget || budget.folder === null) { cur = null; return renderEmpty(); }
     const win = trailingWindow(now(), s.months, budget);
     const m = measure(budget.rows, budget.accounts, budget.categories, { ...win, notCardSpend: s.notCardSpend });
     const ms = budget.miles ? summariseMiles(budget.miles.rows, m.from, m.to) : null;
@@ -366,6 +391,7 @@ function mountBottomLine(root, ctx) {
     const eff = effectiveSettings(s, banking);
     const st = buildStatement(m, eff, ms, { products, vitality });
     if (onboarding) {
+      cur = null;
       const main = el(wrap, 'main', 'dc-main dc-main-solo');
       renderOnboarding(main, {
         settings: s, budget, detected, measured: m, statement: st,
@@ -380,7 +406,11 @@ function mountBottomLine(root, ctx) {
     const P = id => pr.all.find(p => p.id === id);
     const cmp = { health: compareHealth(P('health'), s, undefined, { now: now() }), gap: compareGap(P('gap'), s, undefined, { now: now() }), insure: compareInsure(P('insure'), s), life: compareLife(P('life'), s), home: compareHome(s) };
     const issues = typeof rates.statusIssues === 'function' ? [].concat(rates.statusIssues(s) || []).map(noteText).filter(Boolean) : [];
-    const view = { s, eff, m, ms, st, pr, P, cmp, products, vitality, banking, detected, issues, windowNote: m.windowNote || win.windowNote || '', folderNote: folderNote(budget), bankName: products.bank ? bankName(eff) : '', verdicts: buildVerdicts(st, cmp, products, { now: now() }), sw: buildSwitch(st, cmp, products, { now: now() }), rivals: buildRivals(st, cmp, products, { now: now() }) };
+    const view = {
+      levers: () => memo('levers', () => computeLevers({ m, ms, s: eff, st, products, vitality, buildStatement }).filter(l => !NOT_ADVICE.has(l.id))),
+      trend: () => memo('trend', () => buildTrend({ budget, s, now: now(), products, buildStatementFor: (m2, ms2) => buildStatement(m2, eff, ms2, { products, vitality }) })),
+      s, eff, m, ms, st, pr, P, cmp, products, vitality, banking, detected, issues, windowNote: m.windowNote || win.windowNote || '', folderNote: folderNote(budget), bankName: products.bank ? bankName(eff) : '', verdicts: buildVerdicts(st, cmp, products, { now: now() }), sw: buildSwitch(st, cmp, products, { now: now() }), rivals: buildRivals(st, cmp, products, { now: now() }),
+    };
     cur = view;
     currentProducts = pr.products;
     currentTabs = tabsFor(products);
@@ -405,6 +435,20 @@ function mountBottomLine(root, ctx) {
     el(c, 'p', 'dc-empty-text', 'This reads the Budget plugin\'s Transactions folder.');
     const mb = moreIn(c, 'empty.more', 'Where it looks for the budget');
     el(mb, 'p', null, 'The notes it reads look like Transactions/<account>/<YYYY-MM>.md. Set the budget folder in this plugin\'s settings if it lives somewhere unusual.');
+    const ex = button(c, 'dc-btn dc-btn-primary dc-example-go', 'Try it with example data', () => setExample(true));
+    ex.id = 'dc-example-go';
+    el(c, 'p', 'dc-empty-text', 'A made-up household, so you can see how it works. Nothing in your vault changes.');
+  }
+
+  /* The example household (src/example.js) goes on or off in the plugin,
+     which saves the settings and refreshes the page. */
+  const setExample = on => plugin.setExample(on, now());
+  /* shown on every page while the example is on, so it is never mistaken
+     for the person's own figures */
+  function exampleStrip(parent) {
+    const h = hint(parent, 'You are looking at a made-up example household.', 'info');
+    h.classList.add('dc-example-strip');
+    button(h, 'dc-btn dc-example-leave', 'Leave the example', () => setExample(false));
   }
 
   // ── the shell: rail (or the phone's bar and menu) and the page ───────
@@ -454,6 +498,7 @@ function mountBottomLine(root, ctx) {
     content.id = 'dc-panel';
     content.setAttribute('role', 'tabpanel');
     content.setAttribute('aria-labelledby', 'dc-tab-' + t);
+    if (view.s.sample) exampleStrip(content);
     pageHead(content, view, curTab, curP);
     /* the Overview says it with the confidence notes when there are any */
     const notes = st.confidence && st.confidence.thin && (st.confidence.notes || []).length;
@@ -763,7 +808,32 @@ function mountBottomLine(root, ctx) {
       if (p.id === 'insure' && verdicts.home) productCard(grid, 'insure', 'Home contents', verdicts.home, null, 'insure', 'home');
     }
     if (products.bank) el(sec.sec, 'p', 'dc-small dc-def', 'After rewards means what you pay, less what comes back.');
+    /* is it getting better or worse: one line, and Flows has the chart */
+    const tr = view.trend();
+    if (tr.note) {
+      const th = hint(panel, tr.note, 'info');
+      th.classList.add('dc-trend-strip');
+      if (tr.enough) button(th, 'dc-link', 'See over time', () => show('flows'));
+    }
+    /* the three biggest habits and answers; the rest are on Benefits */
+    renderLevers(panel, { ...pageCtx(), levers: view.levers(), limit: TOP_LEVERS, onAll: () => show('benefits'), heading: LEVERS_HEADING });
     renderDates(panel, pr.dates);
+    /* the example's figures are made up: nothing to keep */
+    if (!s.sample) {
+      const rec = section(panel, 'Keep a record', 'ov.record', 'receipt');
+      el(rec.sec, 'p', 'dc-small', 'Saves today\'s verdicts and figures as a note in your vault, to compare next year.');
+      button(rec.sec, 'dc-btn dc-summary-save', 'Save a summary note', () => plugin.saveSummary(summaryText(), now()));
+    }
+  }
+
+  /* What every renderer in src/ui-*.js is handed. */
+  const pageCtx = () => ({ s: plugin.settings, period: period(), money, per, save, rerender: render, now: now() });
+
+  /* The summary note's text (src/summary-note.js), from the page as drawn;
+     null when there is nothing to write about. */
+  function summaryText() {
+    if (!cur || !cur.pr.products.length) return null;
+    return summaryMarkdown({ st: cur.st, pr: cur.pr, verdicts: cur.verdicts, sw: cur.sw, s: cur.s, now: now(), market: marketAge(now()), levers: cur.levers(), version: plugin.manifest && plugin.manifest.version });
   }
 
   /* One product on the Overview: a button to its tab (heading, verdict,
@@ -848,6 +918,7 @@ function mountBottomLine(root, ctx) {
     mb.setAttribute('role', 'status');
     icon(mb, age.stale ? 'triangle-alert' : 'calendar');
     el(mb, 'span', 'dc-hint-text dc-market-line' + (age.stale ? ' dc-market-warn' : ''), age.stale ? `These prices may be out of date: we last checked them on ${dayLabel(age.asOf)}. Check each one with the company before you decide.` : `Prices checked on ${dayLabel(age.asOf)}.`);
+    reportLink(mb, '', '');
     const mm = moreIn(mb, 'market.more', 'When prices were checked', mb);
     el(mm, 'p', null, `Prices checked on ${dayLabel(age.asOf)}. Next update ${age.stale ? 'was due by' : 'due by'} ${monthLabel(age.reviewBy.slice(0, 7))}.`);
     el(mm, 'p', null, MARKET.note || 'Banks, medical aids and insurers change prices every year.');
@@ -923,6 +994,11 @@ function mountBottomLine(root, ctx) {
   /* The top five competitors for each product, beside what Discovery costs
      you now: one row each (name, one line, how it compares); the costs and
      what comes back wait behind its More. */
+  /* "Report a wrong price": opens a new issue on the plugin's GitHub page
+     with only the product and the rival's name in it */
+  function reportLink(parent, label, name) {
+    button(parent, 'dc-link dc-report', 'Report a wrong price', () => window.open(wrongPriceUrl(label, name)), 'external-link');
+  }
   function renderRivals(panel, rivals) {
     if (!rivals.length) return;
     const top = section(panel, 'Discovery next to its competitors', 'rv.more', 'layout-grid');
@@ -971,16 +1047,20 @@ function mountBottomLine(root, ctx) {
         const fig = noFig ? (r.pay === null && !r.assumedWhy ? 'No published price' : SHORT[r.assumedWhy] || 'No published price') : Math.abs(per(gap)) < 0.5 ? 'About the same' : `${R(gap)} ${perLabel()} ${gap < 0 ? 'better' : 'worse'} off than Discovery`;
         const cls = noFig || Math.abs(per(gap)) < 0.5 ? 'is-zero' : gap < 0 ? 'is-cheaper' : 'is-dearer';
         row('', r.name + (r.quoted ? ' (your quote)' : ''), line, fig, cls, `rv.${sec.id}.${ri}`, m => {
+          /* a price you typed yourself is not ours to correct */
+          const report = () => { if (!r.quoted) reportLink(m, sec.label, r.name); };
           if (missing && r.what) el(m, 'p', 'dc-small', plainReward(r.what));
           if (r.unconfirmed && r.unconfirmedNote) el(m, 'p', 'dc-small', r.unconfirmedNote);
           if (noFig && r.assumedWhy && ASSUMED_WHY[r.assumedWhy]) el(m, 'p', null, ASSUMED_WHY[r.assumedWhy]);
           if (r.pay === null) {
             if (r.quoteUnder) el(m, 'p', null, `Switching pays if their quote is under ${money(r.quoteUnder)} a month.`);
+            report();
             return;
           }
-          if (bare) { el(m, 'p', null, 'No fees and no rewards.'); return; }
+          if (bare) { el(m, 'p', null, 'No fees and no rewards.'); report(); return; }
           el(m, 'p', null, `Costs ${R(r.pay)}. Gives back ${R(r.back)}. ${r.real >= 0 ? `After rewards you pay ${R(r.real)}.` : `After rewards, ${R(r.real)} more comes back than you pay.`}`);
           if (r.back >= 0.5) backBreakdown(m, r.items);
+          report();
         });
       });
     }
@@ -1078,7 +1158,8 @@ function mountBottomLine(root, ctx) {
   }
 
   // ── Flows ────────────────────────────────────────────────────────────
-  function renderFlows(panel, { pr }) {
+  function renderFlows(panel, view) {
+    const { pr } = view;
     const kpis = el(panel, 'div', 'dc-kpis');
     const a = card(kpis, { icon: 'arrow-up-right', cls: 'dc-kpi', title: 'You pay Discovery', line: 'Every product you have.' });
     figure(a.fig, pr.totals.paid, { label: `${perLabel()} in all` });
@@ -1089,6 +1170,7 @@ function mountBottomLine(root, ctx) {
     figure(c.fig, net, { result: net >= 0.5, label: net >= 0.5 ? `${perLabel()} better off` : perLabel() });
     const sec = el(panel, 'section', 'dc-card dc-flow-card');
     flow = mountFlow(sec, { products: pr.products, totals: pr.totals, per, perLabel, onOpen: id => show(id), open });
+    renderTrend(panel, { ...pageCtx(), trend: view.trend() });
   }
 
   // ── a product tab ────────────────────────────────────────────────────
@@ -2105,12 +2187,17 @@ function mountBottomLine(root, ctx) {
       radios(body, 'Which Discovery Insure plan are you on?', INSURE_PLANS, cond.insurePlan || '', v => setCond('insurePlan', v));
       radios(body, 'Does Discovery Insure also cover your home?', HOME_COVER, cond.homeCover || '', v => setCond('homeCover', v));
     }
-    const again = el(body, 'div', 'dc-setup-again');
-    button(again, 'dc-btn', 'Ask me the questions again', async () => { s.onboarded = false; await plugin.saveSettings(); render(); });
-    el(again, 'span', 'dc-fld-h', 'Goes through the first-run questions again, with your answers filled in.');
+    /* the example is already answered */
+    if (!s.sample) {
+      const again = el(body, 'div', 'dc-setup-again');
+      button(again, 'dc-btn', 'Ask me the questions again', async () => { s.onboarded = false; await plugin.saveSettings(); render(); });
+      el(again, 'span', 'dc-fld-h', 'Goes through the first-run questions again, with your answers filled in.');
+    }
   }
 
   function renderBenefitsTab(panel, view) {
+    /* every way to get more, first; below it, which benefits count */
+    renderLevers(panel, { ...pageCtx(), levers: view.levers(), heading: LEVERS_HEADING });
     renderBenefits(panel, { s: view.s, st: view.st, save, rerender: render, period: period(), milesUse: MILES_USE });
   }
 
@@ -2130,6 +2217,8 @@ function mountBottomLine(root, ctx) {
 
   return {
     refresh, render,
+    /* the summary note's text for the page as drawn, or null (main.js command) */
+    summary: summaryText,
     destroy() { if (typeof stopWelcome === 'function') stopWelcome(); if (typeof cancelRefocus === 'function') cancelRefocus(); if (flow) flow.destroy(); if (ro) ro.disconnect(); if (tabSaveTimer) { clearTimeout(tabSaveTimer); plugin.saveSettings(); } clear(root); },
   };
 }

@@ -5,6 +5,7 @@
 
 const { PluginSettingTab, Setting, Notice } = require('obsidian');
 const { PALETTES, paletteOf } = require('./palettes');
+const { DEFAULT_SETTINGS } = require('./constants');
 
 class SettingsTab extends PluginSettingTab {
   constructor(app, plugin) {
@@ -61,6 +62,19 @@ class SettingsTab extends PluginSettingTab {
         await this.plugin.saveSettings();
         this.plugin.refreshViews();
         new Notice('Open Is Discovery Worth It to answer the questions.');
+      }));
+
+    new Setting(containerEl)
+      .setName('Summary notes folder')
+      .setDesc('Where "Save a summary note" puts its dated note. It is made if it is not there.')
+      .addText(t => t.setPlaceholder(DEFAULT_SETTINGS.summaryFolder).setValue(s.summaryFolder || '').onChange(async v => { s.summaryFolder = v.trim(); await this.plugin.saveSettings(); }));
+
+    new Setting(containerEl)
+      .setName('Example data')
+      .setDesc('Shows a made-up household instead of your budget, so you can see how the page works. Nothing in your vault changes, and your own answers come back when you turn it off. While it is on, the other settings here change only the example.')
+      .addToggle(t => t.setValue(!!s.sample).onChange(async v => {
+        await this.plugin.setExample(v);
+        this.display();
       }));
 
     new Setting(containerEl)

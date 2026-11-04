@@ -188,6 +188,14 @@ const DEFAULT_SETTINGS = {
   /* The page's colours: a palette id from src/palettes.js. Meadow by
      default; 'discovery' = the page's original Discovery colours. */
   palette: 'meadow',
+  /* The example household (src/example.js). While sample is true the page
+     shows the made-up household and reads none of the vault's files;
+     realSettings holds the person's own settings whole, so leaving the
+     example (even after a restart) puts them back. */
+  sample: false,
+  realSettings: null,
+  /* The vault folder "Save a summary note" writes into (summary-note.js). */
+  summaryFolder: 'Is Discovery Worth It',
 };
 
 module.exports = { VIEW_TYPE, VERB_PREFIX, RULES, SHOP_TAGS, NOT_SPEND_TYPES, STATUSES, DEFAULT_SETTINGS };

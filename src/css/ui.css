@@ -81,3 +81,25 @@
 .dc-needs-r.dc-cmp-h > span:not(:first-child) { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; word-break: break-word; line-height: 1.15; }
 .dc-page.is-phone .dc-needs-r.dc-cmp-h { letter-spacing: 0; font-size: 9px; }
 .dc-page.is-phone .dc-needs-r.dc-cmp-h > span:not(:first-child) { letter-spacing: 0; }
+
+/* ── the primary button (one per screen, never a glow) ── */
+.dc-page button.dc-btn.dc-btn-primary { border-color: var(--dc-navy-2); background: var(--dc-navy-2); color: #ffffff; }
+@media (hover: hover) { .dc-page button.dc-btn.dc-btn-primary:hover { border-color: var(--dc-accent-ink); } }
+
+/* ── the example household ───────────────────────────── */
+/* "Try it with example data" on the empty screen: a full 44px target */
+.dc-empty button.dc-btn.dc-example-go { min-height: 44px; margin-top: 6px; }
+/* the strip on every page while the example is on: its words, then the way out */
+.dc-hint.dc-example-strip { margin-bottom: 0; border-style: solid; border-color: rgba(var(--dc-accent-rgb), 0.5); background: rgba(var(--dc-accent-rgb), 0.07); color: var(--dc-text); font-weight: 600; }
+.dc-example-strip > button.dc-btn.dc-example-leave { margin-left: auto; }
+
+/* ── Report a wrong price, and Save a summary note ───── */
+.dc-page button.dc-link.dc-report { align-self: flex-start; margin-top: 4px; }
+.dc-market-banner > button.dc-link.dc-report { margin-top: 0; }
+.dc-page button.dc-link.dc-report .dc-icon { display: inline-flex; width: 14px; height: 14px; }
+.dc-page button.dc-link.dc-report svg { width: 14px; height: 14px; }
+.dc-page button.dc-btn.dc-summary-save { align-self: flex-start; margin-top: 8px; }
+
+/* ── "Over time" as one line on the Overview ─────────── */
+.dc-hint.dc-trend-strip { margin-bottom: 0; }
+.dc-trend-strip > button.dc-link { margin-left: auto; }
