@@ -17,8 +17,8 @@
 const { el, icon } = require('./dom');
 const { money: formatMoney } = require('./format');
 
-const HEADING = 'How to get more out of Discovery';
-const NONE = 'You are already getting the most from your setup.';
+const HEADING = 'What would add more, by these figures';
+const NONE = 'By these figures, nothing here would add R 100 or more a year.';
 
 /* which levers' "What to do" is open, by lever id: kept across re-renders */
 const OPEN = new Set();
@@ -47,7 +47,7 @@ function leverCard(parent, lever, ctx) {
   const btn = el(c, 'button', 'dc-lev-btn');
   btn.type = 'button';
   btn.setAttribute('aria-controls', id);
-  el(btn, 'span', 'dc-lev-btn-t', 'What to do');
+  el(btn, 'span', 'dc-lev-btn-t', 'How it works');
   const chev = el(btn, 'span', 'dc-lev-chev');
   const body = el(c, 'div', 'dc-lev-body');
   body.id = id;

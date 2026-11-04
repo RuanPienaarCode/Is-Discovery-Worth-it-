@@ -73,7 +73,7 @@ const view = viewFor({ products: { bank: true, health: true, gap: false, insure:
 assert.deepStrictEqual(view.pr.products.map(p => p.id), ['bank', 'health', 'insure'], 'fixture owns bank, health and insure');
 
 const levers = [
-  { id: 'status', title: 'Reach Gold on your bank score', line: '', gain: 1840.4, how: 'Earn Vitality points in the Discovery Bank app.', needs: null, kind: 'status' },
+  { id: 'status', title: 'A Gold bank score', line: '', gain: 1840.4, how: 'The Discovery Bank app shows the Vitality Money points still needed.', needs: null, kind: 'status' },
   { id: 'tiny', title: 'A lever too small to write', line: '', gain: 0.2, how: '', needs: null, kind: 'habit' },
 ];
 const md = summaryMarkdown({ ...view, now: NOW, market: marketAge(NOW), levers, version: '0.1.3' });
@@ -97,7 +97,9 @@ assert.ok(/^\d{4}-\d{2}$/.test(props.window_from) && /^\d{4}-\d{2}$/.test(props.
 /* heading, window line, closing line */
 assert.ok(md.includes('\n# Is Discovery worth it? — 4 November 2026\n'), 'H1 with the long date');
 assert.ok(/From your statements, \w{3} \d{4} to \w{3} \d{4} \(\d+ months\), made into a year\./.test(md), 'one line on the months covered');
-assert.ok(md.trimEnd().endsWith('Made by the Is Discovery Worth It plugin. A calculator, not financial advice.'), 'closing line');
+assert.ok(md.includes('Made by the Is Discovery Worth It plugin. Not affiliated with or endorsed by Discovery. A calculator, not financial advice.'), 'closing line: the full notice');
+assert.ok(md.trimEnd().endsWith('is for the provider or a licensed financial adviser to tell you.'), 'the note ends with the adviser line');
+assert.ok(/worked out from your statements and from published prices as at 3 Nov 2026\./.test(md), 'the basis, with the price date');
 
 /* each owned product, with its verdict word and its own figures */
 for (const p of view.pr.products) {
@@ -112,7 +114,7 @@ assert.ok(!md.includes('### Gap cover') && !md.includes('### Discovery Life'), '
 /* compare answer, levers, benefits, prices */
 assert.ok(md.includes('## Stay with Discovery or move everything?'));
 assert.ok(/(Staying looks cheaper|Moving looks cheaper|Both cost about the same|Not enough data to say)/.test(md), 'the Compare answer');
-assert.ok(md.includes(`- **Reach Gold on your bank score**: ${money(1840)} a year more. Earn Vitality points in the Discovery Bank app.`), 'a lever: title + R X a year more');
+assert.ok(md.includes(`- **A Gold bank score**: ${money(1840)} a year more. The Discovery Bank app shows the Vitality Money points still needed.`), 'a lever: title + R X a year more');
 assert.ok(!md.includes('A lever too small to write'), 'a lever under half a rand is left out');
 assert.ok(/- I use it \(\d+\)/.test(md) && /- Sometimes \(\d+\): [^\n]*Flight discount/.test(md) && /- Not for me \(\d+\): [^\n]*Gym discount/.test(md), 'benefits by level, with the levels the person chose');
 assert.ok(md.includes('Prices of other companies checked on 3 Nov 2026.'), 'the as-at date');
@@ -142,7 +144,7 @@ assert.ok(!/[−]/.test(homeMd), 'no minus sign');
 const later = new Date(2027, 1, 10);
 const staleMd = summaryMarkdown({ ...view, now: later, market: marketAge(later), version: '0.1.3' });
 assert.ok(staleMd.includes('These prices may be out of date: we last checked them on 3 Nov 2026.'), 'stale warning');
-assert.ok(!staleMd.includes('## Ways to get more'), 'no levers section without levers');
+assert.ok(!staleMd.includes('## What would add more'), 'no levers section without levers');
 
 /* a thin import: "Not enough data" carries no figures */
 const thinBudget = rows.filter(r => r.date >= '2026-09');

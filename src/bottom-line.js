@@ -15,7 +15,7 @@ const { measure, trailingWindow } = require('./measure');
 const { summariseMiles } = require('./miles');
 const { buildStatement } = require('./model');
 const { buildProducts } = require('./products');
-const { buildVerdicts, MATERIAL } = require('./verdict');
+const { buildVerdicts, verdictLead, MATERIAL } = require('./verdict');
 const { detectProducts, detectBanking, resolveProducts, resolveVitality, resolveSuite, PRODUCT_NAMES } = require('./detect');
 const { marketAge, MARKET } = require('./market');
 const { BENEFITS } = require('./benefits');
@@ -24,7 +24,8 @@ const { buildSwitch, buildRivals, byKind } = require('./switch');
 const { NEEDS, GRADES, compareHealth, compareGap, compareInsure, compareLife, compareHome, healthPremium, HEALTH_PLANS, HEALTH_OWN, GAP_PLANS, INSURERS, LIFE_OFFERS, HOME_INSURERS, HOME_RANGE } = require('./compare');
 const { mountFlow } = require('./ui-flow');
 const { RATES, SUITES, rate, sourceText, suiteOf, bankProductOf } = require('./rates');
-const { renderWelcome, stopWelcome, NOTICE_LINE, noticeMore } = require('./welcome');
+const { renderWelcome, stopWelcome } = require('./welcome');
+const { NOTICE_LINE, noticeMore } = require('./notice');
 const { productLogo } = require('./logos');
 const { drawMark } = require('./art');
 const { PALETTES, paletteOf, applyPalette } = require('./palettes');
@@ -90,10 +91,10 @@ const SUBTITLE = {
   life: () => 'Through your payslip or a debit order',
 };
 /* each page's title and its one line, under the kicker */
-const TITLES = { overview: 'Is it worth it?', compare: 'Stay or switch?', benefits: 'Your benefits', flows: 'Where the money goes', inputs: 'Inputs' };
+const TITLES = { overview: 'Is it worth it?', compare: 'Staying or moving', benefits: 'Your benefits', flows: 'Where the money goes', inputs: 'Inputs' };
 const SUBS = {
   overview: 'What you pay Discovery, and what comes back.',
-  compare: 'Stay with Discovery, or move everything.',
+  compare: 'What you pay now, next to moving everything.',
   benefits: 'Pick the ones you use. Only those count.',
   flows: 'Tap a product to follow its money.',
   inputs: 'Everything you can set, in one place.',
@@ -711,7 +712,7 @@ function mountBottomLine(root, ctx) {
   function staleStrip(parent) {
     const age = marketAge(now());
     if (!age.stale) return;
-    const h = hint(parent, `Prices of other companies may be out of date: we last checked them on ${dayLabel(age.asOf)}. Check with the company before you decide.`, 'warn');
+    const h = hint(parent, `Prices of other companies may be out of date: we last checked them on ${dayLabel(age.asOf)}. Each company can tell you its price today.`, 'warn');
     h.classList.add('dc-stale-strip');
   }
   /* A bill item (a claim paid back, say) with how many payments it rests on:
@@ -747,8 +748,8 @@ function mountBottomLine(root, ctx) {
         const close = !unknown && !stay && !!vb && vb.tone === 'good';
         const k = card(kpis, {
           p: 'bank', cls: 'dc-kpi dc-kpi-hero' + (unknown ? ' is-unknown' : ''), key: 'ov.bank',
-          title: unknown ? 'Not enough data on Discovery Bank' : stay ? 'Discovery Bank looks worth keeping' : close ? `About the same as ${alt.name}` : `${alt.name} could cost you less`,
-          line: unknown ? vb.why : stay ? `By these figures, you are better off than with ${alt.name}, after fees.` : close ? `Moving would save under ${money(MATERIAL)} a year.` : `By these figures, you would be better off with ${alt.name}.`,
+          title: unknown ? 'Not enough data on Discovery Bank' : stay ? 'Discovery Bank comes out ahead' : close ? `About the same as ${alt.name}` : `${alt.name} costs less by these figures`,
+          line: unknown ? vb.why : stay ? `By these figures, you are better off than with ${alt.name}, after fees.` : close ? `By these figures, the difference is under ${money(MATERIAL)} a year.` : `By these figures, you would be better off with ${alt.name}.`,
         });
         /* no figure and no More when there is not enough data: a number would contradict it */
         if (unknown) k.noFig();
@@ -917,7 +918,7 @@ function mountBottomLine(root, ctx) {
     const mb = el(panel, 'div', 'dc-market-banner dc-hint' + (age.stale ? ' is-warn is-stale' : ''));
     mb.setAttribute('role', 'status');
     icon(mb, age.stale ? 'triangle-alert' : 'calendar');
-    el(mb, 'span', 'dc-hint-text dc-market-line' + (age.stale ? ' dc-market-warn' : ''), age.stale ? `These prices may be out of date: we last checked them on ${dayLabel(age.asOf)}. Check each one with the company before you decide.` : `Prices checked on ${dayLabel(age.asOf)}.`);
+    el(mb, 'span', 'dc-hint-text dc-market-line' + (age.stale ? ' dc-market-warn' : ''), age.stale ? `These prices may be out of date: we last checked them on ${dayLabel(age.asOf)}. Each company can tell you its price today.` : `Prices checked on ${dayLabel(age.asOf)}.`);
     reportLink(mb, '', '');
     const mm = moreIn(mb, 'market.more', 'When prices were checked', mb);
     el(mm, 'p', null, `Prices checked on ${dayLabel(age.asOf)}. Next update ${age.stale ? 'was due by' : 'due by'} ${monthLabel(age.reviewBy.slice(0, 7))}.`);
@@ -950,7 +951,7 @@ function mountBottomLine(root, ctx) {
       el(am, 'p', null, `No quote yet for ${list}, so both sides use what you pay now. Type quotes on the Inputs tab.`);
     }
     el(am, 'p', null, `Moving everything means ${products.bank && st.chosen ? st.chosen.name + ' instead of Discovery Bank, ' : ''}the cheapest medical aid and gap cover that cover what you need, and your own quotes for car and life cover.`);
-    el(am, 'p', 'dc-small', 'Insurance claims are left out, because any insurer pays claims. Cover is never exactly the same, so check each product\'s tab before you move.');
+    el(am, 'p', 'dc-small', 'Insurance claims are left out, because any insurer pays claims. Cover is never exactly the same. Each product\'s tab shows what differs, and the provider or a licensed financial adviser can tell you more.');
 
     const sides = el(panel, 'div', 'dc-sw-sides');
     const movedTo = sw.rows.filter(r => r.kind === 'cost' && r.goName && !r.assumed).map(r => r.goName);
@@ -966,8 +967,8 @@ function mountBottomLine(root, ctx) {
       if (who) el(m, 'p', 'dc-small', who);
       if (x.benefit >= 0.5) backBreakdown(m, items);
     };
-    side('Stay with Discovery', sw.stay, diff >= 0.5 && stayBetter && !thin, `${names(pr.products.map(p => p.name))}, as you have them now.`, 'stay', sideItems('stayItems'));
-    side('Move everything', sw.go, diff >= 0.5 && !stayBetter && !thin, movedTo.length ? `To ${names(movedTo)}${kept.length ? `. ${names(kept).replace(/^./, x => x.toUpperCase())} stay${kept.length > 1 ? '' : 's'} at today's price until you get a quote` : ''}.` : '', 'go', sideItems('goItems'));
+    side('Staying with Discovery', sw.stay, diff >= 0.5 && stayBetter && !thin, `${names(pr.products.map(p => p.name))}, as you have them now.`, 'stay', sideItems('stayItems'));
+    side('Moving everything', sw.go, diff >= 0.5 && !stayBetter && !thin, movedTo.length ? `To ${names(movedTo)}${kept.length ? `. ${names(kept).replace(/^./, x => x.toUpperCase())} stay${kept.length > 1 ? '' : 's'} at today's price until you get a quote` : ''}.` : '', 'go', sideItems('goItems'));
     el(panel, 'p', 'dc-small dc-def', 'After rewards means what you pay, less what comes back. Both sides use today\'s prices.');
 
     const why = section(panel, 'Where the difference comes from', 'sw.why', 'arrow-left-right');
@@ -1006,9 +1007,9 @@ function mountBottomLine(root, ctx) {
     const LOGO = { bank: 'bank', medical: 'health', car: 'insure', gap: 'gap', life: 'life' };
     const NOTE = {
       medical: 'Discovery\'s cost after rewards counts the Vitality rewards you get back; the other medical aids have no Vitality.',
-      car: 'Nobody publishes car insurance prices, so each insurer shows the most a quote could be and still beat Discovery (after its own rewards and the Drive fuel rewards you would lose).',
+      car: 'Nobody publishes car insurance prices, so each insurer shows the most a quote could be and still cost less than Discovery (after its own rewards and the Drive fuel rewards you would lose).',
       gap: 'A plan pays up to a number of times the medical aid\'s own rate for hospital doctors: for example 3,5 times that rate. A higher number pays more.',
-      life: 'Life cover is priced per person: get a quote for the same cover.',
+      life: 'Life cover is priced per person, so there is no price until you type a quote for the same cover.',
     };
     const NOTE_LABEL = { medical: 'How to compare plans', car: 'Why there are no prices', gap: 'What the % means', life: 'How to compare quotes' };
     for (const sec of rivals) {
@@ -1053,7 +1054,7 @@ function mountBottomLine(root, ctx) {
           if (r.unconfirmed && r.unconfirmedNote) el(m, 'p', 'dc-small', r.unconfirmedNote);
           if (noFig && r.assumedWhy && ASSUMED_WHY[r.assumedWhy]) el(m, 'p', null, ASSUMED_WHY[r.assumedWhy]);
           if (r.pay === null) {
-            if (r.quoteUnder) el(m, 'p', null, `Switching pays if their quote is under ${money(r.quoteUnder)} a month.`);
+            if (r.quoteUnder) el(m, 'p', null, `By these figures, a quote under ${money(r.quoteUnder)} a month would cost less.`);
             report();
             return;
           }
@@ -1198,7 +1199,7 @@ function mountBottomLine(root, ctx) {
       if (v.amount === null || isUnknown(v)) vk.noFig();
       else if (v.tone === 'quote') { el(vk.fig, 'span', 'dc-amt is-plain dc-kpi-value', money(v.amount)); el(vk.fig, 'span', 'dc-per', 'a month: the quote to beat'); }
       else if (v.tone === 'good') figure(vk.fig, v.amount, { result: true, label: `${perLabel()} better off` });
-      else figure(vk.fig, v.amount, { label: v.tone === 'check' ? `${perLabel()} you could save` : v.tone === 'over' ? `${perLabel()} better off elsewhere` : perLabel() });
+      else figure(vk.fig, v.amount, { label: v.tone === 'check' ? `${perLabel()} less elsewhere, by these figures` : v.tone === 'over' ? `${perLabel()} better off elsewhere` : perLabel() });
       if (words.why && !isUnknown(v)) el(vk.more('How this is worked out'), 'p', null, words.why);
     }
     if (p.backSum >= 0.5) {
@@ -1284,7 +1285,7 @@ function mountBottomLine(root, ctx) {
       you: 'Discovery Health (now)', cmp, lostLabel: 'Vitality rewards you would lose',
       name: r => r.scheme + ' ' + r.plan,
       sub: r => [r.misses.length ? 'does not cover ' + r.misses.map(needLabel).join(', ') : '', r.unsure.length ? 'not sure about ' + r.unsure.map(needLabel).join(', ') : '', r.gapExtra >= 0.5 ? `gap cover costs ${money(per(r.gapExtra))} ${perLabel()} more on this plan (included)` : '', plainWords(r.dayToDay), plainWords(r.network)].filter(Boolean).join('. '),
-      foot: 'A plan that does not cover something you need is left out of the verdict. Plans differ, so before you move compare the hospitals you may use, the cover for day-to-day visits and the list of chronic conditions. A new scheme can make you wait before some cover starts, and charges more if you join after 35 having ever been without a medical aid. You can keep part of Vitality without Discovery Health: Discovery Bank account holders can join Vitality Active (R159 a month, one person, HealthyFood included) in the banking app. Discovery Gap Cover stops when you leave Discovery Health; the Gap tab shows others.',
+      foot: 'A plan that does not cover something you need is left out of the verdict. Plans differ in the hospitals you may use, the cover for day-to-day visits and the list of chronic conditions; the scheme or a licensed financial adviser can tell you what each plan covers. A new scheme can make you wait before some cover starts, and charges more if you join after 35 having ever been without a medical aid. You can keep part of Vitality without Discovery Health: Discovery Bank account holders can join Vitality Active (R159 a month, one person, HealthyFood included) in the banking app. Discovery Gap Cover stops when you leave Discovery Health; the Gap tab shows others.',
     });
   }
 
@@ -1352,11 +1353,11 @@ function mountBottomLine(root, ctx) {
     total(c, `After rewards and claims, ${perLabel()}`, p.net, 'result');
     const cmp = compareInsure(p, plugin.settings);
     if (cmp) renderMarket(c, {
-      key: 'mk.insure', title: 'Compared with other car insurers', line: 'Nobody publishes a price for you: get quotes.',
-      intro: `Car insurance depends on the car, the drivers and where you live. Full cover for one car costs about R980 a month in the Western Cape, R1 371 in Gauteng and R800–R1 400 across the country (Hippo via Pineapple, March 2026). Type a quote for the same cars and cover on the Inputs tab. Until then, each insurer shows the most it could charge a month and still beat Discovery, after its own rewards and the Vitality Drive rewards you would lose (${money(per(cmp.driveValue))} ${perLabel()}).`,
+      key: 'mk.insure', title: 'Compared with other car insurers', line: 'Nobody publishes a price for you, so only quotes you type are compared.',
+      intro: `Car insurance depends on the car, the drivers and where you live. Full cover for one car costs about R980 a month in the Western Cape, R1 371 in Gauteng and R800–R1 400 across the country (Hippo via Pineapple, March 2026). Type a quote for the same cars and cover on the Inputs tab. Until then, each insurer shows the most it could charge a month and still cost less than Discovery, after its own rewards and the Vitality Drive rewards you would lose (${money(per(cmp.driveValue))} ${perLabel()}).`,
       you: 'Discovery Insure (now)', cmp, lostLabel: 'Their rewards', lost: r => r.rewards,
       name: r => r.name, sub: r => r.rewardNote || '',
-      foot: 'Compare the same things: the same excess (what you pay yourself on a claim), car hire, and the same drivers.',
+      foot: 'A fair comparison has the same things: the same excess (what you pay yourself on a claim), car hire, and the same drivers.',
     });
     renderHome(c);
   }
@@ -1374,13 +1375,13 @@ function mountBottomLine(root, ctx) {
       key: 'mk.home', title: none ? 'Home contents: not insured' : 'Home contents',
       line: none ? 'What cover would cost.' : 'Against what you pay today.',
       intro: none
-        ? `If a burglary, fire or burst geyser damages your things, you pay to replace them. ${value ? `Prices are for ${value} of contents` : 'Type what your things would cost to replace on the Inputs tab to see prices'}. If you rent, you only need contents cover; the building is the landlord's.`
+        ? `If a burglary, fire or burst geyser damages your things, you pay to replace them. ${value ? `Prices are for ${value} of contents` : 'Type what your things would cost to replace on the Inputs tab to see prices'}. If you rent, the building is the landlord's to insure.`
         : `Prices are for ${value || 'the contents value you typed'}, against what you pay today.`,
       extra: h.range ? `Most insurers charge about R${HOME_RANGE.low}–R${HOME_RANGE.high} a month for every R100 000 of contents (${money(h.range.low)}–${money(h.range.high)} a month for ${money(h.contents)}), depending on your suburb, security and excess. Source: ${h.range.source}.` : '',
       you: none ? 'No cover today' : 'Your cover (now)', cmp: h, lostLabel: 'Their rewards', lost: r => r.rewards,
       name: r => r.name, sub: r => [r.per100k ? `about ${money(r.per100k)} a month per R100 000` : '', r.rewardNote].filter(Boolean).join(' · '),
       vsLabel: none ? `It would cost ${perLabel()}` : null, vs: none ? r => (r.annual === null ? null : r.annual) : null,
-      foot: 'Insure for what it would cost to buy everything again new. If you insure for less, the insurer pays only part of a claim. Discovery Insure can add contents cover to your car policy.',
+      foot: 'Contents cover is usually for what it would cost to buy everything again new. With less cover, the insurer pays only part of a claim. Discovery Insure can add contents cover to your car policy.',
     });
   }
 
@@ -1404,11 +1405,11 @@ function mountBottomLine(root, ctx) {
       plainLine(c, 'Life cover alone, own policy', null, 'estimated', `For your cover amount and age, if you are healthy and do not smoke (smokers pay 50–100% more). Cover for severe illness and lost income would cost extra. Source: ${cmp.lifeOnly.source}.`, 'plain', false, false, `${money(cmp.lifeOnly.low)}–${money(cmp.lifeOnly.high)} a month`);
     }
     renderMarket(c, {
-      key: 'mk.life', title: 'Compared with a policy of your own', line: `It must cost less than your share: ${money(cmp.current.monthly)} a month.`,
+      key: 'mk.life', title: 'Compared with a policy of your own', line: `To cost less, it would have to come under your share: ${money(cmp.current.monthly)} a month.`,
       intro: 'Cover through your employer needs no medical tests up to a set amount, and stops when you leave the job (you can then usually keep similar cover without new tests). A policy of your own is all yours to pay, so for the same cover (life, severe illness and lost income together) it has to cost less than your share. Type a quote for the same cover on the Inputs tab.',
       you: 'Through your employer, your share (now)', cmp, lostLabel: 'Their rewards', lost: r => r.rewards,
       name: r => r.name, sub: r => [r.example, r.rewardNote].filter(Boolean).join(' · '),
-      foot: 'Compare the same things: the same cover amounts, how long the income cover waits before it pays and how long it pays, and the same list of severe illnesses.',
+      foot: 'A fair comparison has the same things: the same cover amounts, how long the income cover waits before it pays and how long it pays, and the same list of severe illnesses.',
     });
   }
 
@@ -1433,14 +1434,7 @@ function mountBottomLine(root, ctx) {
     const a = v.amount === null ? null : `${money(per(Math.abs(v.amount)))} ${perLabel()}`;
     /* not enough to judge: just the reason */
     if (isUnknown(v)) return { lead: v.why, why: '' };
-    let lead = '';
-    /* 'good' also covers a gain too small to switch for */
-    if (a !== null && v.tone === 'good' && v.vs) lead = v.amount >= 0 ? `${a} better off than with ${v.vs}.` : `${v.vs} is only ${a} cheaper.`;
-    else if (a !== null && v.tone === 'check') lead = `${v.vs} could save you ${a}.`;
-    else if (a !== null && v.tone === 'over') lead = v.id === 'bank' ? `By these figures, ${a} better off with ${v.vs}.` : `Your ${v.vs} quote is ${a} cheaper.`;
-    /* a break-even quote is always a monthly premium */
-    else if (v.amount !== null && v.tone === 'quote') lead = `A quote under ${money(v.amount)} a month wins.`;
-    else if (a !== null && v.tone === 'none') lead = `About ${a} would insure them.`;
+    const lead = verdictLead(v, a, v.amount === null ? null : money(v.amount));
     if (!lead) return { lead: v.why, why: '' };
     return v.tone === 'none' ? { lead: v.why, why: lead } : { lead, why: v.why };
   }
@@ -1631,7 +1625,7 @@ function mountBottomLine(root, ctx) {
       el(nm, 'span', null, o.name(r));
       const sub = plainReward(o.sub(r));
       if (sub || r.quoted || r.unconfirmed) el(nm, 'span', 'dc-cmp-sub', [r.quoted ? 'your quote' : r.unconfirmed ? 'price not confirmed' : '', sub].filter(Boolean).join(' · '));
-      if (r.monthly === null) el(row, 'span', 'dc-amt is-zero is-words', r.breakEven ? 'get a quote' : 'not published');
+      if (r.monthly === null) el(row, 'span', 'dc-amt is-zero is-words', r.breakEven ? 'no quote yet' : 'not published');
       else amt(row, r.monthly, { raw: true, neutral: true });
       if (o.lostLabel) {
         const lost = o.lost ? o.lost(r) : r.vitalityLost ? r.vitalityLost : 0;
@@ -1643,7 +1637,7 @@ function mountBottomLine(root, ctx) {
       /* the home table's own column is what the cover would cost: a plain figure */
       if (o.vs) { if (vs === null) el(row, 'span', 'dc-amt is-zero', '—'); else amt(row, vs, { neutral: true }); }
       else if (vs !== null) verdictAmt(row, vs);
-      else if (r.breakEven) el(row, 'span', 'dc-amt is-zero is-words', `Switching pays if their quote is under ${money(r.breakEven)} a month`);
+      else if (r.breakEven) el(row, 'span', 'dc-amt is-zero is-words', `By these figures, a quote under ${money(r.breakEven)} a month would cost less`);
       else el(row, 'span', 'dc-amt is-zero', '—');
     }
   }
@@ -1652,10 +1646,10 @@ function mountBottomLine(root, ctx) {
     const d = st.downgrade;
     if (!d) return;
     const suite = suiteOf(cur ? cur.eff : plugin.settings).label;
-    const h = subHead(c, 'Or stay, on a cheaper account', 'bank.down');
+    const h = subHead(c, 'Discovery\'s cheaper account', 'bank.down');
     el(c, 'p', 'dc-card-line', `The ${d.label} instead of the full ${suite}.`);
     const mb = h.more('How this is worked out');
-    el(mb, 'p', null, `Swap the full ${suite} for just the ${d.label}, and keep Vitality Money. The changes to your rewards are listed below.`);
+    el(mb, 'p', null, `The ${d.label} in place of the full ${suite}, with Vitality Money kept. The changes to your rewards are listed below.`);
     if (d.gainAfterWatch !== null) {
       el(mb, 'p', null, `Once your Apple Watch contract ends${d.watchEnds ? ` on ${dayLabel(d.watchEnds)}` : ''}, the Suite no longer gives you the watch, so the cheaper account would leave you ${d.gainAfterWatch >= 0 ? `${R(d.gainAfterWatch)} ${perLabel()} better off` : `${R(d.gainAfterWatch)} ${perLabel()} worse off`}, unless you take a new watch.`);
     }
@@ -2204,8 +2198,9 @@ function mountBottomLine(root, ctx) {
   function renderFoot(panel, { m, st }) {
     const f = el(panel, 'footer', 'dc-foot');
     const line = el(f, 'div', 'dc-foot-line');
-    el(line, 'span', null, 'A calculator, not financial advice.');
+    el(line, 'span', null, NOTICE_LINE);
     const mb = moreIn(line, 'foot.more', 'About these figures', f);
+    for (const t of noticeMore(marketAge(now()).asOf)) el(mb, 'p', null, t);
     el(mb, 'p', null, 'Some figures are estimates; each product tab shows the rate behind them. Discovery changes its rates every year.');
     const excl = Object.entries(m.excludedFromSpend).filter(([, v]) => Math.abs(v) >= 1);
     if (excl.length && tab() === 'bank') {

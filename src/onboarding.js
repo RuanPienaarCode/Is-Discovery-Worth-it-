@@ -28,6 +28,7 @@ const { el, icon, button, checkRow } = require('./dom');
 const { money, parseTyped, showTyped, monthLabel } = require('./format');
 const { plainWords } = require('./ui-benefits');
 const { welcomeWasShown } = require('./welcome');
+const { NOTICE_LINE } = require('./notice');
 const { STATUSES } = require('./constants');
 const { healthPremium, HEALTH_PLANS, HEALTH_OWN } = require('./compare');
 const { PRODUCT_NAMES, detectProducts, detectBanking, resolveProducts, resolveVitality, guessHealthPlan, resolveSuite } = require('./detect');
@@ -653,6 +654,7 @@ function renderOnboarding(parent, ctx) {
         el(list, 'li', null, `You said you use ${n('full')} of the benefits in full, ${n('half')} some of the time, and ${n('none')} not at all.`);
       }
       for (const t of statusProblems()) el(list, 'li', null, t);
+      el(body, 'p', 'dc-onb-hint', NOTICE_LINE);
     },
   };
 

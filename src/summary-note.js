@@ -17,6 +17,8 @@
 const { money, monthLabel, dayLabel } = require('./format');
 const { BENEFITS } = require('./benefits');
 const { marketAge } = require('./market');
+const { verdictLead: leadOf } = require('./verdict');
+const { NOTICE_LINE, ADVISER, noticeMore } = require('./notice');
 
 const DEFAULT_FOLDER = 'Is Discovery Worth It';
 const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -54,14 +56,7 @@ function afterRewards(paid, back) {
 /* The verdict's figure in words (the Overview card's lead line). */
 function verdictLead(v) {
   if (!v || isUnknown(v) || !num(v.amount)) return '';
-  const a = `${R(v.amount)} a year`;
-  if (v.tone === 'good' && v.vs) return v.amount >= 0 ? `${a} better off than with ${v.vs}.` : `${v.vs} is only ${a} cheaper.`;
-  if (v.tone === 'check' && v.vs) return `${v.vs} could save you ${a}.`;
-  if (v.tone === 'over' && v.vs) return v.id === 'bank' ? `By these figures, ${a} better off with ${v.vs}.` : `Your ${v.vs} quote is ${a} cheaper.`;
-  /* a break-even quote is a monthly premium */
-  if (v.tone === 'quote') return `A quote under ${R(v.amount)} a month wins.`;
-  if (v.tone === 'none') return `About ${a} would insure them.`;
-  return '';
+  return leadOf(v, `${R(v.amount)} a year`, R(v.amount));
 }
 
 function productSection(out, name, v, p) {
@@ -100,19 +95,19 @@ function compareSection(out, sw, pr, verdicts, st) {
     if (!x || !num(x.cost) || !num(x.benefit)) return;
     out.push(`- ${label}: you pay ${R(x.cost)} a year and ${R(x.benefit)} comes back. ${afterRewards(x.cost, x.benefit)}`);
   };
-  side('Stay with Discovery', sw.stay);
-  side('Move everything', sw.go);
+  side('Staying with Discovery', sw.stay);
+  side('Moving everything', sw.go);
   out.push('');
   if (Array.isArray(sw.assumed) && sw.assumed.length) {
     out.push(`No quote yet for ${listOf(sw.assumed.map(x => String(x).toLowerCase()))}, so both sides use what you pay now.`, '');
   }
-  out.push('Moving everything means the cheapest options the plugin could price, using today\'s prices. Cover is never exactly the same, so check each one before you move.', '');
+  out.push('Moving everything means the cheapest options the plugin could price, using today\'s prices. Cover is never exactly the same. ' + ADVISER, '');
 }
 
 function leversSection(out, levers) {
   const list = (Array.isArray(levers) ? levers : []).filter(l => l && l.title && num(l.gain) && l.gain >= 0.5).slice(0, 3);
   if (!list.length) return;
-  out.push('## Ways to get more', '');
+  out.push('## What would add more, by these figures', '');
   for (const l of list) out.push(`- **${l.title}**: ${R(l.gain)} a year more.${l.how ? ' ' + l.how : ''}`);
   out.push('');
 }
@@ -133,7 +128,7 @@ function pricesSection(out, age) {
   if (!age || !age.asOf) return;
   out.push('## Prices', '');
   if (age.stale) {
-    out.push(`These prices may be out of date: we last checked them on ${dayLabel(age.asOf)}. Check each one with the company before you decide.${age.staleWhy ? ' ' + age.staleWhy : ''}`, '');
+    out.push(`These prices may be out of date: we last checked them on ${dayLabel(age.asOf)}. Each company can tell you its price today.${age.staleWhy ? ' ' + age.staleWhy : ''}`, '');
   } else {
     out.push(`Prices of other companies checked on ${dayLabel(age.asOf)}.`, '');
   }
@@ -175,7 +170,7 @@ function summaryMarkdown(o) {
   leversSection(out, levers);
   benefitsSection(out, st);
   pricesSection(out, age);
-  out.push('---', '', 'Made by the Is Discovery Worth It plugin. A calculator, not financial advice.', '');
+  out.push('---', '', `Made by the Is Discovery Worth It plugin. ${NOTICE_LINE}`, '', ...noticeMore(age && age.asOf).slice(1).flatMap(t => [t, '']));
   return out.join('\n');
 }
 

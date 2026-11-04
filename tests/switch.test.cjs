@@ -263,7 +263,7 @@ assert.strictEqual(RB[0].rivals.find(r => r.name === 'Capitec').items[0].kind, '
   /* car / life with no quote: the glossary's sentence */
   const car = buildSwitch(st, { insure: insureNoQuote }, { insure: true }).rows.find(r => r.key === 'car');
   assert.strictEqual(car.assumedWhy, 'noQuote');
-  assert.ok(/^No quote yet, so we used today's price\. Switching pays if their quote is under R\s1\s000 a month\.$/.test(car.goNote), car.goNote);
+  assert.ok(/^No quote yet, so we used today's price\. By these figures, a quote under R\s1\s000 a month would cost less\.$/.test(car.goNote), car.goNote);
   /* an ended product has no Vitality or Drive rewards left to lose */
   const stEnded = { ...st, confidence: { ended: { health: '2026-02-02', insure: '2026-03-03' } } };
   const se = buildSwitch(stEnded, {}, { health: true, insure: true });

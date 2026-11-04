@@ -23,6 +23,7 @@
 const { has, only, freshen } = require('./switch');
 const { altConfirmed } = require('./rates');
 const { money, dayLabel } = require('./format');
+const { ADVISER } = require('./notice');
 
 const MATERIAL = 600;
 
@@ -73,7 +74,7 @@ const endedVerdict = (id, lastPaid) => ({
 
 const notEnough = (id, why) => ({ id, tone: 'unknown', word: 'Not enough data', amount: null, vs: null, why });
 const restsOn = (st, keys) => `The answer turns on ${labelsOf(st, keys)}, worked out from one or two payments and made into a year, so it is not enough to go on.`;
-const unconfirmedNote = name => ` ${name}'s price is not confirmed, so check it first.`;
+const unconfirmedNote = name => ` ${name}'s price is not confirmed, so it may be wrong.`;
 
 function fromMarket(id, cmp, name, opts) {
   const o = opts || {};
@@ -81,17 +82,17 @@ function fromMarket(id, cmp, name, opts) {
   const best = bestPriced(cmp);
   if (!best) {
     const be = cmp.rows.map(r => r.breakEven).filter(v => v > 0);
-    if (!be.length) return { id, tone: 'quote', word: 'Get quotes', amount: null, vs: null, why: o.noQuote || 'There are no prices to compare yet. Type a quote on the Inputs tab.' };
-    return { id, tone: 'quote', word: 'Get quotes', amount: Math.min(...be), vs: null, why: o.noQuote || 'Other companies don\'t publish prices for this, so ask them for a quote.' };
+    if (!be.length) return { id, tone: 'quote', word: 'No price to compare', amount: null, vs: null, why: o.noQuote || 'There are no prices to compare yet. Type a quote on the Inputs tab.' };
+    return { id, tone: 'quote', word: 'No price to compare', amount: Math.min(...be), vs: null, why: o.noQuote || 'Other companies only give a price as a quote, so there is nothing to compare yet.' };
   }
   const gain = best.gainIfSwitch;
   const unsure = best.unconfirmed && !best.quoted ? unconfirmedNote(name(best)) : '';
   const side = sideOf(gain);
-  if (side === 'good') return { id, tone: 'good', word: 'Worth it', amount: -gain, vs: name(best), why: o.good || 'Nothing we could price elsewhere is cheaper.' };
+  if (side === 'good') return { id, tone: 'good', word: 'Comes out ahead', amount: -gain, vs: name(best), why: o.good || 'Nothing we could price elsewhere is cheaper.' };
   if (side === 'even') return { id, tone: 'good', word: 'About the same', amount: -gain, vs: name(best), why: `By these figures, ${name(best)} is within ${money(MATERIAL)} a year of what you pay now${o.evenAfter || ''}, too close to call.${o.evenTail || ''}${unsure}` };
   const by = `By these figures, ${best.quoted ? 'your ' + name(best) + ' quote' : name(best)} would cost about ${money(gain)} less a year.`;
-  if (best.quoted) return { id, tone: 'over', word: 'Could cost less elsewhere', amount: gain, vs: name(best), why: `${by} Check that the cover is the same before you switch.` };
-  return { id, tone: 'check', word: 'Could save', amount: gain, vs: name(best), why: `${by} ${o.check || 'The cheaper option usually covers less, so compare before you switch.'}${unsure}` };
+  if (best.quoted) return { id, tone: 'over', word: 'Lower price elsewhere', amount: gain, vs: name(best), why: `${by} The cover is not the same. ${ADVISER}` };
+  return { id, tone: 'check', word: 'Lower price elsewhere', amount: gain, vs: name(best), why: `${by} ${o.check || `The cheaper option usually covers less. ${ADVISER}`}${unsure}` };
 }
 
 /* The same comparison with `extra` a year less lost by switching (the
@@ -118,7 +119,7 @@ function buildVerdicts(st, cmp, products, opts) {
   const alt = has(products, 'bank') && st && st.chosen;
   if (alt) {
     const gain = alt.gainIfSwitch;
-    const unsure = altConfirmed(alt) ? '' : ` ${alt.name}'s figures are not confirmed, so check them before you decide.`;
+    const unsure = altConfirmed(alt) ? '' : ` ${alt.name}'s figures are not confirmed, so they may be wrong.`;
     /* the bank's own lines that rest on one or two payments: without them
        Discovery is worth less (a value line) or costs less (a fee line) */
     const lines = (st.lines || []).filter(l => l.group === 'bank' || l.group === 'cost');
@@ -131,7 +132,7 @@ function buildVerdicts(st, cmp, products, opts) {
     } else if (ex.keys.length && sideOf(gain) !== sideOf(gain + exValue - exCost)) {
       out.bank = notEnough('bank', restsOn(st, ex.keys));
     } else if (sideOf(gain) === 'less') {
-      out.bank = { id: 'bank', tone: 'check', word: 'Could cost less elsewhere', amount: gain, vs: alt.name, why: `By these figures, ${alt.name} would cost about ${money(gain)} less a year.${unsure}` };
+      out.bank = { id: 'bank', tone: 'check', word: 'Lower price elsewhere', amount: gain, vs: alt.name, why: `By these figures, ${alt.name} would cost about ${money(gain)} less a year.${unsure}` };
     } else if (sideOf(gain) === 'even') {
       out.bank = { id: 'bank', tone: 'good', word: 'About the same', amount: -gain, vs: alt.name, why: `By these figures, ${alt.name} is within ${money(MATERIAL)} a year of Discovery Bank, too close to call.${unsure}` };
     } else {
@@ -143,7 +144,7 @@ function buildVerdicts(st, cmp, products, opts) {
         : net <= -0.5
           ? 'Its fees cost more than its rewards give back, but the other bank would leave you worse off.'
           : 'Its fees and its rewards come to about the same, and the other bank would leave you worse off.';
-      out.bank = { id: 'bank', tone: 'good', word: 'Worth it', amount: -gain, vs: alt.name, why: why + unsure };
+      out.bank = { id: 'bank', tone: 'good', word: 'Comes out ahead', amount: -gain, vs: alt.name, why: why + unsure };
     }
   }
 
@@ -152,14 +153,14 @@ function buildVerdicts(st, cmp, products, opts) {
      split out of the debit): it was counted as nothing, not as free. */
   const vitText = c.health && c.health.vitalityKnown !== false && Number.isFinite(vit) && Math.abs(vit) >= 0.5 ? (vit > 0 ? ' Vitality Health gives back more than it costs.' : ' Vitality Health costs more than it gives back.') : '';
   const healthOpts = {
-    good: 'No other medical aid that covers what your family needs costs less, once you count the Vitality rewards you would lose.' + vitText,
-    check: 'A cheaper plan covers what your family needs, but some of its limits are lower. Compare them before you switch.' + vitText,
+    good: 'No other medical aid that covers what you ticked costs less, once you count the Vitality rewards you would lose.' + vitText,
+    check: 'A cheaper plan covers what you ticked, but some of its limits are lower. The scheme or a licensed financial adviser can tell you what each plan covers.' + vitText,
     evenAfter: ', once you count the Vitality rewards you would lose',
     evenTail: vitText,
   };
   const healthName = r => r.scheme + ' ' + r.plan;
   /* the rivals' prices are not for today (opts.now): ask for quotes */
-  if (c.health && c.health.stale) healthOpts.noQuote = 'The other medical aids\' prices here are out of date (most change every January). Ask them for a quote.';
+  if (c.health && c.health.stale) healthOpts.noQuote = 'The other medical aids\' prices here are out of date (most change every January), so they are not compared.';
   out.health = fromMarket('health', c.health, healthName, healthOpts);
   /* the Vitality Health rewards a rival would end, where they rest on one
      or two payments: the verdict stands only if it holds without them */
@@ -172,26 +173,26 @@ function buildVerdicts(st, cmp, products, opts) {
      Vitality part may be counted as saved, so no firm saving is claimed. */
   const unsplit = c.health && (c.health.vitalityKnown === false || (st && st.bill && st.bill.priceStale));
   if (out.health && unsplit && out.health.tone !== 'good' && out.health.tone !== 'unknown') {
-    out.health = { id: 'health', tone: 'quote', word: 'Get quotes', amount: null, vs: null, why: 'We could not tell how much of your Discovery Health debit order is the medical aid itself. Pick your plan, or type its amount, on the Inputs tab.' };
+    out.health = { id: 'health', tone: 'quote', word: 'No price to compare', amount: null, vs: null, why: 'We could not tell how much of your Discovery Health debit order is the medical aid itself. Pick your plan, or type its amount, on the Inputs tab.' };
   }
   /* say what the best one could not confirm */
   const hb = bestPriced(c.health);
   if (out.health && hb && hb.unsure && hb.unsure.length && (out.health.tone === 'check' || out.health.tone === 'over')) {
     const label = id => ((c.health.needs || []).find(n => n.id === id) || { label: id }).label.toLowerCase();
-    out.health.why += ` Check first: ${hb.unsure.map(label).join(', ')}.`;
+    out.health.why += ` Not confirmed for that plan: ${hb.unsure.map(label).join(', ')}.`;
   }
 
   /* The published gap prices are for an oldest member under 45: older, or
      not said, and only a typed quote is compared. */
   const gapAged = c.gap && c.gap.pricedForAge === false;
   out.gap = fromMarket('gap', c.gap, r => r.provider + ' ' + r.plan, {
-    check: 'Cheaper gap cover exists, but it usually pays out less on a big medical bill. Compare the cover before you switch.',
-    noQuote: gapAged ? 'Rival prices shown are for under 45s. Ask them for a quote for your family\'s ages.'
-      : c.gap && c.gap.stale ? 'The gap cover prices here are out of date (most change every January). Ask for a quote.' : undefined,
+    check: `Cheaper gap cover exists, but it usually pays out less on a big medical bill. ${ADVISER}`,
+    noQuote: gapAged ? 'Rival prices shown are for under 45s. They are not compared for your family\'s ages.'
+      : c.gap && c.gap.stale ? 'The gap cover prices here are out of date (most change every January), so they are not compared.' : undefined,
   });
 
   const insureOpts = {
-    noQuote: 'Car insurance is priced per person, so ask for a quote for the same cars and cover. It also has to make up for the Vitality Drive fuel rewards you would lose.',
+    noQuote: 'Car insurance is priced per person, so nothing is compared until you type a quote for the same cars and cover. A quote would also have to make up for the Vitality Drive fuel rewards you would lose.',
   };
   out.insure = fromMarket('insure', c.insure, r => r.name, insureOpts);
   const exI = extrapolatedOf(st, REWARD_KEYS.insure);
@@ -224,7 +225,7 @@ function buildVerdicts(st, cmp, products, opts) {
        share: with severe illness and income cover on top, an individual
        policy is unlikely to come in under it. */
     if (out.life.tone === 'quote' && l.lifeOnly && l.lifeOnly.low >= l.current.monthly * 0.25) {
-      out.life = { id: 'life', tone: 'good', word: 'Likely worth it', amount: null, vs: null, why: 'On a policy of your own, life cover alone would already cost a big part of what you pay now, and yours also covers severe illness and income. A quote would settle it.' };
+      out.life = { id: 'life', tone: 'good', word: 'Likely ahead', amount: null, vs: null, why: 'On a policy of your own, life cover alone would already cost a big part of what you pay now, and yours also covers severe illness and income. A quote would settle it.' };
     }
   }
 
@@ -248,4 +249,18 @@ function buildVerdicts(st, cmp, products, opts) {
   return out;
 }
 
-module.exports = { buildVerdicts, MATERIAL };
+/* A verdict's figure in words: the Overview card's one line and the
+   summary note's. a: the amount with its period ("R 1 200 a year"), or
+   null; monthly: a break-even quote, a monthly premium ("R 950"). Every
+   sentence states what the sum shows, never what to do about it. */
+function verdictLead(v, a, monthly) {
+  if (!v || v.tone === 'unknown') return '';
+  if (a && v.tone === 'good' && v.vs) return v.amount >= 0 ? `${a} better off than with ${v.vs}.` : `By these figures, ${v.vs} is ${a} cheaper.`;
+  if (a && v.tone === 'check' && v.vs) return `By these figures, ${v.vs} costs ${a} less.`;
+  if (a && v.tone === 'over' && v.vs) return v.id === 'bank' ? `By these figures, ${a} better off with ${v.vs}.` : `Your ${v.vs} quote is ${a} cheaper.`;
+  if (monthly && v.tone === 'quote') return `By these figures, a quote under ${monthly} a month would cost less.`;
+  if (a && v.tone === 'none') return `About ${a} would insure them.`;
+  return '';
+}
+
+module.exports = { buildVerdicts, verdictLead, MATERIAL };

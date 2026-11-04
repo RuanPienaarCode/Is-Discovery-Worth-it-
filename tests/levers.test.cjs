@@ -89,7 +89,7 @@ assert.strictEqual(byId(sam, 'gym36').kind, 'answer');
 assert.strictEqual(byId(sam, 'dday').kind, 'answer');
 assert.strictEqual(byId(sam, 'status.money').kind, 'status');
 assert.ok(/bank score \(Vitality Money status, Blue to Diamond\)/.test(byId(sam, 'status.money').line), 'the score with its status beside it');
-assert.strictEqual(byId(sam, 'status.money').title, 'Reach a Silver bank score', 'the next status only');
+assert.strictEqual(byId(sam, 'status.money').title, 'A Silver bank score', 'the next status only');
 assert.ok(/Ð-Day \(the 15th of each month\)/.test(byId(sam, 'dday').line), 'Ð-Day explained at first mention');
 /* the inputs are not changed */
 const before = clone(settings());
@@ -118,7 +118,7 @@ near(byId(sam, 'status.money').gain, worth(sameThingsBought(m, s0, sSilver, buil
 const dg = buildStatement(m, s0, null, { products: ALL, vitality: VIT }).downgrade;
 assert.ok(dg && dg.gainIfDowngrade >= MIN_GAIN, 'Sam could save on the Credit Card Account');
 near(byId(sam, 'downgrade').gain, dg.gainIfDowngrade, 'downgrade gain = st.downgrade');
-assert.strictEqual(byId(sam, 'downgrade').title, 'Move to the Black Credit Card Account');
+assert.strictEqual(byId(sam, 'downgrade').title, 'The Black Credit Card Account instead');
 
 // ── same things bought: the gym and flight figures are honest ──────────
 /* a gym only: R500 a month at 50% off is a R1 000 membership; 75% off
@@ -169,7 +169,7 @@ const mDiscFuel = window_(Object.assign(samFigures(), { 'disc.fuel.bp': fig(1500
 const discFuelL = run(settings(), { m: mDiscFuel });
 assert.ok(!ids(discFuelL).includes('driveFuelCard'), 'fuel already on the Discovery card: no fuel lever');
 assert.ok(ids(discFuelL).includes('status.drive'), 'and the next car score pays more fuel back');
-assert.strictEqual(byId(discFuelL, 'status.drive').title, 'Reach a Silver car score');
+assert.strictEqual(byId(discFuelL, 'status.drive').title, 'A Silver car score');
 /* no Vitality Drive: no fuel or car score lever */
 const noDrive = run(settings(), { m: mDiscFuel, products: Object.assign({}, ALL, { insure: false }), vitality: Object.assign({}, VIT, { drive: false }) });
 assert.ok(!ids(noDrive).includes('driveFuelCard') && !ids(noDrive).includes('status.drive'), 'no Vitality Drive: no fuel levers');
@@ -206,7 +206,7 @@ const bigSt = buildStatement(mBig, bigCardS, null, { products: ALL, vitality: VI
 const bigGain = worth(sameThingsBought(mBig, bigCardS, bigSuiteS, bigSt), bigSuiteS) - worthOf(bigSt) - feeYear;
 assert.ok(bigGain >= MIN_GAIN, `the Suite pays for this household (${Math.round(bigGain)})`);
 near(byId(bigCard, 'upgrade').gain, bigGain, 'big spender: upgrade gain = statement difference less the fees');
-assert.strictEqual(byId(bigCard, 'upgrade').title, 'Move to the Black Suite');
+assert.strictEqual(byId(bigCard, 'upgrade').title, 'The Black Suite instead');
 assert.ok(feeYear > 0, 'the Suite costs more a month, and that is netted');
 /* a small household: every gain under R100 is dropped */
 const mTiny = window_({ 'fee.account': fig(40), 'spend.card': fig(300) });
@@ -249,7 +249,7 @@ const ctx = { s: settings(), period: 'annual', levers: sam };
 const panel = document.createElement('div');
 renderLevers(panel, ctx);
 assert.strictEqual(all(panel, 'dc-lev-h')[0].textContent, HEADING, 'the heading');
-assert.strictEqual(HEADING, 'How to get more out of Discovery');
+assert.strictEqual(HEADING, 'What would add more, by these figures');
 assert.strictEqual(all(panel, 'dc-lev-card').length, sam.length, 'one card per lever');
 const first = all(panel, 'dc-lev-card')[0];
 assert.strictEqual(all(first, 'dc-lev-title')[0].textContent, sam[0].title);
@@ -258,7 +258,7 @@ assert.ok(/a year more$/.test(all(first, 'dc-lev-fig')[0].textContent), 'figure 
 const btn = all(first, 'dc-lev-btn')[0];
 assert.strictEqual(btn.tagName, 'BUTTON');
 assert.strictEqual(btn.type, 'button');
-assert.ok(btn.textContent.includes('What to do'), 'the button is named');
+assert.ok(btn.textContent.includes('How it works'), 'the button is named');
 const body = all(first, 'dc-lev-body')[0];
 assert.strictEqual(btn.getAttribute('aria-controls'), body.id);
 assert.strictEqual(btn.getAttribute('aria-expanded'), 'false');
@@ -288,7 +288,7 @@ assert.strictEqual(asked, 1);
 const p0 = document.createElement('div');
 renderLevers(p0, Object.assign({}, ctx, { levers: [] }));
 assert.strictEqual(all(p0, 'dc-lev-none')[0].textContent, NONE);
-assert.strictEqual(NONE, 'You are already getting the most from your setup.');
+assert.strictEqual(NONE, 'By these figures, nothing here would add R 100 or more a year.');
 assert.strictEqual(all(p0, 'dc-lev-card').length, 0);
 /* no heading when the page draws its own */
 const pn = document.createElement('div');

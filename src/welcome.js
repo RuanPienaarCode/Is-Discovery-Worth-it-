@@ -10,19 +10,11 @@
 
 const { el, icon, button } = require('./dom');
 const { drawMark, drawWelcomeArt } = require('./art');
-const { dayLabel } = require('./format');
-const { MARKET } = require('./market');
+const { NOTICE_LINE, noticeMore } = require('./notice');
 
-/* The not-affiliated notice, shown here and on the Overview. The one line is
-   always visible; the longer words wait behind "Disclaimer and sources". */
-const NOTICE_LINE = 'Not affiliated with or endorsed by Discovery. A calculator, not financial advice.';
-function noticeMore(asOf) {
-  return [
-    'Discovery, Discovery Bank, Discovery Health, Discovery Insure, Discovery Life, Vitality and Discovery Miles are brands of Discovery Limited. This plugin is not made, approved or sponsored by it.',
-    `Every figure is an estimate worked out from your statements and from published prices as at ${dayLabel(asOf || MARKET.asOf)}.`,
-    'Check with Discovery or a licensed financial adviser before you change a product.',
-  ];
-}
+/* The not-affiliated notice (src/notice.js), shown here, on the Overview
+   and in the footer of every tab. The one line is always visible; the
+   longer words wait behind "Disclaimer and sources". */
 
 /* the timers of the screen on show; stopWelcome() (view.js, on close) clears
    them, and each does nothing once the screen has left the page */

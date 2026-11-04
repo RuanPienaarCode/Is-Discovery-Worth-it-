@@ -8,7 +8,7 @@ It counts a benefit only at the value it has for you. A gym discount is worth no
 
 No account, no network, no telemetry and no AI. Everything is worked out on your device from your own notes.
 
-The plugin is free. It gives no advice: it shows what the numbers say, and the decision is yours.
+The plugin is free. It gives no financial advice: it shows calculations from your own statements and published prices, and never tells you to buy, change, replace or cancel a product. The decision is yours.
 
 ## What you need
 
@@ -86,7 +86,7 @@ gh attestation verify main.js -R RuanPienaarCode/Is-Discovery-Worth-it-
 - Some reward rates are not published. Where the plugin knows that, the page says it is an estimate.
 - Medical aids and insurers differ in ways a table cannot show: hospital networks, waiting periods, what happens to your cover history if you move. Check these before you move anything.
 - Discovery changes its rewards and prices every year. Read the "as at" dates.
-- **This is a calculator, not financial advice.** It does not know your whole situation, and nothing in it is a recommendation to buy, keep or cancel any product. It is free, and the figures are estimates. Check with Discovery or a licensed financial adviser before you change a product.
+- **This is a calculator, not financial advice.** It shows calculations and comparisons from your statements and published prices. Nothing in it is a recommendation, guidance or proposal to buy, keep, change, replace or cancel any product, and it does not know your whole situation. It is free, and the figures are estimates. Cover is never exactly the same from one provider to the next, so what changing, replacing or ending a product would mean for you is for the provider or a licensed financial adviser to say. The not-affiliated notice is on every tab, the first-run questions and the summary note, and a test (`tests/no-advice.test.cjs`) fails the build if wording that tells you what to do with a product comes back.
 - A product with fewer than 6 months of its own payments shows "Not enough data" instead of a verdict, and no figure is drawn under those words. The same goes for the whole comparison when there are fewer than 6 months of Discovery payments.
 
 ## Not affiliated

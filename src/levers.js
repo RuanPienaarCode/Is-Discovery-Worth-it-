@@ -126,6 +126,9 @@ const SCORE = {
   health: { short: 'health score', long: 'health score (Vitality Health status, Blue to Diamond)', app: 'The Vitality app shows how many Vitality points you still need' },
   drive: { short: 'car score', long: 'car score (Vitality Drive status, Blue to Diamond)', app: 'The Discovery Insure app shows how many Vitality Drive points you still need' },
 };
+/* a change of package is a change to a financial product: the figure, and
+   who can say what else changes, never an instruction to make it */
+const CHANGE_HOW = 'A change of account is made with Discovery Bank. Discovery Bank or a licensed financial adviser can tell you what else changes.';
 const pctText = v => String(Math.round(v * 10) / 10).replace('.', ',') + '%';
 
 /* ── the levers ─────────────────────────────────────────────────────────
@@ -180,11 +183,11 @@ function computeLevers(args) {
     add({
       id: 'checks',
       kind: unanswered ? 'answer' : 'habit',
-      title: 'Do your Vitality Age and a Vitality Health Check',
+      title: 'Vitality Age and a Vitality Health Check',
       line: then > now
         ? `Your HealthyFood, HealthyCare and flight discounts from Vitality Health go from ${pctText(now)} to ${pctText(then)} once you have done both.`
         : 'Your HealthyFood, HealthyCare and flight discounts from Vitality Health go up once you have done both.',
-      how: 'Do the Vitality Age assessment in the Vitality app and a Vitality Health Check at a participating pharmacy, every 12 months.',
+      how: 'Vitality Age is done in the Vitality app, and a Vitality Health Check at a participating pharmacy. Both last 12 months.',
       needs: unanswered
         ? 'Already done both in the last 12 months? Say so on Inputs and it counts.'
         : 'Each adult on the plan needs both, and they count for 12 months.',
@@ -199,11 +202,11 @@ function computeLevers(args) {
     add({
       id: 'gym36',
       kind: unanswered ? 'answer' : 'habit',
-      title: 'Work out 36 times a year',
+      title: '36 workouts a year',
       line: then > now
         ? `Your gym discount goes from ${pctText(now)} to ${pctText(then)} with at least 36 workouts in 12 months.`
         : 'Your gym discount goes up with at least 36 workouts in 12 months.',
-      how: 'Go to the gym about three times a month, and check your count in the Vitality app.',
+      how: 'That is about three gym visits a month. The Vitality app shows your count.',
       needs: unanswered
         ? 'It needs a one-gym (Club) membership. Already going 36 times a year? Say so on Inputs and it counts.'
         : 'It needs a one-gym (Club) membership; other memberships keep the smaller discount.',
@@ -216,9 +219,9 @@ function computeLevers(args) {
     add({
       id: 'dday',
       kind: unanswered ? 'answer' : 'habit',
-      title: 'Spend your Miles on Ð-Day',
+      title: 'Miles spent on Ð-Day',
       line: 'On Ð-Day (the 15th of each month) the discount at Discovery Miles partners doubles, so each Mile buys more.',
-      how: 'Keep your Miles for the 15th and spend them at Discovery Miles partners, online or in store.',
+      how: 'That means Miles kept for the 15th and spent at Discovery Miles partners, online or in store.',
       needs: unanswered
         ? 'Already spend them on Ð-Day? Say so on Benefits and it counts.'
         : 'Prepaid electricity, data and airtime in the app get only the everyday discount, not Ð-Day\'s.',
@@ -232,9 +235,9 @@ function computeLevers(args) {
     add({
       id: 'virtualCard',
       kind: 'habit',
-      title: 'Pay with the virtual card',
+      title: 'Paying with the virtual card',
       line: 'The virtual card in your phone earns many more Miles than the plastic card.',
-      how: 'Add the Discovery Bank virtual card to your phone and pay with your phone instead of the plastic card.',
+      how: 'The virtual card lives in your phone, and you pay with the phone instead of the plastic card.',
       needs: null,
     }, gainWith(s1 => { s1.rates = Object.assign({}, s1.rates, { virtualSharePct: 100 }); }));
   }
@@ -252,9 +255,9 @@ function computeLevers(args) {
       add({
         id: 'driveFuelCard',
         kind: 'habit',
-        title: 'Pay for fuel with your Discovery Bank card',
+        title: 'Fuel paid with your Discovery Bank card',
         line: 'Vitality Drive only gives fuel back when you pay at bp or Shell with a Discovery Bank card.',
-        how: 'Use your Discovery Bank card, ideally the virtual card in your phone, for fuel at bp and Shell.',
+        how: 'That is fuel at bp and Shell paid with a Discovery Bank card; the virtual card in your phone earns the most.',
         needs: 'Any Discovery Bank account counts, even the free one.',
       }, gainWith(() => {}, () => {
         const changes = {};
@@ -276,7 +279,7 @@ function computeLevers(args) {
     add({
       id: 'status.' + k,
       kind: 'status',
-      title: `Reach a ${next} ${w.short}`,
+      title: `A ${next} ${w.short}`,
       line: `Your ${w.long} is ${cur} now, and ${next} pays more back.`,
       how: `${w.app} for ${next}.`,
       needs: null,
@@ -294,9 +297,9 @@ function computeLevers(args) {
       add({
         id: 'downgrade',
         kind: 'habit',
-        title: `Move to the ${d.label}`,
+        title: `The ${d.label} instead`,
         line: `By these figures, its smaller monthly fee is worth more than the rewards you would give up.`,
-        how: `Ask Discovery Bank to move you from the ${suiteOf(s).label} to the ${d.label}, in the app or by phone.`,
+        how: CHANGE_HOW,
         needs: watch ? 'Your Apple Watch deal needs the Suite, so it ends if you move.' : null,
       }, d.gainIfDowngrade);
     }
@@ -312,9 +315,9 @@ function computeLevers(args) {
         add({
           id: 'upgrade',
           kind: 'habit',
-          title: `Move to the ${to.label}`,
+          title: `The ${to.label} instead`,
           line: `By these figures, the ${to.label}'s extra rewards are worth more than its higher monthly fee.`,
-          how: `Ask Discovery Bank to move you from the ${from.label} to the ${to.label}, in the app or by phone.`,
+          how: CHANGE_HOW,
           needs: 'The Suite adds a transaction account to your credit card, in one package.',
         }, rewards - fees);
       }

@@ -42,7 +42,7 @@ const { priceValidFor } = require('./market');
 const { altConfirmed } = require('./rates');
 /* the chosen rival bank's figures are not confirmed (rates.js): say so wherever it is named */
 const altUnsure = a => !!a && typeof altConfirmed === 'function' && !altConfirmed(a);
-const unsureNote = a => `${a.name}'s figures are not confirmed, so check them first.`;
+const unsureNote = a => `${a.name}'s figures are not confirmed, so they may be wrong.`;
 
 /* products[id] === false leaves that product out; no map = everything */
 const has = (products, id) => !products || products[id] !== false;
@@ -118,7 +118,7 @@ const ASSUMED_NOTE = {
   age: 'No fair comparison yet: rival prices are for people under 45.',
   unsplit: 'We could not tell how much of your Discovery Health debit order is the medical aid itself, so we used today\'s price. Pick your plan, or type its amount, on the Inputs tab.',
   stalePlan: 'Your plan\'s price has changed since the prices we have, so we used today\'s price. Type your medical aid amount on the Inputs tab.',
-  stale: 'These prices are out of date, so we used today\'s price. Ask for a quote instead.',
+  stale: 'These prices are out of date, so we used today\'s price.',
 };
 
 /* The day as 'YYYY-MM-DD', or null when none was given. */
@@ -190,7 +190,7 @@ function buildSwitch(st, cmp, products, opts) {
     const be = cm.rows.filter(r => !isDiscovery(r)).map(r => r.breakEven).filter(v => v > 0);
     add(key, label, 'cost', cm.current.annual, cm.current.annual, {
       assumed: true, assumedWhy: 'noQuote',
-      goNote: ASSUMED_NOTE.noQuote + (be.length ? ` Switching pays if their quote is under ${money(Math.min(...be))} a month.` : ''),
+      goNote: ASSUMED_NOTE.noQuote + (be.length ? ` By these figures, a quote under ${money(Math.min(...be))} a month would cost less.` : ''),
     });
   };
 
@@ -201,7 +201,7 @@ function buildSwitch(st, cmp, products, opts) {
     /* The medical aid is only compared when its own price is known (the
        debit split out, at a price that still holds) and the rivals' prices
        are current; otherwise moving is taken as costing the same, as the
-       Health verdict's "Get quotes" says. */
+       Health verdict's "No price to compare" says. */
     const ms = medicalState(st, c.health);
     const best = ms.ok ? cheapest(c.health.rows.filter(r => priced(r) && !r.stale && r.likeForLike !== false && !isDiscovery(r))) : null;
     const staleRivals = ms.ok && !best && c.health.rows.some(r => r.stale && !isDiscovery(r));
