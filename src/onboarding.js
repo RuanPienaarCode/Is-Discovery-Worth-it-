@@ -22,7 +22,11 @@
    later; a row you did not touch stays on the suggestion.
 
    renderOnboarding(parent, { settings, budget, detected, measured,
-     statement, save, onDone }) → the root element. */
+     statement, save, onDone, skip, manual }) → the root element.
+   skip: screen ids to leave out (typed-numbers mode has already asked the
+   products and the bank package, src/manual-form.js). manual: true when the
+   figures were typed in, not read from statements: the words about
+   statements are said about the typed figures (src/manual.js). */
 
 const { el, icon, button, checkRow } = require('./dom');
 const { money, parseTyped, showTyped, monthLabel } = require('./format');
@@ -32,6 +36,7 @@ const { NOTICE_LINE } = require('./notice');
 const { STATUSES } = require('./constants');
 const { healthPremium, HEALTH_PLANS, HEALTH_OWN } = require('./compare');
 const { PRODUCT_NAMES, detectProducts, detectBanking, resolveProducts, resolveVitality, guessHealthPlan, resolveSuite } = require('./detect');
+const { rewordTree } = require('./manual');
 
 const IDS = ['bank', 'health', 'gap', 'insure', 'life'];
 const ICONS = { bank: 'landmark', health: 'heart-pulse', gap: 'shield-check', insure: 'car', life: 'umbrella' };
@@ -199,6 +204,8 @@ function renderOnboarding(parent, ctx) {
     busy: false,
   };
   const showHello = !welcomeWasShown();
+  const skipIds = new Set(ctx.skip || []);
+  const manual = !!ctx.manual;
   /* which "Why we suggest this" notes are open, across redraws */
   const opened = new Set();
   /* a Miles statement already says what your Miles bought */
@@ -243,7 +250,7 @@ function renderOnboarding(parent, ctx) {
     }
     if (benefitRows().length) ids.push('benefits');
     ids.push('done');
-    return ids;
+    return skipIds.size ? ids.filter(id => !skipIds.has(id)) : ids;
   };
 
   /* the tiers you can pick: a credit card on its own has no Purple */
@@ -457,7 +464,7 @@ function renderOnboarding(parent, ctx) {
       const fee = vmFee();
       h.textContent = 'Do you have Vitality Money?';
       lead.textContent = `The monthly add-on${fee === null ? '' : ` (${money(fee)} a month on your package)`} for the bank's extra rewards.`;
-      yesNo(body, 'Vitality Money', st.vm, banking.vitalityMoney ? 'We saw Vitality Money payments in your statements.' : 'We saw no Vitality Money payment in your statements.', v => { st.vm = v; drawProgress(); });
+      yesNo(body, 'Vitality Money', st.vm, manual ? 'Where to find it: the Discovery app, under Vitality Money.' : banking.vitalityMoney ? 'We saw Vitality Money payments in your statements.' : 'We saw no Vitality Money payment in your statements.', v => { st.vm = v; drawProgress(); });
     },
 
     vmStatus(h, lead, body) {
@@ -721,6 +728,7 @@ function renderOnboarding(parent, ctx) {
     const lead = el(card, 'p', 'dc-onb-lead');
     const body = el(card, 'div', 'dc-onb-body');
     SCREENS[id](h, lead, body);
+    if (manual) rewordTree(card);
     if (st.error) {
       const e = el(card, 'p', 'dc-onb-error', st.error);
       e.setAttribute('role', 'alert');
@@ -740,4 +748,4 @@ function renderOnboarding(parent, ctx) {
   return root;
 }
 
-module.exports = { renderOnboarding };
+module.exports = { renderOnboarding, radioGroup };

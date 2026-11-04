@@ -194,6 +194,12 @@ const DEFAULT_SETTINGS = {
      example (even after a restart) puts them back. */
   sample: false,
   realSettings: null,
+  /* Where the figures come from: '' = the Budget plugin's notes in this
+     vault; 'manual' = the numbers typed in by hand (src/manual.js,
+     "Type in my numbers"), kept in `manual` (every answer null until typed;
+     null is not counted). */
+  dataSource: '',
+  manual: {},
   /* The vault folder "Save a summary note" writes into (summary-note.js). */
   summaryFolder: 'Is Discovery Worth It',
 };

@@ -1259,6 +1259,34 @@
 .dc-page.is-phone .dc-lev .dc-lev-cards { grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .dc-page.is-phone .dc-lev .dc-lev-amt { font-size: 24px; }
 
+/* Typed numbers (src/manual.js, src/manual-form.js): the questions wear the
+   first-run questions' look (.dc-onb, onboarding.css); this file only adds
+   the "Where to find it" line, the gap cover tick, and the strips on the
+   page. No :has(), no color-mix(), no !important: iOS 15 is the floor. */
+
+/* ── the questions ───────────────────────────────────── */
+.dc-onb .dc-man-where {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 0 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--dc-surface-2);
+  color: var(--dc-text-2);
+}
+.dc-onb .dc-man-where > .dc-icon { margin-top: 2px; color: var(--dc-accent-ink); }
+.dc-onb .dc-man-tick { margin-top: 12px; align-items: center; }
+.dc-onb .dc-man-fees .dc-onb-group { margin-bottom: 12px; }
+.dc-onb .dc-man-fee-field[hidden] { display: none; }
+
+/* ── on the page ─────────────────────────────────────── */
+.dc-hint.dc-typed-strip { margin-bottom: 0; }
+.dc-typed-strip > button.dc-link { margin-left: auto; }
+.dc-hint.dc-budget-found { margin-bottom: 0; border-style: solid; border-color: rgba(var(--dc-accent-rgb), 0.5); background: rgba(var(--dc-accent-rgb), 0.07); color: var(--dc-text); }
+.dc-budget-found-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.dc-empty button.dc-btn.dc-manual-go { margin-top: 10px; }
+
 /* The first-run questions (src/onboarding.js). Every rule sits under
    .dc-onb. One column that works down to 320px; tap targets are 44px or
    more. Colours are the page's tokens and the .dc-p-* product colours from

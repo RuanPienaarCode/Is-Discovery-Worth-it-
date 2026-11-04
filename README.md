@@ -26,9 +26,15 @@ Screens show a made-up example household.
 
 ## What you need
 
-- **The Budget plugin** (id `budget-app`) with your bank statements imported. This plugin reads its notes: `Transactions/<account>/<YYYY-MM>.md`, with `Accounts/` and `Categories/` beside them. Without them it finds no budget and says so.
+- **The Budget plugin** (id `budget-app`) with your bank statements imported. This plugin reads its notes: `Transactions/<account>/<YYYY-MM>.md`, with `Accounts/` and `Categories/` beside them. Without them it finds no budget and offers to let you type your numbers in instead (see below).
 - **Optional, recommended: your Discovery Miles statement.** In Discovery Bank online, open *Discovery Miles*, then *Download transactions*, and save the CSV anywhere in your vault. It is found by its header, wherever it is. Bank statements do not show Miles, and the Miles statement names who paid each reward, so with it more figures are read from your own records and fewer are estimated.
 - Obsidian 1.8 or later, on desktop or phone.
+
+## Without the Budget plugin
+
+No budget in your vault? Choose **Type in my numbers** on the first screen (or run the command *Type in my numbers*). It asks, one question at a time, only what the products you tick need: your Discovery Bank package and its fees (the published fee for your package, or what you pay), your card spend in a normal month, what you spend at Checkers, Woolworths, Pick n Pay, Clicks, Dis-Chem, bp and Shell, your gym, flights booked through Vitality Travel in the last year, your Discovery Health debit order and the claims it paid back, gap cover, your Discovery Insure premium and your share of Discovery Life. Each question says where to find the figure (the Discovery app, a bank statement). Leave one blank if you are not sure: it is then **not counted**, never guessed.
+
+Your answers are treated as a rough average month and made into a year, so every page works the same way. Figures from them are labelled **You entered**, and the page says they are typed averages, not statements. They are kept only in this plugin's settings (`data.json`). A Discovery Miles statement saved in the vault still counts. Change any answer on the Inputs tab, under *Your typed numbers*. If a Budget-plugin budget appears in the vault later, the page asks which figures to use, and *Read my budget instead* on the Inputs tab switches over (your typed numbers are kept).
 
 ## First run
 
@@ -64,13 +70,13 @@ Each figure is labelled with where it came from, so you can judge it:
 
 - **From your statements:** read from your Budget notes.
 - **From your Miles statement:** read from the CSV.
-- **You entered:** typed by you.
+- **You entered:** typed by you (with *Type in my numbers*, every figure that would come from your statements).
 - **Estimate:** worked out from a rate, which can be changed beside the line it affects. Most rates are published, and name their source and date. Some rates, such as a few rival banks' rewards, are **not published**: those are the plugin's own guesses, and the page marks each one it knows about as not published. It cannot know about a rate that changed after the release you installed. Type your own figure when you know it.
 
 ## Privacy
 
 - It reads your Budget notes and the CSV files in your vault. Each CSV is opened once to see whether it is a Discovery Miles statement, and again only when the file changes.
-- It writes **only its own settings file**, `.obsidian/plugins/discovery-worth-it/data.json`. That holds your answers, not your transactions: your health plan, family size, Vitality statuses, health-check answers, benefits you use, and any quotes you type. If your vault is synced or kept in git, `data.json` travels with it. Leave that file out of any vault you share or publish.
+- It writes **only its own settings file**, `.obsidian/plugins/discovery-worth-it/data.json`. That holds your answers, not your transactions: your health plan, family size, Vitality statuses, health-check answers, benefits you use, any quotes you type, and your typed numbers if you use *Type in my numbers*. If your vault is synced or kept in git, `data.json` travels with it. Leave that file out of any vault you share or publish.
 - **Nothing leaves your vault.** There are no network requests, no account, no telemetry and no AI.
 
 ## Market data and how fresh it is

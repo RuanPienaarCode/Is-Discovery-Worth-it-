@@ -20,6 +20,8 @@ const { detectProducts, detectBanking, resolveProducts, resolveVitality, resolve
 const { marketAge, MARKET } = require('./market');
 const { BENEFITS } = require('./benefits');
 const { renderOnboarding } = require('./onboarding');
+const { renderManualForm } = require('./manual-form');
+const { manualQuestions, publishedFees, applyManual, manualWords, rewordTree, typedSource } = require('./manual');
 const { buildSwitch, buildRivals, byKind } = require('./switch');
 const { NEEDS, GRADES, compareHealth, compareGap, compareInsure, compareLife, compareHome, healthPremium, HEALTH_PLANS, HEALTH_OWN, GAP_PLANS, INSURERS, LIFE_OFFERS, HOME_INSURERS, HOME_RANGE } = require('./compare');
 const { mountFlow } = require('./ui-flow');
@@ -41,6 +43,7 @@ const { summaryMarkdown } = require('./summary-note');
 const { wrongPriceUrl } = require('./wrong-price');
 
 const SOURCE = { measured: 'From your statements', statement: 'From your Miles statement', estimated: 'Estimate', entered: 'You entered' };
+
 const MILES_INPUTS = [
   ['card', 'Base Miles on card spend', 'Miles'],
   ['healthyFood', 'HealthyFood Miles (bank and Vitality Health together)', 'Miles'],
@@ -247,10 +250,15 @@ function mountBottomLine(root, ctx) {
     if (isField(a) && a !== src) { pending = true; return; }
     render();
   };
+  /* typed numbers: the months are made from the answers, so an answer that
+     changed means reading them again (it is quick: nothing is read from disk
+     but the Miles CSVs, which load.js keeps) */
+  const typed = () => !!budget && !!budget.manual;
   const save = async () => {
     const src = lastChanged;
     lastChanged = null;
     await plugin.saveSettings();
+    if (typed()) { budget = await plugin.readBudget(); detectedCache = null; }
     requestRender(src);
   };
   const period = () => (plugin.settings.period === 'monthly' ? 'monthly' : 'annual');
@@ -372,13 +380,27 @@ function mountBottomLine(root, ctx) {
        restart them), until they are finished or skipped */
     /* the example household is already answered: its page never asks */
     const onboarding = !!budget && budget.folder !== null && !s.onboarded && !s.sample;
-    root.classList.toggle('dc-onboarding', onboarding);
-    if (onboarding && wrap.querySelector('.dc-onb')) return;
+    /* typed numbers not finished yet: their questions come first */
+    const asking = s.dataSource === 'manual' && !s.sample && !(s.manual && s.manual.done);
+    root.classList.toggle('dc-onboarding', onboarding || asking);
+    if ((onboarding || asking) && wrap.querySelector('.dc-onb')) return;
     const scrollTop = scroller().scrollTop;
     applyWidth();
     if (flow) { flow.destroy(); flow = null; }
     clear(wrap);
     wrap.classList.toggle('dc-menu-open', menuOpen);
+    if (asking) {
+      cur = null;
+      const main = el(wrap, 'main', 'dc-main dc-main-solo');
+      renderManualForm(main, {
+        settings: s,
+        save: () => plugin.saveSettings(),
+        onDone: async () => { clear(wrap); await refresh(); scroller().scrollTop = 0; },
+        onLeave: () => plugin.setManual(false),
+      });
+      applyWidth();
+      return;
+    }
     if (!budget || budget.folder === null) { cur = null; return renderEmpty(); }
     const win = trailingWindow(now(), s.months, budget);
     const m = measure(budget.rows, budget.accounts, budget.categories, { ...win, notCardSpend: s.notCardSpend });
@@ -397,7 +419,12 @@ function mountBottomLine(root, ctx) {
       renderOnboarding(main, {
         settings: s, budget, detected, measured: m, statement: st,
         save: () => plugin.saveSettings(),
-        onDone: () => { render(); scroller().scrollTop = 0; },
+        /* typed numbers: the bank fee follows the Vitality Money answer, so
+           the months are made again */
+        onDone: async () => { if (typed()) { clear(wrap); await refresh(); } else render(); scroller().scrollTop = 0; },
+        /* typed numbers already asked the products and the bank package */
+        skip: typed() ? ['hello', 'products', 'bankKind', 'tier'] : [],
+        manual: typed(),
       });
       applyWidth();
       return;
@@ -425,6 +452,8 @@ function mountBottomLine(root, ctx) {
     else if (t === 'inputs') renderInputs(panel, view);
     else renderProduct(panel, view, view.P(t));
     renderFoot(panel, view);
+    /* typed numbers: every word about statements is said about the typed figures */
+    if (typed()) rewordTree(wrap);
     applyWidth();
     scroller().scrollTop = scrollTop;
   }
@@ -436,9 +465,32 @@ function mountBottomLine(root, ctx) {
     el(c, 'p', 'dc-empty-text', 'This reads the Budget plugin\'s Transactions folder.');
     const mb = moreIn(c, 'empty.more', 'Where it looks for the budget');
     el(mb, 'p', null, 'The notes it reads look like Transactions/<account>/<YYYY-MM>.md. Set the budget folder in this plugin\'s settings if it lives somewhere unusual.');
-    const ex = button(c, 'dc-btn dc-btn-primary dc-example-go', 'Try it with example data', () => setExample(true));
+    const ty = button(c, 'dc-btn dc-btn-primary dc-example-go dc-manual-go', 'Type in my numbers', () => plugin.setManual(true));
+    ty.id = 'dc-manual-go';
+    el(c, 'p', 'dc-empty-text', 'A rough average month, typed by you. The figures stay only in this plugin\'s settings.');
+    const ex = button(c, 'dc-btn dc-example-go', 'Try it with example data', () => setExample(true));
     ex.id = 'dc-example-go';
     el(c, 'p', 'dc-empty-text', 'A made-up household, so you can see how it works. Nothing in your vault changes.');
+  }
+
+  /* Typed numbers: the figures are a typed average month, so the pages
+     that give a verdict say so, with a way to change them. */
+  function typedStrip(parent) {
+    const h = hint(parent, 'Worked out from the rough monthly averages you typed, not from statements.', 'info');
+    h.classList.add('dc-typed-strip');
+    button(h, 'dc-link', 'Change my numbers', () => show('inputs'));
+  }
+  /* Typed numbers, and a Budget-plugin budget has appeared in the vault:
+     ask which to use, once per budget folder. */
+  function budgetFoundStrip(parent) {
+    const s = plugin.settings;
+    const found = budget && budget.budgetFound;
+    if (found === null || found === undefined || (s.manual || {}).keepTyped === found) return;
+    const h = hint(parent, `There is a Budget-plugin budget in ${found ? '"' + found + '"' : 'this vault'}. Which figures should the page use?`, 'info');
+    h.classList.add('dc-budget-found');
+    const row = el(h, 'span', 'dc-budget-found-btns');
+    button(row, 'dc-btn dc-btn-primary', 'My budget', () => plugin.setManual(false));
+    button(row, 'dc-btn', 'My typed numbers', async () => { s.manual = { ...s.manual, keepTyped: found }; await save(); });
   }
 
   /* The example household (src/example.js) goes on or off in the plugin,
@@ -485,8 +537,8 @@ function mountBottomLine(root, ctx) {
     close.setAttribute('aria-label', 'Close menu');
     renderTabs(drawer, view);
     const foot = el(drawer, 'div', 'dc-nav-foot');
-    el(foot, 'p', 'dc-nav-window', `${monthLabel(m.from)} – ${monthLabel(m.to)}`);
-    el(foot, 'p', 'dc-nav-meta', `${st.window.months} months · ${m.rowsSeen.toLocaleString('en-US').replace(/,/g, ' ')} transactions`);
+    el(foot, 'p', 'dc-nav-window', typed() ? 'Typed averages' : `${monthLabel(m.from)} – ${monthLabel(m.to)}`);
+    el(foot, 'p', 'dc-nav-meta', typed() ? 'A normal month, made into a year' : `${st.window.months} months · ${m.rowsSeen.toLocaleString('en-US').replace(/,/g, ' ')} transactions`);
     const scrim = el(shell, 'div', 'dc-nav-scrim');
     scrim.addEventListener('click', () => setMenu(false));
 
@@ -500,6 +552,7 @@ function mountBottomLine(root, ctx) {
     content.setAttribute('role', 'tabpanel');
     content.setAttribute('aria-labelledby', 'dc-tab-' + t);
     if (view.s.sample) exampleStrip(content);
+    if (typed()) budgetFoundStrip(content);
     pageHead(content, view, curTab, curP);
     /* the Overview says it with the confidence notes when there are any */
     const notes = st.confidence && st.confidence.thin && (st.confidence.notes || []).length;
@@ -554,7 +607,7 @@ function mountBottomLine(root, ctx) {
   function pageHead(content, { m, eff, st }, curTab, p) {
     const head = el(content, 'header', 'dc-head');
     const titles = el(head, 'div', 'dc-head-titles');
-    el(titles, 'p', 'dc-kicker', `${monthLabel(m.from)} – ${monthLabel(m.to)}`);
+    el(titles, 'p', 'dc-kicker', typed() ? 'Your typed averages' : `${monthLabel(m.from)} – ${monthLabel(m.to)}`);
     const row = el(titles, 'div', 'dc-title-row');
     if (p) productLogo(el(row, 'span', 'dc-tile dc-tile-lg dc-p-' + p.id), p.id);
     el(row, 'h1', 'dc-title', p ? p.name : TITLES[curTab.id]);
@@ -733,6 +786,7 @@ function mountBottomLine(root, ctx) {
       return;
     }
     noticeStrip(panel);
+    if (typed()) typedStrip(panel);
     confidenceStrip(panel, st);
     readingNotes(panel, view);
     csvNotesStrip(panel);
@@ -810,7 +864,7 @@ function mountBottomLine(root, ctx) {
     }
     if (products.bank) el(sec.sec, 'p', 'dc-small dc-def', 'After rewards means what you pay, less what comes back.');
     /* is it getting better or worse: one line, and Flows has the chart */
-    const tr = view.trend();
+    const tr = typed() ? {} : view.trend();
     if (tr.note) {
       const th = hint(panel, tr.note, 'info');
       th.classList.add('dc-trend-strip');
@@ -834,7 +888,8 @@ function mountBottomLine(root, ctx) {
      null when there is nothing to write about. */
   function summaryText() {
     if (!cur || !cur.pr.products.length) return null;
-    return summaryMarkdown({ st: cur.st, pr: cur.pr, verdicts: cur.verdicts, sw: cur.sw, s: cur.s, now: now(), market: marketAge(now()), levers: cur.levers(), version: plugin.manifest && plugin.manifest.version });
+    const text = summaryMarkdown({ st: cur.st, pr: cur.pr, verdicts: cur.verdicts, sw: cur.sw, s: cur.s, now: now(), market: marketAge(now()), levers: cur.levers(), version: plugin.manifest && plugin.manifest.version });
+    return typed() && text ? manualWords(text) : text;
   }
 
   /* One product on the Overview: a button to its tab (heading, verdict,
@@ -914,6 +969,7 @@ function mountBottomLine(root, ctx) {
     /* the prices are typed in by hand and checked twice a year: say when. Once
        they may be out of date the warning IS the visible line, with the
        reason and the way out in it; More only holds the dates. */
+    if (typed()) typedStrip(panel);
     const age = marketAge(now());
     const mb = el(panel, 'div', 'dc-market-banner dc-hint' + (age.stale ? ' is-warn is-stale' : ''));
     mb.setAttribute('role', 'status');
@@ -1171,7 +1227,8 @@ function mountBottomLine(root, ctx) {
     figure(c.fig, net, { result: net >= 0.5, label: net >= 0.5 ? `${perLabel()} better off` : perLabel() });
     const sec = el(panel, 'section', 'dc-card dc-flow-card');
     flow = mountFlow(sec, { products: pr.products, totals: pr.totals, per, perLabel, onOpen: id => show(id), open });
-    renderTrend(panel, { ...pageCtx(), trend: view.trend() });
+    /* typed numbers are the same every month: there is no change over time */
+    if (!typed()) renderTrend(panel, { ...pageCtx(), trend: view.trend() });
   }
 
   // ── a product tab ────────────────────────────────────────────────────
@@ -1473,7 +1530,9 @@ function mountBottomLine(root, ctx) {
     const body = el(row, 'div', 'dc-line-body');
     body.id = 'dc-line-' + (++lineSeq);
     head.setAttribute('aria-controls', body.id);
-    if (o.source) el(body, 'span', 'dc-badge is-' + o.source, SOURCE[o.source]);
+    /* typed numbers: what would have been read from statements was typed in */
+    const src = o.source && typed() ? typedSource(o.source) : o.source;
+    if (src) el(body, 'span', 'dc-badge is-' + src, SOURCE[src]);
     if (o.rough) el(body, 'p', 'dc-line-note', roughNote(o.rough));
     if (o.note) el(body, 'p', 'dc-line-note', o.note);
     if (o.fill) o.fill(body);
@@ -2033,19 +2092,23 @@ function mountBottomLine(root, ctx) {
     noteStrip(panel, view.issues, 'dc-status-issues', 'warn', 'statusissues.more', 'More about these statuses');
     noteStrip(panel, view.folderNote, 'dc-folder-note', 'info', 'foldernote.more', 'More about the budget folder');
     csvNotesStrip(panel);
+    if (typed()) renderTyped(panel, view);
     renderSetup(panel, view);
     const gb = inputCard(panel, 'For the whole page', null, null, 'notes.page');
     const g = el(gb, 'div', 'dc-fgrid');
     const s = plugin.settings;
-    const { f: mf, hint } = field(g, 'Months to look back');
-    const msel = el(mf, 'select', 'dc-inp dropdown');
-    /* three months is always "Not enough data": not offered (one already saved stays visible) */
-    const lengths = [6, 12, 24];
-    if (!lengths.includes(s.months)) lengths.unshift(s.months);
-    for (const n of lengths) { const o = el(msel, 'option', null, `${n} months`); o.value = String(n); }
-    msel.value = String(s.months);
-    msel.addEventListener('change', async () => { s.months = Number(msel.value); await save(); });
-    hint(`${monthLabel(view.m.from)} – ${monthLabel(view.m.to)}`);
+    /* typed numbers are one average month: there are no months to choose */
+    if (!typed()) {
+      const { f: mf, hint } = field(g, 'Months to look back');
+      const msel = el(mf, 'select', 'dc-inp dropdown');
+      /* three months is always "Not enough data": not offered (one already saved stays visible) */
+      const lengths = [6, 12, 24];
+      if (!lengths.includes(s.months)) lengths.unshift(s.months);
+      for (const n of lengths) { const o = el(msel, 'option', null, `${n} months`); o.value = String(n); }
+      msel.value = String(s.months);
+      msel.addEventListener('change', async () => { s.months = Number(msel.value); await save(); });
+      hint(`${monthLabel(view.m.from)} – ${monthLabel(view.m.to)}`);
+    }
     const { f: cf } = field(g, 'Compare with');
     const csel = el(cf, 'select', 'dc-inp dropdown');
     for (const a of view.st.alternatives) { const o = el(csel, 'option', null, a.name); o.value = a.id; }
@@ -2066,6 +2129,51 @@ function mountBottomLine(root, ctx) {
     for (const p of view.pr.products) {
       const body = inputCard(panel, p.name, p.id, p.paid, 'notes.in.' + p.id);
       INPUTS[p.id](body, view, { onInputsPage: true });
+    }
+  }
+
+  /* Your typed numbers (src/manual.js): every answer the ticked products
+     need, to change in place, and the ways to go through the questions
+     again or read a Budget-plugin budget instead. */
+  function renderTyped(panel) {
+    const s = plugin.settings;
+    s.manual = { ...s.manual };
+    const store = s.manual;
+    const body = inputCard(panel, 'Your typed numbers', null, null, 'notes.typed');
+    body.parentNode.classList.add('dc-typed');
+    fnote(body, 'A normal month, as you typed it. A blank is not counted. The figures stay in this plugin\'s settings.');
+    const onSet = () => applyManual(s);
+    for (const q of manualQuestions(s)) {
+      const g = el(body, 'div', 'dc-fgrid');
+      if (q.id === 'fees') {
+        const pub = publishedFees(s);
+        const { f, hint: fh } = field(g, 'Discovery Bank fees');
+        const sel = el(f, 'select', 'dc-inp dropdown');
+        for (const [v, text] of [['published', 'The published fee for my package'], ['typed', 'What I typed']]) { const o = el(sel, 'option', null, text); o.value = v; }
+        sel.value = store.feesHow === 'typed' ? 'typed' : 'published';
+        sel.addEventListener('change', async () => { store.feesHow = sel.value; await save(); });
+        fh(`${money(pub.total)} a month for the ${pub.label}${pub.vitalityMoney ? ', Vitality Money included' : ''}.`);
+        if (store.feesHow === 'typed') numField(g, 'Fees you pay', 'R/month', store, 'fees', onSet);
+        continue;
+      }
+      for (const f of q.fields) numField(g, f.label, q.per === 'year' ? 'R/year' : 'R/month', store, f.key, onSet, q.fields.length === 1 ? q.where : '');
+      if (q.fields.length > 1) fnote(body, q.where);
+      if (q.id === 'gap') {
+        const { f, hint: gh } = field(g, 'Part of the Discovery Health debit order?');
+        const sel = el(f, 'select', 'dc-inp dropdown');
+        for (const [v, text] of [['no', 'No, it has its own'], ['yes', 'Yes']]) { const o = el(sel, 'option', null, text); o.value = v; }
+        sel.value = store.gapInHealth ? 'yes' : 'no';
+        sel.addEventListener('change', async () => { store.gapInHealth = sel.value === 'yes'; applyManual(s); await save(); });
+        gh('Then it is counted inside the Health debit order, not twice.');
+      }
+    }
+    const again = el(body, 'div', 'dc-setup-again');
+    button(again, 'dc-btn', 'Go through the questions again', async () => { s.manual = { ...s.manual, done: false }; await plugin.saveSettings(); render(); });
+    el(again, 'span', 'dc-fld-h', 'One question at a time, with your answers filled in.');
+    if (budget && budget.budgetFound !== null && budget.budgetFound !== undefined) {
+      const use = el(body, 'div', 'dc-setup-again');
+      button(use, 'dc-btn', 'Read my budget instead', () => plugin.setManual(false));
+      el(use, 'span', 'dc-fld-h', `Your Budget-plugin budget in ${budget.budgetFound ? '"' + budget.budgetFound + '"' : 'this vault'}. Your typed numbers are kept.`);
     }
   }
 
@@ -2100,14 +2208,14 @@ function mountBottomLine(root, ctx) {
     const cond = s.conditions || {};
     const setCond = async (k, v) => { s.conditions = { ...s.conditions, [k]: v }; await save(); };
     body.parentNode.classList.add('dc-setup');
-    fnote(body, 'What you have decides which tabs show and which benefits count. The note under each product says what your statements show.');
+    fnote(body, typed() ? 'What you have decides which tabs show and which benefits count.' : 'What you have decides which tabs show and which benefits count. The note under each product says what your statements show.');
 
     const list = el(body, 'div', 'dc-setup-prods');
     for (const id of PRODUCT_IDS) {
       const { row } = checkRow(list, 'dc-setup-prod dc-p-' + id, products[id], async on => { s.products = { ...s.products, [id]: on }; await save(); });
       const t = el(row, 'span', 'dc-setup-prod-t');
       el(t, 'span', 'dc-fld-l', PRODUCT_NAMES[id]);
-      if ((detected[id] || {}).why) el(t, 'span', 'dc-fld-h', detected[id].why);
+      if (!typed() && (detected[id] || {}).why) el(t, 'span', 'dc-fld-h', detected[id].why);
     }
 
     const yesNo = (g, key, label, hint) => {
@@ -2128,7 +2236,7 @@ function mountBottomLine(root, ctx) {
       for (const k of Object.keys(KIND_LABELS)) { const o = el(ksel, 'option', null, KIND_LABELS[k]); o.value = k; }
       ksel.value = kind;
       ksel.addEventListener('change', async () => { s.bankKind = ksel.value; await save(); });
-      kh((banking.why || '') + (s.bankKind ? '' : banking.kind ? ' Read from your account notes. Choose one to confirm it.' : ' You have not said which one yet, so it is counted as the all-in-one package.'));
+      if (!typed()) kh((banking.why || '') + (s.bankKind ? '' : banking.kind ? ' Read from your account notes. Choose one to confirm it.' : ' You have not said which one yet, so it is counted as the all-in-one package.'));
       if (kind !== 'savings') {
         const tiers = kind === 'card' ? SUITES.filter(t => t.creditCard) : SUITES;
         const { f: tf } = field(g, kind === 'card' ? 'Which package is your credit card?' : 'Which Suite?');
@@ -2145,7 +2253,7 @@ function mountBottomLine(root, ctx) {
         fsel.addEventListener('change', async () => { s.bankFees = fsel.value; await save(); });
         fh('Bundled fees give you a set number of payments for a monthly fee. Pay as you transact charges for each payment.');
       }
-      yesNo(g, 'money', 'Vitality Money', banking.vitalityMoney ? 'Vitality Money premiums show in your statements.' : 'No Vitality Money premium shows in your statements.');
+      yesNo(g, 'money', 'Vitality Money', typed() ? '' : banking.vitalityMoney ? 'Vitality Money premiums show in your statements.' : 'No Vitality Money premium shows in your statements.');
       if (vitality.money) statusSelect(g, 'money', 'Your bank score (Vitality Money status)');
       if (st.mileSource === 'statement') {
         const { f, hint: mh } = field(body, 'How you spend your Miles');

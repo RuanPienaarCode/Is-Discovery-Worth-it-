@@ -3,7 +3,8 @@ const { Plugin, Notice, normalizePath } = require('obsidian');
 const { VIEW_TYPE, DEFAULT_SETTINGS } = require('./constants');
 const { BottomLineView } = require('./view');
 const { SettingsTab } = require('./settings-tab');
-const { loadBudget } = require('./load');
+const { loadBudget, budgetCandidates } = require('./load');
+const { manualSource, MANUAL_FOLDER, MANUAL_DEFAULTS, applyManual } = require('./manual');
 const { sampleSource, SAMPLE_FOLDER } = require('./sample');
 const { enterExample, leaveExample } = require('./example');
 const { saveSummary } = require('./summary-note');
@@ -16,6 +17,7 @@ function mergeSettings(saved) {
   /* a window of 3 months is no longer offered (it is always "Not enough data") */
   if (!(Number(out.months) >= 6)) out.months = 6;
   for (const k of ['status', 'rates', 'actualMiles', 'travel', 'members', 'quotes', 'products', 'benefits', 'vitality', 'conditions', 'health', 'life', 'home', 'bill']) out[k] = { ...DEFAULT_SETTINGS[k], ...((saved || {})[k] || {}) };
+  out.manual = { ...MANUAL_DEFAULTS, ...((saved || {}).manual || {}) };
   return out;
 }
 
@@ -30,6 +32,7 @@ class DiscoveryWorthItPlugin extends Plugin {
     this.addRibbonIcon('calculator', 'Is Discovery worth it?', () => this.openView());
     this.addCommand({ id: 'open', name: 'Open', callback: () => this.openView() });
     this.addCommand({ id: 'example', name: 'Try it with example data', callback: async () => { await this.setExample(true); await this.openView(); } });
+    this.addCommand({ id: 'type-numbers', name: 'Type in my numbers', callback: async () => { await this.setManual(true); await this.openView(); } });
     this.addCommand({ id: 'save-summary', name: 'Save a summary note', callback: () => this.saveSummaryFromView() });
     this.addSettingTab(new SettingsTab(this.app, this));
     /* Re-read when a budget note or a CSV changes — not any note in the
@@ -37,6 +40,12 @@ class DiscoveryWorthItPlugin extends Plugin {
     const touched = f => {
       /* the example household never reads the vault */
       if (!f || !f.path || this.settings.sample) return;
+      /* typed numbers: a Miles CSV still counts, and a budget that appears
+         is offered (bottom-line.js) */
+      if (this.settings.dataSource === 'manual') {
+        if (/\.csv$/i.test(f.path) || /(^|\/)Transactions\/[^/]+\/\d{4}-\d\d\.md$/.test(f.path)) this.scheduleRefresh(1500);
+        return;
+      }
       const inBudget = this.budgetFolder !== undefined && this.budgetFolder !== null && f.path.startsWith(this.budgetFolder ? this.budgetFolder + '/' : '');
       if (/\.csv$/i.test(f.path) || (/\.md$/i.test(f.path) && inBudget)) this.scheduleRefresh(1500);
     };
@@ -60,6 +69,17 @@ class DiscoveryWorthItPlugin extends Plugin {
     if (this.settings.sample) return loadBudget(sampleSource(new Date()), SAMPLE_FOLDER);
     const vault = this.app.vault;
     const files = new Map(vault.getFiles().filter(f => f.extension === 'md' || f.extension === 'csv').map(f => [f.path, f]));
+    /* typed numbers: twelve made months from the answers, plus the vault's
+       Miles CSVs; and whether a Budget-plugin budget has appeared since */
+    if (this.settings.dataSource === 'manual') {
+      const vaultSource = { paths: () => [...files.keys()], read: p => vault.cachedRead(files.get(p)), stat: p => files.get(p).stat };
+      const b = await loadBudget(manualSource(this.settings, new Date(), vaultSource), MANUAL_FOLDER);
+      const found = budgetCandidates([...files.keys()].filter(p => /\.md$/i.test(p)))[0];
+      b.manual = true;
+      b.budgetFound = found ? found.folder : null;
+      this.budgetFolder = null;
+      return b;
+    }
     /* the folder as typed in settings, tidied the way Obsidian tidies paths
        (stray slashes, a leading slash); blank stays blank so it is searched for */
     const typed = String(this.settings.budgetFolder || '').trim();
@@ -75,6 +95,18 @@ class DiscoveryWorthItPlugin extends Plugin {
   async setExample(on, now) {
     if (!!on === !!this.settings.sample) return;
     this.settings = mergeSettings(on ? enterExample(this.settings, now || new Date()) : leaveExample(this.settings));
+    await this.saveSettings();
+    this.refreshViews();
+  }
+
+  /* Typed numbers on or off. On: the page asks for them (src/manual-form.js)
+     and works from them; the answers already typed are kept. Off: the page
+     reads the vault's Budget-plugin budget again; the typed answers stay in
+     settings, ready if it is turned on again. Leaves the example first. */
+  async setManual(on) {
+    if (this.settings.sample) this.settings = mergeSettings(leaveExample(this.settings));
+    this.settings.dataSource = on ? 'manual' : '';
+    if (on) applyManual(this.settings);
     await this.saveSettings();
     this.refreshViews();
   }

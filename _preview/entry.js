@@ -30,6 +30,10 @@
      ?sample=1     start in the example household ("Try it with example data"
                    already pressed); with ?empty=1 "Leave the example" returns
                    to the empty screen
+     ?typed=1      typed numbers ("Type in my numbers" already answered with
+                   made-up figures, the first-run questions done); with
+                   ?empty=1 the vault has no budget, without it the budget
+                   is there too (the "which figures" question shows)
      ?check=1      walk every visible tab at the current width and report
                    sideways scroll, labels over amounts, tap targets under
                    44px, flow text that an SVG clips or overlaps, cards that
@@ -43,6 +47,8 @@ const { loadBudget } = require('../src/load');
 const { DEFAULT_SETTINGS } = require('../src/constants');
 const { sampleFiles, sampleSettings, sampleSource, SAMPLE_FOLDER } = require('../src/sample');
 const { enterExample, leaveExample } = require('../src/example');
+const { manualSource, MANUAL_FOLDER, MANUAL_DEFAULTS, applyManual } = require('../src/manual');
+const { budgetCandidates } = require('../src/load');
 const { saveSummary } = require('../src/summary-note');
 const { Notice } = require('obsidian');
 const { makeFontLoader } = require('../src/font-loader');
@@ -83,6 +89,16 @@ if (ONBOARD) {
   settings = { ...sampleSettings(NOW, OPTS), ...ui0 };
 }
 
+/* ?typed=1: a made-up household typed in by hand (round numbers, never real) */
+if (q.get('typed')) {
+  settings = { ...JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), ...ui0, onboarded: true, dataSource: 'manual',
+    products: { bank: true, health: true, gap: true, insure: true, life: true }, bankKind: 'suite', suite: 'Platinum', suiteAnswered: true,
+    vitality: { money: true, health: true, drive: true }, status: { money: 'Gold', health: 'Silver', drive: 'Blue' },
+    members: { adults: 2, children: 2, oldestAge: 40 }, conditions: { checks: 'one', gym36: true, insurePlan: 'classic', homeCover: 'none' },
+    manual: { ...MANUAL_DEFAULTS, done: true, cardSpend: 12000, checkers: 2500, woolworths: 1200, pnp: 800, clicks: 350, dischem: 0, fuel: 1800,
+      interest: 15, health: 6200, claims: 2400, gym: 400, flights: 4800, gap: 220, gapInHealth: true, insure: 1300, life: 700 } };
+  applyManual(settings);
+}
 if (q.get('pal')) settings.palette = q.get('pal');
 /* ?sample=1: the example is already on, over the fresh settings */
 if (q.get('sample')) settings = enterExample({ ...JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), ...ui0, welcome: ui0.welcome }, NOW);
@@ -108,10 +124,27 @@ const plugin = {
     const path = await saveSummary(vault, plugin.settings.summaryFolder, now || NOW, text);
     new Notice('Saved ' + path);
   },
+  /* the same move main.js makes: typed numbers on or off */
+  async setManual(on) {
+    if (plugin.settings.sample) plugin.settings = { ...JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), ...leaveExample(plugin.settings) };
+    plugin.settings.dataSource = on ? 'manual' : '';
+    plugin.settings.manual = { ...MANUAL_DEFAULTS, ...(plugin.settings.manual || {}) };
+    if (on) applyManual(plugin.settings);
+    await plugin.saveSettings();
+    await ui.refresh();
+  },
   async readBudget() {
     if (plugin.settings.sample) return loadBudget(sampleSource(NOW), SAMPLE_FOLDER);
     const paths = vault.getFiles().map(f => f.path).filter(p => /\.(md|csv)$/.test(p));
-    return loadBudget({ paths: () => paths, read: async p => vault.files.get(p), stat: p => ({ mtime: 1, size: p === BIG ? 6 * 1048576 : (vault.files.get(p) || '').length }) }, plugin.settings.budgetFolder);
+    const source = { paths: () => paths, read: async p => vault.files.get(p), stat: p => ({ mtime: 1, size: p === BIG ? 6 * 1048576 : (vault.files.get(p) || '').length }) };
+    if (plugin.settings.dataSource === 'manual') {
+      const b = await loadBudget(manualSource(plugin.settings, NOW, source), MANUAL_FOLDER);
+      const found = budgetCandidates(paths.filter(p => /\.md$/.test(p)))[0];
+      b.manual = true;
+      b.budgetFound = found ? found.folder : null;
+      return b;
+    }
+    return loadBudget(source, plugin.settings.budgetFolder);
   },
 };
 const root = document.getElementById('page');

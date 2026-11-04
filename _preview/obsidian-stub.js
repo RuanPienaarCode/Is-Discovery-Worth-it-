@@ -34,6 +34,7 @@ const PATHS = {
   'shield-check': 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4',
   car: 'M19 17h2v-4l-2-5H5L3 13v4h2M7 17h10M7 17a2 2 0 1 0 0 .1M17 17a2 2 0 1 0 0 .1',
   umbrella: 'M22 12a10 10 0 0 0-20 0zM12 12v8a2 2 0 0 0 4 0M12 2v1',
+  search: 'M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM21 21l-4.3-4.3',
 };
 export function setIcon(node, name) {
   const d = PATHS[name];
