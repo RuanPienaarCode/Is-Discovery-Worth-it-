@@ -10,6 +10,20 @@ No account, no network, no telemetry and no AI. Everything is worked out on your
 
 The plugin is free. It gives no financial advice: it shows calculations from your own statements and published prices, and never tells you to buy, change, replace or cancel a product. The decision is yours.
 
+## What it looks like
+
+![The Overview tab: a verdict for each Discovery product, and the whole Discovery bill against what comes back](docs/screenshots/overview.png)
+
+![The Compare tab: staying with Discovery next to moving everything, with a total for both](docs/screenshots/compare.png)
+
+![The Benefits tab: mark each benefit as used, sometimes or not for you, and only what you use counts](docs/screenshots/benefits.png)
+
+<img src="docs/screenshots/phone-overview.png" width="300" alt="The Overview tab on a phone">
+
+![The Overview tab in dark mode](docs/screenshots/overview-dark.png)
+
+Screens show a made-up example household.
+
 ## What you need
 
 - **The Budget plugin** (id `budget-app`) with your bank statements imported. This plugin reads its notes: `Transactions/<account>/<YYYY-MM>.md`, with `Accounts/` and `Categories/` beside them. Without them it finds no budget and says so.
