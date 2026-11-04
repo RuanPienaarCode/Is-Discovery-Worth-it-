@@ -1,7 +1,7 @@
 {
   "id": "discovery-worth-it",
   "name": "Is Discovery Worth It",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "minAppVersion": "1.8.0",
   "description": "Shows whether each Discovery product is worth what you pay, using your own Budget notes and only the benefits you actually use.",
   "author": "Ruan Pienaar",

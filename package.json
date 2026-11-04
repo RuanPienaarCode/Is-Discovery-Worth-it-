@@ -1,6 +1,6 @@
 {
   "name": "discovery-worth-it",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Is Discovery worth it for you? Weighs what each Discovery product costs against the benefits you actually use.",
   "private": true,
   "license": "AGPL-3.0-only",
