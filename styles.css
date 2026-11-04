@@ -1378,6 +1378,377 @@
 .dc-onb .dc-onb-more-body { padding: 8px 10px; border-radius: 8px; background: var(--dc-surface-2); }
 .dc-onb .dc-onb-more-body[hidden] { display: none; }
 
+/* ── colour palettes (src/palettes.js) ──────────────────────────────────
+   Five palettes to choose from, beside the page's own Discovery colours
+   (src/styles.css, still the default). A palette is two classes on
+   .dc-page, set from the Colours setting: dc-pal (any new palette) and
+   dc-pal-<id> (its tokens). Each palette sets every colour token for dark
+   (.dc-page.dc-pal-<id>, which ties .theme-light .dc-page and wins by
+   coming later) and for light (.theme-light .dc-page.dc-pal-<id>).
+   Colour only: layout, type, spacing and words are untouched.
+   Every text colour is 4.5:1 or better and every shape 3:1 or better on
+   the surfaces it sits on, light and dark (tests/palettes.test.cjs).
+   The new palettes have no coloured glows: no glow on the brand mark or
+   the open-page marker, no tinted washes behind the rail, the page or the
+   welcome, no pulse on the welcome button, and plain dark button shadows. */
+
+/* results: the better-off and worse-off tints follow the palette */
+.dc-page.dc-pal .dc-pill.is-good { background: rgba(var(--dc-pos-rgb), 0.14); }
+.dc-page.dc-pal .dc-pill.is-over, .dc-page.dc-pal .dc-pill.is-none { background: rgba(var(--dc-neg-rgb), 0.16); }
+.theme-light .dc-page.dc-pal .dc-pill.is-good { background: rgba(var(--dc-pos-rgb), 0.1); }
+.theme-light .dc-page.dc-pal .dc-pill.is-over, .theme-light .dc-page.dc-pal .dc-pill.is-none { background: rgba(var(--dc-neg-rgb), 0.08); }
+.dc-page.dc-pal .dc-sw-side.is-win { border-color: rgba(var(--dc-pos-rgb), 0.55); }
+.theme-light .dc-page.dc-pal .dc-sw-side.is-win { border-color: rgba(var(--dc-pos-rgb), 0.45); }
+
+/* no washes: the rail, the page and the welcome sit on their plain colour */
+.dc-page.dc-pal .dc-nav { background: var(--dc-rail); }
+.dc-page.dc-pal .dc-stage { background: var(--dc-bg); }
+.dc-page.dc-pal .dc-welcome.dc-hello { background: var(--dc-bg); }
+
+/* no glows */
+.dc-page.dc-pal .dc-brand .dc-brand-mark { filter: none; }
+.dc-page.dc-pal button.dc-tab.is-active::before { box-shadow: none; }
+.theme-light .dc-page.dc-pal button.dc-tab.is-active::before { box-shadow: none; }
+.dc-page.dc-pal button.dc-seg-btn[aria-pressed="true"] { box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.45); }
+.dc-page.dc-pal .dc-ben .dc-ben-opt.is-on .dc-ben-opt-t { box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.45); }
+.dc-page.dc-pal .dc-onb button.dc-onb-btn.is-primary { box-shadow: 0 8px 22px -10px rgba(0, 0, 0, 0.5); }
+.dc-page.dc-pal button.dc-hello-go { animation: dc-hello-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 1.4s both; }
+@media (hover: hover) { .dc-page.dc-pal button.dc-hello-go:hover { box-shadow: 0 10px 28px -8px rgba(0, 0, 0, 0.5); } }
+
+/* the dark rail's small labels, a touch brighter for room above 4.5:1 */
+.theme-dark .dc-page.dc-pal .dc-nav-label { color: rgba(255, 255, 255, 0.5); }
+
+/* Sunrise — bright and friendly: Warm cream and tangerine, like early morning light. */
+.dc-page.dc-pal-sunrise {
+  --dc-bg: #1a120d;
+  --dc-rail: #120c08;
+  --dc-surface: #231912;
+  --dc-surface-2: #2d2118;
+  --dc-surface-3: #382a1f;
+  --dc-line: rgba(255, 240, 225, 0.08);
+  --dc-line-2: rgba(255, 240, 225, 0.14);
+  --dc-text: #fbefe4;
+  --dc-text-2: #e3cdbb;
+  --dc-muted: #b39a87;
+  --dc-accent: #ff8a3d;
+  --dc-accent-rgb: 255, 138, 61;
+  --dc-accent-ink: #ffa060;
+  --dc-navy: #c2410c;
+  --dc-navy-2: #c64c0e;
+  --dc-pink: #ff6b45;
+  --dc-pink-rgb: 255, 107, 69;
+  --dc-pos: #7dd87f;
+  --dc-pos-rgb: 125, 216, 127;
+  --dc-neg: #ff8a80;
+  --dc-neg-rgb: 255, 138, 128;
+  --dc-amber: #ffc56b;
+  --dc-amber-rgb: 255, 197, 107;
+  --c-bank: #7b9cff; --c-bank-ink: #7b9cff; --c-bank-rgb: 123, 156, 255;
+  --c-health: #9ccc5a; --c-health-ink: #9ccc5a; --c-health-rgb: 156, 204, 90;
+  --c-gap: #ffc93c; --c-gap-ink: #ffc93c; --c-gap-rgb: 255, 201, 60;
+  --c-insure: #3fd0c8; --c-insure-ink: #3fd0c8; --c-insure-rgb: 63, 208, 200;
+  --c-life: #ff7aa8; --c-life-ink: #ff7aa8; --c-life-rgb: 255, 122, 168;
+  --dc-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.8);
+  --checkbox-border-color: rgba(255, 240, 225, 0.45);
+}
+.theme-light .dc-page.dc-pal-sunrise {
+  --dc-bg: #fff7ef;
+  --dc-rail: #ffffff;
+  --dc-surface: #ffffff;
+  --dc-surface-2: #fdeee0;
+  --dc-surface-3: #f9e2cf;
+  --dc-line: rgba(74, 40, 16, 0.1);
+  --dc-line-2: rgba(74, 40, 16, 0.18);
+  --dc-text: #2b1b10;
+  --dc-text-2: #4d3527;
+  --dc-muted: #80604c;
+  --dc-accent: #e3600c;
+  --dc-accent-rgb: 227, 96, 12;
+  --dc-accent-ink: #b84a08;
+  --dc-navy: #c2410c;
+  --dc-navy-2: #c55010;
+  --dc-pink: #f2542d;
+  --dc-pink-rgb: 242, 84, 45;
+  --dc-pos: #2b722e;
+  --dc-pos-rgb: 43, 114, 46;
+  --dc-neg: #be2626;
+  --dc-neg-rgb: 190, 38, 38;
+  --dc-amber: #8d5000;
+  --dc-amber-rgb: 141, 80, 0;
+  --c-bank: #3f6fe0; --c-bank-ink: #2257d4; --c-bank-rgb: 63, 111, 224;
+  --c-health: #5a9629; --c-health-ink: #426e1e; --c-health-rgb: 90, 150, 41;
+  --c-gap: #b38000; --c-gap-ink: #805c00; --c-gap-rgb: 179, 128, 0;
+  --c-insure: #0d9691; --c-insure-ink: #096c68; --c-insure-rgb: 13, 150, 145;
+  --c-life: #d63c78; --c-life-ink: #b4265d; --c-life-rgb: 214, 60, 120;
+  --dc-shadow: 0 4px 20px rgba(120, 60, 20, 0.07);
+  --checkbox-border-color: #80604c;
+}
+
+/* Meadow — bright and friendly: Fresh greens and sky blue, like a field in spring. */
+.dc-page.dc-pal-meadow {
+  --dc-bg: #0d1610;
+  --dc-rail: #08100b;
+  --dc-surface: #132017;
+  --dc-surface-2: #1a2a1f;
+  --dc-surface-3: #223527;
+  --dc-line: rgba(225, 245, 228, 0.08);
+  --dc-line-2: rgba(225, 245, 228, 0.14);
+  --dc-text: #ecf7ee;
+  --dc-text-2: #c6dccb;
+  --dc-muted: #8fab96;
+  --dc-accent: #5cd27a;
+  --dc-accent-rgb: 92, 210, 122;
+  --dc-accent-ink: #7ce095;
+  --dc-navy: #237a35;
+  --dc-navy-2: #29843b;
+  --dc-pink: #ff8a66;
+  --dc-pink-rgb: 255, 138, 102;
+  --dc-pos: #7ee0a0;
+  --dc-pos-rgb: 126, 224, 160;
+  --dc-neg: #ff8f84;
+  --dc-neg-rgb: 255, 143, 132;
+  --dc-amber: #ffcf6b;
+  --dc-amber-rgb: 255, 207, 107;
+  --c-bank: #8a98ff; --c-bank-ink: #8a98ff; --c-bank-rgb: 138, 152, 255;
+  --c-health: #3fd6c2; --c-health-ink: #3fd6c2; --c-health-rgb: 63, 214, 194;
+  --c-gap: #c49bff; --c-gap-ink: #c49bff; --c-gap-rgb: 196, 155, 255;
+  --c-insure: #5cb8ff; --c-insure-ink: #5cb8ff; --c-insure-rgb: 92, 184, 255;
+  --c-life: #ffb84d; --c-life-ink: #ffb84d; --c-life-rgb: 255, 184, 77;
+  --dc-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.8);
+  --checkbox-border-color: rgba(225, 245, 228, 0.45);
+}
+.theme-light .dc-page.dc-pal-meadow {
+  --dc-bg: #f3f9f2;
+  --dc-rail: #ffffff;
+  --dc-surface: #ffffff;
+  --dc-surface-2: #e7f3e5;
+  --dc-surface-3: #d8ebd5;
+  --dc-line: rgba(20, 50, 25, 0.1);
+  --dc-line-2: rgba(20, 50, 25, 0.18);
+  --dc-text: #14251a;
+  --dc-text-2: #2f4636;
+  --dc-muted: #56705c;
+  --dc-accent: #2e9a42;
+  --dc-accent-rgb: 46, 154, 66;
+  --dc-accent-ink: #237a35;
+  --dc-navy: #237a35;
+  --dc-navy-2: #29843b;
+  --dc-pink: #ef6033;
+  --dc-pink-rgb: 239, 96, 51;
+  --dc-pos: #1d7236;
+  --dc-pos-rgb: 29, 114, 54;
+  --dc-neg: #b53628;
+  --dc-neg-rgb: 181, 54, 40;
+  --dc-amber: #865600;
+  --dc-amber-rgb: 134, 86, 0;
+  --c-bank: #4c5fe8; --c-bank-ink: #354be5; --c-bank-rgb: 76, 95, 232;
+  --c-health: #0f968a; --c-health-ink: #0b6c64; --c-health-rgb: 15, 150, 138;
+  --c-gap: #9b5de5; --c-gap-ink: #8031de; --c-gap-rgb: 155, 93, 229;
+  --c-insure: #1d8cdc; --c-insure-ink: #1567a1; --c-insure-rgb: 29, 140, 220;
+  --c-life: #c17700; --c-life-ink: #895400; --c-life-rgb: 193, 119, 0;
+  --dc-shadow: 0 4px 20px rgba(30, 80, 40, 0.07);
+  --checkbox-border-color: #56705c;
+}
+
+/* Onyx and gold — premium and dark: Near-black and warm gold, with jewel colours for the products. */
+.dc-page.dc-pal-onyx {
+  --dc-bg: #0b0b0c;
+  --dc-rail: #070707;
+  --dc-surface: #141415;
+  --dc-surface-2: #1b1b1d;
+  --dc-surface-3: #232326;
+  --dc-line: rgba(255, 250, 235, 0.08);
+  --dc-line-2: rgba(255, 250, 235, 0.14);
+  --dc-text: #f4f1ea;
+  --dc-text-2: #d2cbbd;
+  --dc-muted: #9c9483;
+  --dc-accent: #d4a843;
+  --dc-accent-rgb: 212, 168, 67;
+  --dc-accent-ink: #e6c068;
+  --dc-navy: #7a5a12;
+  --dc-navy-2: #8c6816;
+  --dc-pink: #e0b44e;
+  --dc-pink-rgb: 224, 180, 78;
+  --dc-pos: #6fd3a2;
+  --dc-pos-rgb: 111, 211, 162;
+  --dc-neg: #ff8a7a;
+  --dc-neg-rgb: 255, 138, 122;
+  --dc-amber: #f2c66b;
+  --dc-amber-rgb: 242, 198, 107;
+  --c-bank: #6f97ff; --c-bank-ink: #6f97ff; --c-bank-rgb: 111, 151, 255;
+  --c-health: #4fd19a; --c-health-ink: #4fd19a; --c-health-rgb: 79, 209, 154;
+  --c-gap: #b28cff; --c-gap-ink: #b28cff; --c-gap-rgb: 178, 140, 255;
+  --c-insure: #46c8d6; --c-insure-ink: #46c8d6; --c-insure-rgb: 70, 200, 214;
+  --c-life: #ff7a96; --c-life-ink: #ff7a96; --c-life-rgb: 255, 122, 150;
+  --dc-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.9);
+  --checkbox-border-color: rgba(255, 250, 235, 0.45);
+}
+.theme-light .dc-page.dc-pal-onyx {
+  --dc-bg: #f7f4ee;
+  --dc-rail: #fffdf9;
+  --dc-surface: #fffdf9;
+  --dc-surface-2: #efe9de;
+  --dc-surface-3: #e5ddcf;
+  --dc-line: rgba(40, 32, 18, 0.1);
+  --dc-line-2: rgba(40, 32, 18, 0.18);
+  --dc-text: #1c1a16;
+  --dc-text-2: #3d3830;
+  --dc-muted: #6b6252;
+  --dc-accent: #a67c1f;
+  --dc-accent-rgb: 166, 124, 31;
+  --dc-accent-ink: #7d5c10;
+  --dc-navy: #7a5a12;
+  --dc-navy-2: #8c6816;
+  --dc-pink: #b08328;
+  --dc-pink-rgb: 176, 131, 40;
+  --dc-pos: #1a6a47;
+  --dc-pos-rgb: 26, 106, 71;
+  --dc-neg: #b3261e;
+  --dc-neg-rgb: 179, 38, 30;
+  --dc-amber: #805000;
+  --dc-amber-rgb: 128, 80, 0;
+  --c-bank: #2f5fc4; --c-bank-ink: #2b57b4; --c-bank-rgb: 47, 95, 196;
+  --c-health: #16855c; --c-health-ink: #126b4a; --c-health-rgb: 22, 133, 92;
+  --c-gap: #7d4fc0; --c-gap-ink: #7041b5; --c-gap-rgb: 125, 79, 192;
+  --c-insure: #0f7f8c; --c-insure-ink: #0c6670; --c-insure-rgb: 15, 127, 140;
+  --c-life: #b8324f; --c-life-ink: #a42d46; --c-life-rgb: 184, 50, 79;
+  --dc-shadow: 0 4px 20px rgba(40, 30, 10, 0.07);
+  --checkbox-border-color: #6b6252;
+}
+
+/* Plum — premium and dark: Deep aubergine and soft lilac, with pastel products. */
+.dc-page.dc-pal-plum {
+  --dc-bg: #150e1b;
+  --dc-rail: #0e0913;
+  --dc-surface: #1d1424;
+  --dc-surface-2: #26192f;
+  --dc-surface-3: #30203b;
+  --dc-line: rgba(245, 230, 255, 0.08);
+  --dc-line-2: rgba(245, 230, 255, 0.14);
+  --dc-text: #f5eefa;
+  --dc-text-2: #d9c9e3;
+  --dc-muted: #a690b3;
+  --dc-accent: #b98af0;
+  --dc-accent-rgb: 185, 138, 240;
+  --dc-accent-ink: #cfa8ff;
+  --dc-navy: #6c3399;
+  --dc-navy-2: #7a3cab;
+  --dc-pink: #f07fb0;
+  --dc-pink-rgb: 240, 127, 176;
+  --dc-pos: #74d9ad;
+  --dc-pos-rgb: 116, 217, 173;
+  --dc-neg: #ff8f9c;
+  --dc-neg-rgb: 255, 143, 156;
+  --dc-amber: #f5c76e;
+  --dc-amber-rgb: 245, 199, 110;
+  --c-bank: #f29a76; --c-bank-ink: #f29a76; --c-bank-rgb: 242, 154, 118;
+  --c-health: #5ec8a0; --c-health-ink: #5ec8a0; --c-health-rgb: 94, 200, 160;
+  --c-gap: #f07fae; --c-gap-ink: #f07fae; --c-gap-rgb: 240, 127, 174;
+  --c-insure: #7fa8f0; --c-insure-ink: #7fa8f0; --c-insure-rgb: 127, 168, 240;
+  --c-life: #e6b450; --c-life-ink: #e6b450; --c-life-rgb: 230, 180, 80;
+  --dc-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.85);
+  --checkbox-border-color: rgba(245, 230, 255, 0.45);
+}
+.theme-light .dc-page.dc-pal-plum {
+  --dc-bg: #f8f4fa;
+  --dc-rail: #ffffff;
+  --dc-surface: #ffffff;
+  --dc-surface-2: #f0e8f4;
+  --dc-surface-3: #e5d9ec;
+  --dc-line: rgba(50, 20, 60, 0.1);
+  --dc-line-2: rgba(50, 20, 60, 0.18);
+  --dc-text: #22152a;
+  --dc-text-2: #43314d;
+  --dc-muted: #6e5a79;
+  --dc-accent: #8b4fc7;
+  --dc-accent-rgb: 139, 79, 199;
+  --dc-accent-ink: #7036a8;
+  --dc-navy: #5b2a86;
+  --dc-navy-2: #6c3399;
+  --dc-pink: #c2417f;
+  --dc-pink-rgb: 194, 65, 127;
+  --dc-pos: #1a6e4c;
+  --dc-pos-rgb: 26, 110, 76;
+  --dc-neg: #b8283c;
+  --dc-neg-rgb: 184, 40, 60;
+  --dc-amber: #855200;
+  --dc-amber-rgb: 133, 82, 0;
+  --c-bank: #d0603a; --c-bank-ink: #9d4425; --c-bank-rgb: 208, 96, 58;
+  --c-health: #1f8f6c; --c-health-ink: #176950; --c-health-rgb: 31, 143, 108;
+  --c-gap: #c43f86; --c-gap-ink: #9f316c; --c-gap-rgb: 196, 63, 134;
+  --c-insure: #3d6fd6; --c-insure-ink: #2859bd; --c-insure-rgb: 61, 111, 214;
+  --c-life: #b07a00; --c-life-ink: #7d5700; --c-life-rgb: 176, 122, 0;
+  --dc-shadow: 0 4px 20px rgba(60, 20, 80, 0.07);
+  --checkbox-border-color: #6e5a79;
+}
+
+/* Graphite — clean and minimal: Black, white and grey with one cobalt blue; quiet product colours. */
+.dc-page.dc-pal-graphite {
+  --dc-bg: #0f0f11;
+  --dc-rail: #09090b;
+  --dc-surface: #17171a;
+  --dc-surface-2: #1f1f23;
+  --dc-surface-3: #28282d;
+  --dc-line: rgba(255, 255, 255, 0.08);
+  --dc-line-2: rgba(255, 255, 255, 0.14);
+  --dc-text: #f2f2f3;
+  --dc-text-2: #cfcfd4;
+  --dc-muted: #9a9aa3;
+  --dc-accent: #6b8cff;
+  --dc-accent-rgb: 107, 140, 255;
+  --dc-accent-ink: #8ea7ff;
+  --dc-navy: #2f5be0;
+  --dc-navy-2: #3a66ea;
+  --dc-pink: #6b8cff;
+  --dc-pink-rgb: 107, 140, 255;
+  --dc-pos: #6fcf97;
+  --dc-pos-rgb: 111, 207, 151;
+  --dc-neg: #ff8577;
+  --dc-neg-rgb: 255, 133, 119;
+  --dc-amber: #e8c06a;
+  --dc-amber-rgb: 232, 192, 106;
+  --c-bank: #8ea6d6; --c-bank-ink: #8ea6d6; --c-bank-rgb: 142, 166, 214;
+  --c-health: #86c2a9; --c-health-ink: #86c2a9; --c-health-rgb: 134, 194, 169;
+  --c-gap: #b9a0cc; --c-gap-ink: #b9a0cc; --c-gap-rgb: 185, 160, 204;
+  --c-insure: #7fbccc; --c-insure-ink: #7fbccc; --c-insure-rgb: 127, 188, 204;
+  --c-life: #d1ae6b; --c-life-ink: #d1ae6b; --c-life-rgb: 209, 174, 107;
+  --dc-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.85);
+  --checkbox-border-color: rgba(255, 255, 255, 0.45);
+}
+.theme-light .dc-page.dc-pal-graphite {
+  --dc-bg: #f6f6f7;
+  --dc-rail: #ffffff;
+  --dc-surface: #ffffff;
+  --dc-surface-2: #efeff1;
+  --dc-surface-3: #e4e4e7;
+  --dc-line: rgba(20, 20, 24, 0.1);
+  --dc-line-2: rgba(20, 20, 24, 0.18);
+  --dc-text: #18181b;
+  --dc-text-2: #3f3f46;
+  --dc-muted: #63636b;
+  --dc-accent: #2f5be0;
+  --dc-accent-rgb: 47, 91, 224;
+  --dc-accent-ink: #244bc2;
+  --dc-navy: #18181b;
+  --dc-navy-2: #2c2c31;
+  --dc-pink: #2f5be0;
+  --dc-pink-rgb: 47, 91, 224;
+  --dc-pos: #1c6e3f;
+  --dc-pos-rgb: 28, 110, 63;
+  --dc-neg: #b42318;
+  --dc-neg-rgb: 180, 35, 24;
+  --dc-amber: #805300;
+  --dc-amber-rgb: 128, 83, 0;
+  --c-bank: #4d6a9e; --c-bank-ink: #455e8d; --c-bank-rgb: 77, 106, 158;
+  --c-health: #4d8a73; --c-health-ink: #3b6958; --c-health-rgb: 77, 138, 115;
+  --c-gap: #86689a; --c-gap-ink: #715782; --c-gap-rgb: 134, 104, 154;
+  --c-insure: #3f8396; --c-insure-ink: #316776; --c-insure-rgb: 63, 131, 150;
+  --c-life: #a07c38; --c-life-ink: #765c29; --c-life-rgb: 160, 124, 56;
+  --dc-shadow: 0 4px 20px rgba(20, 20, 24, 0.06);
+  --checkbox-border-color: #63636b;
+}
+
+
 /* ── Touch screens at any width ──────────────────────────────────────────
    A phone held sideways (an iPhone 11 is 896px wide in landscape) gets the
    wide layout, but it is still tapped with a finger: the controls keep the

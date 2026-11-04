@@ -27,6 +27,7 @@ const { RATES, SUITES, rate, sourceText, suiteOf, bankProductOf } = require('./r
 const { renderWelcome, stopWelcome, NOTICE_LINE, noticeMore } = require('./welcome');
 const { productLogo } = require('./logos');
 const { drawMark } = require('./art');
+const { PALETTES, paletteOf, applyPalette } = require('./palettes');
 const { STATUSES } = require('./constants');
 const rates = require('./rates');
 
@@ -334,6 +335,8 @@ function mountBottomLine(root, ctx) {
   }
 
   function render() {
+    /* the colours first, so the welcome and the questions wear them too */
+    applyPalette(wrap, plugin.settings.palette);
     const welcoming = !welcomed && plugin.settings.welcome !== false;
     /* the welcome fills the whole pane, so the pane itself takes its colour */
     root.classList.toggle('dc-welcoming', welcoming);
@@ -1972,6 +1975,18 @@ function mountBottomLine(root, ctx) {
     for (const a of view.st.alternatives) { const o = el(csel, 'option', null, a.name); o.value = a.id; }
     csel.value = view.st.chosen ? view.st.chosen.id : '';
     csel.addEventListener('change', async () => { s.compareWith = csel.value; await save(); });
+    /* the colours: a palette shows at once, before the save */
+    const { f: pf, hint: phint } = field(g, 'Colours');
+    const psel = el(pf, 'select', 'dc-inp dropdown');
+    for (const p of PALETTES) { const o = el(psel, 'option', null, p.name); o.value = p.id; }
+    psel.value = paletteOf(s.palette);
+    const palHint = phint((PALETTES.find(p => p.id === psel.value) || PALETTES[0]).blurb);
+    psel.addEventListener('change', async () => {
+      s.palette = paletteOf(psel.value);
+      applyPalette(wrap, s.palette);
+      palHint.textContent = (PALETTES.find(p => p.id === s.palette) || PALETTES[0]).blurb;
+      await save();
+    });
     for (const p of view.pr.products) {
       const body = inputCard(panel, p.name, p.id, p.paid, 'notes.in.' + p.id);
       INPUTS[p.id](body, view, { onInputsPage: true });

@@ -4,6 +4,7 @@
    change. */
 
 const { PluginSettingTab, Setting, Notice } = require('obsidian');
+const { PALETTES, paletteOf } = require('./palettes');
 
 class SettingsTab extends PluginSettingTab {
   constructor(app, plugin) {
@@ -38,6 +39,14 @@ class SettingsTab extends PluginSettingTab {
         s.notCardSpend = v.split('\n').map(x => x.trim()).filter(Boolean);
         await save();
       }));
+
+    new Setting(containerEl)
+      .setName('Colours')
+      .setDesc('The colours the page uses, in light and dark. Also on the Inputs page.')
+      .addDropdown(d => {
+        for (const p of PALETTES) d.addOption(p.id, p.name);
+        d.setValue(paletteOf(s.palette)).onChange(async v => { s.palette = paletteOf(v); await this.plugin.saveSettings(); this.plugin.refreshViews(); });
+      });
 
     new Setting(containerEl)
       .setName('Welcome screen')

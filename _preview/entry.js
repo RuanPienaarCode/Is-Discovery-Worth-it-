@@ -19,6 +19,8 @@
      ?bigcsv=1     a 6 MB CSV in the vault (skipped, with a plain note on the
                    Overview and Inputs)
      ?welcome=0    skip the welcome screen (also skipped by ?tab= and ?check=)
+     ?pal=sunrise  a colour palette (src/palettes.js: discovery, sunrise,
+                   meadow, onyx, plum, graphite)
      ?mobile=1     an iPhone: Obsidian's is-mobile + is-phone classes, and the
                    notch and home-bar insets an iPhone 11 reports (portrait or
                    landscape by the window's shape)
@@ -154,6 +156,8 @@ if (ONBOARD) {
 } else {
   settings = { ...base, ...ui0, onboarded: true, products: { bank: true, health: true, gap: true, insure: true, life: true }, bankKind: 'suite', suite: 'Black', status: { money: 'Diamond', health: 'Gold', drive: 'Silver' }, vitality: { money: true, health: true, drive: true }, benefits: { gameboard: 'half', flights: 'none' }, actualMiles: q.get('miles') ? { card: 2600, fuel: 900 } : {}, bill: { medical: 5000, gap: 250 }, members: { adults: 2, children: 1, ...(OLDER ? { oldestAge: 62 } : {}) }, quotes: { 'insure.outsurance': 1050 }, life: { monthly: 650, cover: 750000, total: 1300, age: 41 }, home: { monthly: 0, contents: 300000 } };
 }
+
+if (q.get('pal')) settings.palette = q.get('pal');
 
 const BIG = 'Money/Other/old-export.csv';
 if (q.get('bigcsv')) files[BIG] = 'a,b\n1,2\n';
