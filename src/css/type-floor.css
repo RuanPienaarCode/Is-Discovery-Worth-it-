@@ -1,0 +1,32 @@
+/* ── Type floor on touch screens ─────────────────────────────────────────
+   Apple's smallest text style (Caption 2) is 11pt. On a desktop the small
+   uppercase labels (kickers, group heads, table heads, step numbers) sit
+   at 9–10px; on a phone or tablet nothing goes under 11px. .is-touch is
+   set in bottom-line.js from Obsidian's is-mobile class or a coarse
+   pointer, so a phone held sideways keeps the floor too.
+   The "Over time" chart scales with its 320-unit viewBox (about 0.8 at a
+   320px-wide phone), so its labels start bigger on a phone: 14 units is
+   11px at 320 and about 16px at 440. */
+.dc-page.is-touch .dc-kicker,
+.dc-page.is-touch .dc-grp,
+.dc-page.is-touch .dc-subhead,
+.dc-page.is-touch .dc-cmp-h,
+.dc-page.is-touch .dc-date-d,
+.dc-page.is-touch .dc-pill,
+.dc-page.is-touch .dc-onb .dc-onb-stepno,
+.dc-page.is-touch .dc-nav-label,
+.dc-page.is-touch .dc-nav-window,
+.dc-page.is-touch .dc-nav-meta,
+.dc-page.is-touch .dc-brand-sub,
+.dc-page.is-touch table.dc-table th,
+.dc-page.is-touch table.dc-table tr.dc-row-group td { font-size: 11px; }
+/* the flow chart's column heads sit in a fixed-width SVG: at 11px they keep
+   their old width by tracking tighter */
+.dc-page.is-touch .dc-fl-t.h { font-size: 11px; letter-spacing: 0.08em; }
+.dc-page.is-touch .dc-ben .dc-ben-sug { font-size: 11.5px; }
+.dc-page.is-phone .dc-trend .dc-trend-q,
+.dc-page.is-phone .dc-trend .dc-trend-y { font-size: 14px; }
+/* the year sits 17 units under the quarter (ui-trend.js); at 14 units the
+   two lines touch, so the year drops 3 more (the chart's overflow is
+   visible, so the lower line is not cut off) */
+.dc-page.is-phone .dc-trend .dc-trend-y { transform: translateY(3px); }

@@ -79,8 +79,15 @@
 }
 /* a need's name in the cover grid wraps instead of being cut off */
 .dc-needs-r.dc-cmp-h > span:not(:first-child) { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; word-break: break-word; line-height: 1.15; }
-.dc-page.is-phone .dc-needs-r.dc-cmp-h { letter-spacing: 0; font-size: 9px; }
-.dc-page.is-phone .dc-needs-r.dc-cmp-h > span:not(:first-child) { letter-spacing: 0; }
+/* on a phone the need columns are 31–44px wide: a word like "Psychology"
+   cannot fit across at a readable size, so the heads stand on their side
+   (bottom to top) at 11px instead of breaking mid-word. writing-mode is
+   unprefixed in Safari since 10.1, inside the iOS 15 floor. */
+.dc-page.is-phone .dc-needs-r.dc-cmp-h { letter-spacing: 0; font-size: 11px; text-transform: none; font-family: inherit; align-items: end; }
+.dc-page.is-phone .dc-needs-r.dc-cmp-h > span:not(:first-child) { letter-spacing: 0; writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; overflow-wrap: normal; word-break: normal; justify-self: center; line-height: 1.2; }
+/* with the heads upright a need column only has to hold its 18px mark, so
+   the plan name gets the room and long names wrap between words */
+.dc-page.is-phone .dc-needs-r { grid-template-columns: minmax(0, 1fr) repeat(var(--n, 5), 26px); }
 
 /* ── the primary button (one per screen, never a glow) ── */
 .dc-page button.dc-btn.dc-btn-primary { border-color: var(--dc-navy-2); background: var(--dc-navy-2); color: #ffffff; }

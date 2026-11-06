@@ -222,3 +222,11 @@
 .dc-page.is-phone .dc-hello-art { max-height: 240px; }
 .dc-page.is-phone h1.dc-hello-h1 { font-size: 2.4em; }
 .dc-page.is-phone button.dc-hello-go { width: 100%; }
+
+/* a phone held sideways is only ~375–440px tall: at 70vh the picture filled
+   the screen and "Let's find out" sat more than a screen below it, so on a
+   short touch screen the picture shrinks to a strip */
+@media (max-height: 500px) {
+  .dc-page.is-touch .dc-hello-art { max-height: 34vh; }
+  .dc-page.is-touch .dc-welcome.dc-hello { padding-top: 12px; }
+}
