@@ -41,6 +41,8 @@ const { buildTrend } = require('./trend');
 const { renderTrend } = require('./ui-trend');
 const { summaryMarkdown } = require('./summary-note');
 const { wrongPriceUrl } = require('./wrong-price');
+const { householdOf, buildLatest } = require('./offers');
+const { renderLatest } = require('./ui-offers');
 
 const SOURCE = { measured: 'From your statements', statement: 'From your Miles statement', estimated: 'Estimate', entered: 'You entered' };
 
@@ -55,6 +57,7 @@ const PRODUCT_IDS = ['bank', 'health', 'gap', 'insure', 'life'];
    one tab per chosen Discovery product, then Inputs. */
 const tabsFor = chosen => [
   { id: 'overview', name: 'Overview', icon: 'layout-grid' },
+  { id: 'latest', name: 'Latest', icon: 'megaphone' },
   { id: 'compare', name: 'Compare', icon: 'arrow-left-right' },
   { id: 'benefits', name: 'Benefits', icon: 'gift' },
   { id: 'flows', name: 'Flows', icon: 'waypoints' },
@@ -94,9 +97,10 @@ const SUBTITLE = {
   life: () => 'Through your payslip or a debit order',
 };
 /* each page's title and its one line, under the kicker */
-const TITLES = { overview: 'Is it worth it?', compare: 'Staying or moving', benefits: 'Your benefits', flows: 'Where the money goes', inputs: 'Inputs' };
+const TITLES = { overview: 'Is it worth it?', latest: 'Latest from Discovery', compare: 'Staying or moving', benefits: 'Your benefits', flows: 'Where the money goes', inputs: 'Inputs' };
 const SUBS = {
   overview: 'What you pay Discovery, and what comes back.',
+  latest: 'Offers on now, checked against what your household has.',
   compare: 'What you pay now, next to moving everything.',
   benefits: 'Pick the ones you use. Only those count.',
   flows: 'Tap a product to follow its money.',
@@ -172,6 +176,9 @@ function mountBottomLine(root, ctx) {
   const plugin = ctx.plugin;
   const now = ctx.now || (() => new Date());
   let budget = null;
+  /* the offer notes for the Latest tab ({ folder, offers, inbox, example }),
+     read with the budget on each refresh */
+  let offers = null;
   let flow = null;
   /* what is open (a More, a line, a list), kept across re-renders */
   const open = new Set();
@@ -292,6 +299,7 @@ function mountBottomLine(root, ctx) {
 
   async function refresh() {
     budget = await plugin.readBudget();
+    offers = typeof plugin.readOffers === 'function' ? await plugin.readOffers() : null;
     detectedCache = null;
     requestRender(null);
   }
@@ -446,6 +454,7 @@ function mountBottomLine(root, ctx) {
     const panel = renderShell(view);
     const t = tab();
     if (t === 'overview') renderOverview(panel, view);
+    else if (t === 'latest') renderLatestTab(panel, view);
     else if (t === 'compare') renderSwitch(panel, view);
     else if (t === 'benefits') renderBenefitsTab(panel, view);
     else if (t === 'flows') renderFlows(panel, view);
@@ -607,12 +616,16 @@ function mountBottomLine(root, ctx) {
   function pageHead(content, { m, eff, st }, curTab, p) {
     const head = el(content, 'header', 'dc-head');
     const titles = el(head, 'div', 'dc-head-titles');
-    el(titles, 'p', 'dc-kicker', typed() ? 'Your typed averages' : `${monthLabel(m.from)} – ${monthLabel(m.to)}`);
+    /* Latest has no amounts and no statement window: today's date instead,
+       and no Monthly / Yearly */
+    const latest = curTab.id === 'latest';
+    el(titles, 'p', 'dc-kicker', latest ? `As of ${dayLabel(todayYmd())}` : typed() ? 'Your typed averages' : `${monthLabel(m.from)} – ${monthLabel(m.to)}`);
     const row = el(titles, 'div', 'dc-title-row');
     if (p) productLogo(el(row, 'span', 'dc-tile dc-tile-lg dc-p-' + p.id), p.id);
     el(row, 'h1', 'dc-title', p ? p.name : TITLES[curTab.id]);
     const sub = p ? SUBTITLE[p.id](eff, cur) : SUBS[curTab.id];
     if (sub) el(titles, 'p', 'dc-sub', sub);
+    if (latest) return;
     const seg = el(head, 'div', 'dc-seg');
     seg.setAttribute('role', 'group');
     seg.setAttribute('aria-label', 'Show amounts');
@@ -2088,12 +2101,68 @@ function mountBottomLine(root, ctx) {
     return el(sec, 'div', 'dc-ch-body');
   }
 
+  // ── Latest ───────────────────────────────────────────────────────────
+  /* today as 'YYYY-MM-DD' on this device's calendar */
+  const todayYmd = () => { const d = now(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  function renderLatestTab(panel, view) {
+    const s = plugin.settings;
+    const house = householdOf({ eff: { ...view.eff, people: s.people }, products: view.products, vitality: view.vitality });
+    const o = offers || { folder: s.offersFolder || '', offers: [], inbox: null, example: !!s.sample };
+    renderLatest(panel, {
+      latest: buildLatest(o.offers || [], house, todayYmd()),
+      folder: o.folder, inbox: o.inbox, example: !!o.example,
+      people: house.length - 1,
+      openNote: path => plugin.openNote && plugin.openNote(path),
+      setState: async (path, state) => { if (plugin.setOfferState) await plugin.setOfferState(path, state); await refresh(); },
+      onSetup: () => { open.add('notes.latest'); show('inputs'); },
+    });
+  }
+
+  /* The offers folder and the others at home (settings.people), for the
+     Latest tab. */
+  function renderOffersInputs(panel) {
+    const s = plugin.settings;
+    const body = inputCard(panel, 'Latest offers', null, null, 'notes.latest');
+    const g = el(body, 'div', 'dc-fgrid');
+    const { f: ff, hint: fh } = field(g, 'Offers folder');
+    const fin = el(ff, 'input', 'dc-inp');
+    fin.type = 'text'; fin.autocomplete = 'off'; fin.spellcheck = false;
+    fin.value = s.offersFolder || '';
+    fin.placeholder = 'Discovery offers';
+    fh('One note per offer. Emails and PDFs to be read go in its Inbox folder.');
+    fin.addEventListener('change', async () => { s.offersFolder = fin.value.trim().replace(/^\/+|\/+$/g, ''); await save(); await refresh(); });
+    el(body, 'h3', 'dc-h3', 'Others at home');
+    fnote(body, 'Each offer says who can use it. You are checked from your answers above; each person here by their own bank account and whether they are on the medical aid. Cars, home and life cover count as the household\'s.');
+    const people = Array.isArray(s.people) ? s.people : (s.people = []);
+    const BANKS = [['transaction', 'Transaction account'], ['suite', 'Suite (account and credit card)'], ['card', 'Credit card account'], ['savings', 'Savings only'], ['none', 'No Discovery Bank account'], ['', 'Not sure']];
+    people.forEach((p, i) => {
+      const row = el(body, 'div', 'dc-fgrid dc-of-person');
+      const { f: nf } = field(row, 'Name');
+      const nin = el(nf, 'input', 'dc-inp');
+      nin.type = 'text'; nin.autocomplete = 'off'; nin.value = p.name || '';
+      nin.addEventListener('change', async () => { p.name = nin.value.trim(); await save(); });
+      const { f: bf } = field(row, 'Discovery Bank');
+      const bsel = el(bf, 'select', 'dc-inp dropdown');
+      for (const [v, l] of BANKS) { const op = el(bsel, 'option', null, l); op.value = v; }
+      bsel.value = p.bank || '';
+      bsel.addEventListener('change', async () => { p.bank = bsel.value; await save(); });
+      const { f: af } = field(row, 'On the medical aid');
+      const asel = el(af, 'select', 'dc-inp dropdown');
+      for (const [v, l] of [['yes', 'Yes'], ['no', 'No'], ['', 'Not sure']]) { const op = el(asel, 'option', null, l); op.value = v; }
+      asel.value = p.aid === true ? 'yes' : p.aid === false ? 'no' : '';
+      asel.addEventListener('change', async () => { p.aid = asel.value === 'yes' ? true : asel.value === 'no' ? false : null; await save(); });
+      button(row, 'dc-link dc-of-remove', 'Remove ' + (p.name || 'this person'), async () => { people.splice(i, 1); await save(); }, 'trash-2');
+    });
+    button(body, 'dc-btn dc-of-addp', 'Add someone', async () => { people.push({ name: '', bank: '', aid: null }); await save(); }, 'user-plus');
+  }
+
   function renderInputs(panel, view) {
     noteStrip(panel, view.issues, 'dc-status-issues', 'warn', 'statusissues.more', 'More about these statuses');
     noteStrip(panel, view.folderNote, 'dc-folder-note', 'info', 'foldernote.more', 'More about the budget folder');
     csvNotesStrip(panel);
     if (typed()) renderTyped(panel, view);
     renderSetup(panel, view);
+    renderOffersInputs(panel);
     const gb = inputCard(panel, 'For the whole page', null, null, 'notes.page');
     const g = el(gb, 'div', 'dc-fgrid');
     const s = plugin.settings;

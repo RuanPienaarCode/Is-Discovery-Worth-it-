@@ -202,6 +202,13 @@ const DEFAULT_SETTINGS = {
   manual: {},
   /* The vault folder "Save a summary note" writes into (summary-note.js). */
   summaryFolder: 'Is Discovery Worth It',
+  /* The Latest tab (src/offers.js): the folder of offer notes, one note per
+     offer, with an Inbox folder inside for emails and PDFs not read yet. */
+  offersFolder: 'Discovery offers',
+  /* The others at home, for who can use an offer: { name, bank: 'suite' |
+     'card' | 'transaction' | 'savings' | 'none' | '', aid: true | false |
+     null }. You are always the first person, from the answers above. */
+  people: [],
 };
 
 module.exports = { VIEW_TYPE, VERB_PREFIX, RULES, SHOP_TAGS, NOT_SPEND_TYPES, STATUSES, DEFAULT_SETTINGS };

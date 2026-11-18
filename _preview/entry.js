@@ -42,6 +42,7 @@
                    ?setup=thin) and, on Compare with ?old=1, the stale
                    warning as the visible line (in #dc-check) */
 import { makeMemoryVault } from './memory-vault.js';
+const { sampleOffers } = require('../src/sample-offers');
 const { mountBottomLine } = require('../src/bottom-line');
 const { loadBudget } = require('../src/load');
 const { DEFAULT_SETTINGS } = require('../src/constants');
@@ -104,6 +105,11 @@ if (q.get('pal')) settings.palette = q.get('pal');
 if (q.get('sample')) settings = enterExample({ ...JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), ...ui0, welcome: ui0.welcome }, NOW);
 if (q.get('sample') && q.get('tab')) settings.tab = q.get('tab');
 
+/* the Latest tab: made-up offers (src/sample-offers.js) and two others at
+   home; ?nooffers=1 shows the empty tab, ?nopeople=1 only you */
+if (!q.get('nopeople') && !(settings.people && settings.people.length)) settings.people = [{ name: 'Sam', bank: 'transaction', aid: true }, { name: 'Robin', bank: 'none', aid: true }];
+let previewOffers = q.get('nooffers') ? [] : sampleOffers(NOW);
+
 const BIG = 'Money/Other/old-export.csv';
 if (q.get('bigcsv')) files[BIG] = 'a,b\n1,2\n';
 const vault = makeMemoryVault(q.get('empty') ? { 'Notes/Hello.md': '# hi\n' } : files);
@@ -133,6 +139,15 @@ const plugin = {
     await plugin.saveSettings();
     await ui.refresh();
   },
+  async readOffers() {
+    if (plugin.settings.sample) return { folder: '', offers: sampleOffers(NOW), inbox: null, example: true };
+    return { folder: plugin.settings.offersFolder, offers: previewOffers, inbox: q.get('nooffers') ? null : 2, example: false };
+  },
+  async setOfferState(path, state) {
+    previewOffers = previewOffers.map(o => (o.path === path ? { ...o, state } : o));
+    console.log('[setOfferState]', path, state);
+  },
+  openNote(path) { new Notice('Open ' + path); },
   async readBudget() {
     if (plugin.settings.sample) return loadBudget(sampleSource(NOW), SAMPLE_FOLDER);
     const paths = vault.getFiles().map(f => f.path).filter(p => /\.(md|csv)$/.test(p));

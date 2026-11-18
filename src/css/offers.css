@@ -1,0 +1,146 @@
+/* The Latest tab (src/ui-offers.js), in the page's look (tokens from
+   src/styles.css and src/css/palettes.css). Every rule sits under .dc-of.
+   A card is the when, a title, one line and who can use it, with a thin
+   edge in its area's product colour; the rest waits behind "Details".
+   iOS 15 floor: no :has(), no color-mix(), no container queries; the narrow
+   and touch layouts hang on the page's .is-narrow / .is-phone / .is-touch
+   classes. Tap targets are 44px on touch. No glows. */
+
+.dc-of { display: flex; flex-direction: column; gap: 18px; min-width: 0; color: var(--dc-text); }
+.dc-of [hidden] { display: none; }
+
+/* each area wears its product's colour */
+.dc-of .dc-of-card { --p: var(--dc-muted); --p-ink: var(--dc-text-2); }
+.dc-of .dc-of-card.is-bank { --p: var(--c-bank); --p-ink: var(--c-bank-ink); }
+.dc-of .dc-of-card.is-vitality,
+.dc-of .dc-of-card.is-health { --p: var(--c-health); --p-ink: var(--c-health-ink); }
+.dc-of .dc-of-card.is-insure { --p: var(--c-insure); --p-ink: var(--c-insure-ink); }
+.dc-of .dc-of-card.is-gap { --p: var(--c-gap); --p-ink: var(--c-gap-ink); }
+.dc-of .dc-of-card.is-life,
+.dc-of .dc-of-card.is-travel { --p: var(--c-life); --p-ink: var(--c-life-ink); }
+
+/* one-line notes: example data, files waiting in the Inbox */
+.dc-of .dc-of-note { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px dashed var(--dc-line-2); border-radius: var(--dc-radius-sm); color: var(--dc-text-2); font-size: 13.5px; line-height: 1.45; }
+.dc-of .dc-of-note.is-inbox { border-style: solid; border-color: var(--dc-amber); }
+.dc-of .dc-of-note .dc-icon { margin-top: 2px; }
+
+/* the counts across the top */
+.dc-of .dc-of-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.dc-of .dc-of-stat { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 12px; border: 1px solid var(--dc-line); border-radius: 999px; background: var(--dc-surface); font-size: 13px; color: var(--dc-text-2); white-space: nowrap; }
+.dc-of .dc-of-stat strong { font-size: 16px; color: var(--dc-text); }
+.dc-of .dc-of-stat.is-urgent { border-color: var(--dc-amber); }
+.dc-of .dc-of-hint { font-size: 13px; color: var(--dc-muted); line-height: 1.45; }
+.dc-of button.dc-of-inline { display: inline; min-height: 0; height: auto; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; color: var(--dc-accent-ink); font: inherit; font-weight: 600; text-decoration: underline; white-space: normal; cursor: pointer; }
+
+/* a group: its heading, then the cards */
+.dc-of .dc-of-group { display: flex; flex-direction: column; gap: 10px; }
+.dc-of .dc-of-h { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; }
+.dc-of .dc-of-count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--dc-surface-2); color: var(--dc-text-2); font-size: 12px; font-weight: 700; }
+.dc-of .dc-of-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 12px; align-items: start; }
+
+/* the card */
+.dc-of .dc-of-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px 12px 18px;
+  border: 1px solid var(--dc-line);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow), inset 4px 0 0 var(--p);
+}
+.dc-of .dc-of-card.fit-check { border-style: dashed; }
+.dc-of .dc-of-card.is-compact { box-shadow: inset 4px 0 0 var(--dc-line-2); background: var(--dc-surface-2); }
+.dc-of .dc-of-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
+.dc-of .dc-of-area { font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--p-ink); }
+.dc-of .dc-of-when { padding: 2px 8px; border-radius: 999px; background: var(--dc-surface-2); color: var(--dc-text-2); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.dc-of .dc-of-when.is-urgent { background: rgba(var(--dc-amber-rgb), 0.18); color: var(--dc-text); }
+.dc-of .dc-of-title { margin: 0; min-width: 0; font-size: 16px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; overflow-wrap: anywhere; word-break: break-word; }
+.dc-of .dc-of-line { margin: 0; color: var(--dc-text-2); font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; word-break: break-word; }
+.dc-of .dc-of-who { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; color: var(--dc-pos); font-size: 13px; font-weight: 600; line-height: 1.3; }
+.dc-of .dc-of-who.is-check { color: var(--dc-muted); }
+
+/* Details: the toggle and what it opens */
+.dc-of button.dc-of-more {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  margin: 2px 0 0;
+  padding: 0 10px;
+  border: 1px solid var(--dc-line);
+  border-radius: 999px;
+  background: var(--dc-surface-2);
+  color: var(--dc-accent-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: normal;
+  text-align: left;
+  box-shadow: none;
+  cursor: pointer;
+}
+.dc-of .dc-of-chev { display: inline-flex; align-items: center; }
+.dc-of .dc-of-chev .dc-icon { width: 14px; height: 14px; }
+.dc-of .dc-of-body { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 8px; background: var(--dc-surface-2); font-size: 13px; line-height: 1.45; color: var(--dc-text-2); overflow-wrap: anywhere; word-break: break-word; }
+.dc-of .dc-of-body[hidden] { display: none; }
+.dc-of .dc-of-h4 { margin: 4px 0 0; font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dc-muted); }
+.dc-of .dc-of-cond strong { color: var(--dc-text); }
+.dc-of .dc-of-how { margin: 0; padding-left: 20px; }
+.dc-of .dc-of-how li { margin: 2px 0; }
+.dc-of .dc-of-who-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+.dc-of .dc-of-who-list li { display: flex; flex-wrap: wrap; gap: 2px 8px; }
+.dc-of .dc-of-who-name { font-weight: 700; color: var(--dc-text); min-width: 64px; }
+.dc-of .dc-of-who-list li.is-yes .dc-of-who-why { color: var(--dc-pos); }
+.dc-of .dc-of-who-list li.is-no .dc-of-who-why { color: var(--dc-muted); }
+.dc-of .dc-of-problem { display: flex; align-items: flex-start; gap: 6px; color: var(--dc-text); }
+.dc-of .dc-of-problem .dc-icon { color: var(--dc-amber); margin-top: 2px; }
+.dc-of .dc-of-source { color: var(--dc-muted); font-size: 12px; }
+.dc-of .dc-of-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.dc-of .dc-of-act,
+.dc-of button.dc-of-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--dc-line);
+  border-radius: 8px;
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: normal;
+  text-decoration: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+.dc-of .dc-of-act .dc-icon { width: 14px; height: 14px; }
+
+/* the folded groups */
+.dc-of .dc-of-folded { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid var(--dc-line); }
+.dc-of .dc-of-fold { display: flex; flex-direction: column; gap: 8px; }
+.dc-of button.dc-of-fold-btn { background: transparent; color: var(--dc-text-2); }
+.dc-of .dc-of-fold .dc-of-body { background: transparent; padding: 0; }
+
+/* nothing yet */
+.dc-of .dc-of-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 24px; border: 1px dashed var(--dc-line-2); border-radius: var(--dc-radius); }
+.dc-of .dc-of-empty-mark .dc-icon { width: 28px; height: 28px; color: var(--dc-accent-ink); }
+.dc-of .dc-of-empty-title { font-size: 18px; font-weight: 700; }
+.dc-of .dc-of-empty-text { color: var(--dc-text-2); font-size: 14px; line-height: 1.5; max-width: 60ch; }
+
+/* the household rows on Inputs */
+.dc-page .dc-of-person { padding: 10px 0; border-top: 1px solid var(--dc-line); align-items: end; }
+.dc-page button.dc-of-addp { align-self: flex-start; margin-top: 6px; }
+
+/* touch: 44px targets */
+.dc-page.is-touch .dc-of button.dc-of-more,
+.dc-page.is-touch .dc-of button.dc-of-act,
+.dc-page.is-touch .dc-of a.dc-of-act { min-height: 44px; }
+.dc-page.is-phone .dc-of .dc-of-card { padding: 12px 14px 10px 16px; }
