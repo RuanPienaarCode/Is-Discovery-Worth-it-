@@ -32,7 +32,7 @@ assert.strictEqual(parseOffer({ discovery: 'offer' }, 'a.md'), null);
 assert.strictEqual(parseOffer(null, 'a.md'), null);
 /* a comma string works for lists; a Date and a date-time keep only the day */
 {
-  const o = parseOffer({ discovery: 'offer', title: 't', partner: 'A, B', requires: 'bank, suite', how: 'One step', starts: new Date(Date.UTC(2026, 10, 16)), ends: '2026-11-25T09:00' }, 'b.md');
+  const o = parseOffer({ discovery: 'offer', title: 't', partner: ['A', 'B'], requires: 'bank, suite', how: 'One step', starts: new Date(Date.UTC(2026, 10, 16)), ends: '2026-11-25T09:00' }, 'b.md');
   assert.deepStrictEqual(o.partners, ['A', 'B']);
   assert.deepStrictEqual(o.requires, [['bank'], ['suite']]);
   assert.deepStrictEqual(o.how, ['One step']);
@@ -47,6 +47,16 @@ assert.strictEqual(parseOffer(null, 'a.md'), null);
   assert.strictEqual(o.area, 'other');
   assert.strictEqual(o.state, 'used');
 }
+/* ends before starts is a problem in the note, and the dates are not used */
+{
+  const o = parseOffer({ discovery: 'offer', title: 't', starts: '2026-12-01', ends: '2026-11-25' }, 'e.md');
+  assert.ok(o.problems.some(p => /before/.test(p)), o.problems.join('; '));
+  assert.strictEqual(o.starts, null);
+  assert.strictEqual(o.ends, null);
+  assert.strictEqual(timeWords(timing(o, '2026-11-18'), o), 'Dates unclear', 'never shown as Ongoing');
+}
+/* one partner named in a string keeps its comma; a list is a list */
+assert.deepStrictEqual(parseOffer({ discovery: 'offer', title: 't', partner: 'Acme, Inc' }, 'f.md').partners, ['Acme, Inc']);
 /* an unknown state is ignored */
 assert.strictEqual(parseOffer({ discovery: 'offer', title: 't', state: 'maybe' }, 'd.md').state, '');
 
@@ -84,7 +94,7 @@ assert.strictEqual(T('gap', you), true);
 assert.strictEqual(T('new-home-loan', you), null, 'a word the page does not know is not known, never guessed');
 /* Sam: a transaction account (bundled fees unless said), on the medical aid */
 assert.strictEqual(T('bank', sam), true);
-assert.strictEqual(T('transaction-bundled', sam), true);
+assert.strictEqual(T('transaction-bundled', sam), null, 'nobody said which fees Sam pays: not known, never guessed');
 assert.strictEqual(T('credit-card', sam), false);
 assert.strictEqual(T('suite', sam), false);
 assert.strictEqual(T('tier-gold', sam), false);
@@ -134,7 +144,9 @@ const offer = (fm) => parseOffer({ discovery: 'offer', title: 'T', ...fm }, (fm.
   assert.strictEqual(e.verdict, 'yes');
   const s = evaluate(offer({ requires: ['vitality-money', 'transaction-bundled | credit-card'] }), sam);
   assert.strictEqual(s.verdict, 'check');
-  assert.deepStrictEqual(s.unknown, [REQUIREMENTS['vitality-money']]);
+  assert.deepStrictEqual(s.unknown, [REQUIREMENTS['vitality-money'], `${REQUIREMENTS['transaction-bundled']} or ${REQUIREMENTS['credit-card']}`]);
+  assert.strictEqual(evaluate(offer({ requires: ['transaction-bundled | credit-card'] }), sam).verdict, 'check');
+  assert.strictEqual(evaluate(offer({ requires: ['transaction | credit-card'] }), sam).verdict, 'yes');
   const k = evaluate(offer({ requires: ['credit-card', 'new-home-loan'] }), kid);
   assert.strictEqual(k.verdict, 'no', 'one requirement not met beats one not known');
   assert.deepStrictEqual(k.missing, [REQUIREMENTS['credit-card']]);

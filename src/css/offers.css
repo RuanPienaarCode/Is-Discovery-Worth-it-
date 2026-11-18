@@ -143,4 +143,5 @@
 .dc-page.is-touch .dc-of button.dc-of-more,
 .dc-page.is-touch .dc-of button.dc-of-act,
 .dc-page.is-touch .dc-of a.dc-of-act { min-height: 44px; }
+.dc-page.is-touch .dc-of button.dc-of-inline { display: inline-flex; align-items: center; min-height: 44px; }
 .dc-page.is-phone .dc-of .dc-of-card { padding: 12px 14px 10px 16px; }

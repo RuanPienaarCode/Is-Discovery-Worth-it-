@@ -27,6 +27,8 @@
      timing(offer, today)                   → { phase, daysLeft, daysToStart }
      buildLatest(offers, household, today)  → { on, soon, always, notForUs, put, ended, counts } */
 
+const { dayShort: short } = require('./format');
+
 const AREAS = ['bank', 'vitality', 'health', 'insure', 'travel', 'gap', 'life', 'other'];
 const STATES = ['used', 'hidden'];
 const TIERS = ['gold', 'platinum', 'black', 'purple'];
@@ -82,14 +84,20 @@ function parseOffer(fm, path) {
   };
   const area = text(fm.area).toLowerCase();
   const state = text(fm.state).toLowerCase();
+  let starts = date('starts'), ends = date('ends');
+  if (starts && ends && ends < starts) {
+    problems.push(`"ends" (${ends}) is before "starts" (${starts}), so neither date is used`);
+    starts = ends = null;
+  }
   return {
     path: String(path || ''),
     title,
     benefit: text(fm.benefit),
     area: AREAS.includes(area) ? area : 'other',
-    partners: list(fm.partner || fm.partners),
-    starts: date('starts'),
-    ends: date('ends'),
+    /* a list is a list; one name in a string keeps its commas ("Acme, Inc") */
+    partners: Array.isArray(fm.partner || fm.partners) ? list(fm.partner || fm.partners) : list(text(fm.partner || fm.partners) ? [fm.partner || fm.partners] : []),
+    starts,
+    ends,
     requires: list(fm.requires).map(r => r.split('|').map(x => x.trim().toLowerCase()).filter(Boolean)).filter(g => g.length),
     condition: text(fm.condition),
     how: list(Array.isArray(fm.how) ? fm.how : text(fm.how) ? [fm.how] : []),
@@ -98,6 +106,8 @@ function parseOffer(fm, path) {
     added: dayOf(fm.added),
     state: STATES.includes(state) ? state : '',
     problems,
+    /* a date was given but could not be used: the card never says Ongoing */
+    datesBad: problems.length > 0,
   };
 }
 
@@ -143,7 +153,9 @@ function checkRequirement(word, p) {
   const has = (...kinds) => (kind === null || kind === undefined ? null : kinds.includes(kind));
   if (w === 'bank') return kind === null || kind === undefined ? null : kind !== 'none';
   if (w === 'transaction') return has('suite', 'transaction');
-  if (w === 'transaction-bundled') return kind === 'transaction' ? p.bankFees !== 'payt' : has('suite');
+  /* a blank fee answer is bundled for you (the plugin's own default), and
+     not known for the others, who are never asked */
+  if (w === 'transaction-bundled') return kind === 'transaction' ? (p.you ? p.bankFees !== 'payt' : null) : has('suite');
   if (w === 'credit-card') return has('suite', 'card');
   if (w === 'suite') return has('suite');
   if (w.startsWith('tier-') && TIERS.includes(w.slice(5))) {
@@ -191,12 +203,10 @@ function timing(offer, today) {
   return { phase: 'on', daysLeft: dayNo(offer.ends) - t, daysToStart: 0 };
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const short = ymd => { const [, m, d] = ymd.split('-').map(Number); return `${d} ${MONTHS[m - 1]}`; };
 /* "Ends in 5 days", "On 27 Nov", "Ongoing" */
 function timeWords(t, offer) {
   if (t.phase === 'ended') return offer.ends ? `Ended ${short(offer.ends)}` : 'Ended';
-  if (t.phase === 'always') return 'Ongoing';
+  if (t.phase === 'always') return offer.datesBad ? 'Dates unclear' : 'Ongoing';
   if (t.phase === 'soon') {
     if (offer.ends === offer.starts) return `On ${short(offer.starts)}`;
     return offer.ends ? `${short(offer.starts)} to ${short(offer.ends)}` : `From ${short(offer.starts)}`;

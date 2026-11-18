@@ -204,7 +204,7 @@ function mountBottomLine(root, ctx) {
      once per lever) and the trend (every quarter measured). Worked out only
      when a page or the summary note asks, and kept on the budget object
      until the budget is read again or an answer that changes them does. */
-  const settingsKey = s => JSON.stringify(s, (k, v) => (k === 'tab' || k === 'period' || k === 'welcome' || k === 'palette' || k === 'realSettings' ? undefined : v)) + '|' + now().toDateString();
+  const settingsKey = s => JSON.stringify(s, (k, v) => (k === 'tab' || k === 'period' || k === 'welcome' || k === 'palette' || k === 'realSettings' || k === 'people' || k === 'offersFolder' ? undefined : v)) + '|' + now().toDateString();
   const memo = (name, make) => {
     const key = settingsKey(plugin.settings);
     const box = budget.memo || (budget.memo = {});
@@ -2113,7 +2113,14 @@ function mountBottomLine(root, ctx) {
       folder: o.folder, inbox: o.inbox, example: !!o.example,
       people: house.length - 1,
       openNote: path => plugin.openNote && plugin.openNote(path),
-      setState: async (path, state) => { if (plugin.setOfferState) await plugin.setOfferState(path, state); await refresh(); },
+      /* the note is written, and the card moves at once: the metadata cache
+         has the new frontmatter only a moment later (its 'changed' event
+         then refreshes from the note itself) */
+      setState: async (path, state) => {
+        if (plugin.setOfferState) await plugin.setOfferState(path, state);
+        if (offers && offers.offers) offers = { ...offers, offers: offers.offers.map(x => (x.path === path ? { ...x, state } : x)) };
+        render();
+      },
       onSetup: () => { open.add('notes.latest'); show('inputs'); },
     });
   }

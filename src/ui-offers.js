@@ -31,6 +31,7 @@ const FOLDED = [
   { id: 'ended', title: 'Ended', icon: 'history' },
 ];
 
+const ENDED_SHOWN = 12;
 /* which cards and folded groups are open: kept across re-renders */
 const OPEN = new Set();
 let seq = 0;
@@ -213,7 +214,9 @@ function renderLatest(panel, ctx) {
       const sec = el(box, 'section', 'dc-of-fold is-' + g.id);
       const t = toggle(sec, 'fold:' + g.id, `${g.title} (${L[g.id].length})`, 'dc-of-fold-btn');
       const grid = el(t.body, 'div', 'dc-of-grid');
-      for (const it of (g.id === 'ended' ? L[g.id].slice(0, 12) : L[g.id])) offerCard(grid, it, c, true);
+      const shown = g.id === 'ended' ? L[g.id].slice(0, ENDED_SHOWN) : L[g.id];
+      for (const it of shown) offerCard(grid, it, c, true);
+      if (shown.length < L[g.id].length) el(t.body, 'p', 'dc-of-hint', `The ${ENDED_SHOWN} most recent are shown; ${L[g.id].length - shown.length} older ones are still in the folder.`);
     }
   }
   return root;
