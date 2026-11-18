@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Is Discovery Worth It? — Offer notes</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel-2:#1d212b; --line:#2a2f3a;
+    --ink:#e7eaf0; --muted:#9aa3b2; --muted-2:#6f81a3;
+    --accent:#5b9dff; --accent-2:#7c5cff;
+    --crit:#f06464; --warn:#f5a524; --ok:#3ecf8e; --info:#5bb8ff;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --radius:12px; --maxw:1000px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:linear-gradient(180deg,#0c0e12,var(--bg) 240px);color:var(--ink);font-family:var(--sans);line-height:1.6;font-size:16px;padding-bottom:4rem}
+  main{max-width:var(--maxw);margin:0 auto;padding:48px 20px 96px}
+  a{color:var(--accent)}
+  header.hero{padding:8px 0 28px;border-bottom:1px solid var(--line);margin-bottom:36px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  h1{font-size:34px;line-height:1.15;margin:10px 0 8px;letter-spacing:-.02em}
+  h1 .accent{color:var(--accent-2)}
+  .lede{color:var(--muted);font-size:17px;max-width:70ch;margin:0}
+  h2{font-size:23px;margin:46px 0 14px;letter-spacing:-.01em;border-left:3px solid var(--accent);padding-left:.6rem}
+  h3{font-size:17px;margin:26px 0 8px;color:var(--muted)}
+  p{margin:10px 0}
+  ul,ol{margin:10px 0;padding-left:22px} li{margin:5px 0}
+  .toc{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0;list-style:none;padding:0}
+  .toc a{font-size:13px;color:var(--muted);text-decoration:none;border:1px solid var(--line);padding:5px 11px;border-radius:999px}
+  .toc a:hover{color:var(--ink);border-color:var(--accent)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;margin:16px 0}
+  code{font-family:var(--mono);font-size:.88em;background:#10131a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;overflow-wrap:anywhere}
+  pre{background:#10131a;border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;overflow:auto;margin:12px 0;font-size:13.5px;line-height:1.55}
+  pre code{background:none;border:none;padding:0;font-size:inherit}
+  .table-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted-2);font-weight:600;font-size:12.5px;letter-spacing:.04em;text-transform:uppercase}
+  .callout{border-left:3px solid var(--accent);background:var(--panel-2);border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin:18px 0}
+  .callout.warn{border-left-color:var(--warn)} .callout.ok{border-left-color:var(--ok)}
+  .callout .t{font-weight:700;margin-bottom:4px}
+  .pill{display:inline-block;font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .pill.jan{color:var(--warn);border-color:var(--warn)} .pill.jul{color:var(--info);border-color:var(--info)}
+  ol.steps{counter-reset:s;list-style:none;padding-left:0}
+  ol.steps>li{counter-increment:s;position:relative;padding:14px 18px 14px 56px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin:12px 0}
+  ol.steps>li::before{content:counter(s);position:absolute;left:16px;top:14px;width:26px;height:26px;border-radius:50%;background:var(--accent-2);color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
+  a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .muted{color:var(--muted)}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted-2);font-size:13px}
+  @media(max-width:600px){h1{font-size:27px} main{padding:32px 16px 72px} ol.steps>li{padding-left:50px}}
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div class="eyebrow">Is Discovery Worth It? · Latest tab</div>
+    <h1>Offer <span class="accent">notes</span></h1>
+    <p class="lede">The Latest tab reads one Markdown note per Discovery offer. A person can write them; an AI agent can write them from Discovery's emails, its Latest news pages and posts you paste in. The plugin only reads the notes, checks each one against your household, and sorts them.</p>
+    <ul class="toc">
+      <li><a href="#folder">The folder</a></li>
+      <li><a href="#fields">The fields</a></li>
+      <li><a href="#requires">requires words</a></li>
+      <li><a href="#who">Who can use it</a></li>
+      <li><a href="#agent">Rules for an agent</a></li>
+    </ul>
+  </header>
+
+  <h2 id="folder">The folder</h2>
+  <p>Set it under <strong>Inputs → Latest offers → Offers folder</strong> (the default is <code>Discovery offers</code>). Every note under it, in any subfolder, that has <code>discovery: offer</code> in its frontmatter is an offer. Other notes there (an index, say) are left alone.</p>
+  <p>Inside it, <code>Inbox/</code> is for emails, PDFs and screenshots not read yet. The tab shows how many files wait there. Whoever reads a file moves it to <code>Inbox/Done/</code>, which is not counted.</p>
+
+  <h2 id="fields">The fields</h2>
+<pre><code>---
+discovery: offer
+title: Double Miles discounts on sale day
+benefit: Up to 30% off at Miles partners when you pay with Miles
+area: bank
+partner: [Partner A, Partner B]
+starts: 2026-11-27
+ends: 2026-11-27
+requires: [vitality-money]
+condition: Only on the day, at the listed partners
+how:
+  - Pay with Discovery Miles at the till or in the app
+source: Email, 18 Nov 2026 — newsletter subject
+url: https://www.discovery.co.za/...
+added: 2026-11-18
+---
+Anything longer goes in the body. The tab does not show the body.</code></pre>
+  <div class="table-wrap"><table>
+    <tr><th>Field</th><th>What it holds</th><th>Shown</th></tr>
+    <tr><td><code>discovery</code></td><td>Always <code>offer</code>. Required.</td><td>—</td></tr>
+    <tr><td><code>title</code></td><td>A short name. Required.</td><td>Card heading</td></tr>
+    <tr><td><code>benefit</code></td><td>One line: what you get, with the figure.</td><td>Card line</td></tr>
+    <tr><td><code>area</code></td><td><code>bank</code>, <code>vitality</code>, <code>health</code>, <code>insure</code>, <code>travel</code>, <code>gap</code>, <code>life</code> or <code>other</code>. Sets the colour.</td><td>Card label</td></tr>
+    <tr><td><code>partner</code></td><td>A name or a list.</td><td>Details</td></tr>
+    <tr><td><code>starts</code>, <code>ends</code></td><td><code>YYYY-MM-DD</code>. A one-day offer has both the same. Leave both out for a benefit that is always on. A date-time keeps only the day. Anything else is not read as a date: the card shows the problem and the date stays unset.</td><td>When pill</td></tr>
+    <tr><td><code>requires</code></td><td>A list of the words below. Every item must be met; <code>a | b</code> inside one item means either will do.</td><td>Who line</td></tr>
+    <tr><td><code>condition</code></td><td>One line: the catch (minimum spend, which card, limits).</td><td>Details</td></tr>
+    <tr><td><code>how</code></td><td>A list of steps, in Discovery's own words.</td><td>Details</td></tr>
+    <tr><td><code>source</code>, <code>url</code>, <code>added</code></td><td>Where it came from, a web page about it, the day the note was made.</td><td>Details</td></tr>
+    <tr><td><code>state</code></td><td><code>used</code> or <code>hidden</code>. Written by the tab's <em>Used it</em> and <em>Hide</em> buttons, and taken out again by <em>Show again</em>.</td><td>Folded away</td></tr>
+  </table></div>
+
+  <h2 id="requires">requires words</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Word</th><th>Met when</th></tr>
+    <tr><td><code>bank</code></td><td>Any Discovery Bank account</td></tr>
+    <tr><td><code>transaction</code></td><td>A transaction account (on its own or in a Suite)</td></tr>
+    <tr><td><code>transaction-bundled</code></td><td>A transaction account on bundled fees (a Suite counts)</td></tr>
+    <tr><td><code>credit-card</code></td><td>A Suite or a credit card account</td></tr>
+    <tr><td><code>suite</code></td><td>A Suite</td></tr>
+    <tr><td><code>tier-gold</code>, <code>tier-platinum</code>, <code>tier-black</code>, <code>tier-purple</code></td><td>A card of that tier or higher</td></tr>
+    <tr><td><code>vitality-money</code>, <code>vitality-health</code>, <code>vitality-drive</code></td><td>That Vitality programme</td></tr>
+    <tr><td><code>money-gold</code>, <code>health-diamond</code>, <code>drive-silver</code> …</td><td>That programme at that status or higher (blue, bronze, silver, gold, diamond)</td></tr>
+    <tr><td><code>health</code>, <code>gap</code>, <code>insure</code>, <code>life</code></td><td>That Discovery product</td></tr>
+    <tr><td><code>home-cover</code></td><td>Discovery Insure covers the building, the contents or both</td></tr>
+  </table></div>
+  <div class="callout warn"><div class="t">A word not on this list</div>Any other word (<code>new-home-loan</code>, say) cannot be checked, so the offer shows as <em>Not sure who</em> and Details names the word. That is on purpose: the tab never claims you have something it cannot see.</div>
+
+  <h2 id="who">Who can use it</h2>
+  <p><strong>You</strong> are checked from the plugin's own answers: your products, your bank package and tier, your Vitality programmes and statuses, your Insure plan and home cover.</p>
+  <p>The <strong>others at home</strong> are typed under Inputs, each with their own Discovery Bank account and whether they are on the medical aid. Medical aid words follow yours for someone on it. The cars, the home and life cover count as the household's, so those words follow yours for everyone. A Vitality Money status or programme is not asked for others, so it shows as not known for them.</p>
+  <p>One person's requirement not met counts over one not known. An offer goes under <em>Not for us</em> only when nobody at home meets it, and the card says what is missing.</p>
+
+  <h2 id="agent">Rules for an agent writing the notes</h2>
+  <ol class="steps">
+    <li><strong>Only what the source says.</strong> Every figure, date, partner and condition comes from the email, page or post. When the source gives no end date, leave <code>ends</code> out and put "End date not given" in <code>condition</code>. Never make up a date.</li>
+    <li><strong>One offer, one note.</strong> Search the folder by title and partner before writing. The same offer in a second email updates the note (and adds to <code>source</code>); it is not a new note. Keep a <code>state</code> someone set.</li>
+    <li><strong>requires from the eligibility line.</strong> "Credit Card Account or Suite clients" is <code>credit-card</code>; "Transaction Account with bundled fees, Credit Card Account and Suite" is <code>transaction-bundled | credit-card</code>; "with your Ðiscovery Miles" is <code>vitality-money</code>. When the source names no eligibility, leave <code>requires</code> empty.</li>
+    <li><strong>Facts, not advice.</strong> <code>benefit</code>, <code>condition</code> and <code>how</code> describe the offer in Discovery's terms. They never say whether to take it up.</li>
+    <li><strong>Done with a file:</strong> move it from <code>Inbox/</code> to <code>Inbox/Done/</code>.</li>
+  </ol>
+
+  <footer>Is Discovery Worth It? is not affiliated with or endorsed by Discovery. Offers change; the source always has the final terms.</footer>
+</main>
+</body>
+</html>

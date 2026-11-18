@@ -182,6 +182,9 @@ function sampleSettings(now, opts) {
     onboarded: true,
     products: { bank: true, health: true, gap: true, insure: true, life: true },
     bankKind: 'suite', suite: 'Black',
+    /* the others at home, for the Latest tab: a partner with a transaction
+       account and a child, both on the medical aid */
+    people: [{ name: 'Sam', bank: 'transaction', aid: true }, { name: 'Robin', bank: 'none', aid: true }],
     status: { money: 'Diamond', health: 'Gold', drive: 'Silver' },
     vitality: { money: true, health: true, drive: true },
     benefits: { gameboard: 'half', flights: 'none' },

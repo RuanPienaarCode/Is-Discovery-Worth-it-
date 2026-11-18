@@ -9,6 +9,8 @@ const { sampleSource, SAMPLE_FOLDER } = require('./sample');
 const { enterExample, leaveExample } = require('./example');
 const { saveSummary } = require('./summary-note');
 const { makeFontLoader } = require('./font-loader');
+const { parseOffer } = require('./offers');
+const { sampleOffers } = require('./sample-offers');
 
 /* Settings merge one level deep, so a new nested default (status.drive, say)
    reaches someone whose data.json predates it. */
@@ -18,6 +20,8 @@ function mergeSettings(saved) {
   if (!(Number(out.months) >= 6)) out.months = 6;
   for (const k of ['status', 'rates', 'actualMiles', 'travel', 'members', 'quotes', 'products', 'benefits', 'vitality', 'conditions', 'health', 'life', 'home', 'bill']) out[k] = { ...DEFAULT_SETTINGS[k], ...((saved || {})[k] || {}) };
   out.manual = { ...MANUAL_DEFAULTS, ...((saved || {}).manual || {}) };
+  /* never the default's own array: Inputs pushes onto it */
+  out.people = Array.isArray((saved || {}).people) ? saved.people.filter(p => p && typeof p === 'object').map(p => ({ ...p })) : [];
   return out;
 }
 
@@ -37,9 +41,12 @@ class DiscoveryWorthItPlugin extends Plugin {
     this.addSettingTab(new SettingsTab(this.app, this));
     /* Re-read when a budget note or a CSV changes — not any note in the
        vault; debounced so an import of 300 notes is one refresh, not 300. */
+    /* a file in the offers folder (an offer note, or the Inbox count) */
+    const inOffers = p => { const f = this.offersFolderPath(); return !!f && !this.settings.sample && typeof p === 'string' && p.startsWith(f + '/'); };
     const touched = f => {
       /* the example household never reads the vault */
       if (!f || !f.path || this.settings.sample) return;
+      if (inOffers(f.path)) { this.scheduleRefresh(800); return; }
       /* typed numbers: a Miles CSV still counts, and a budget that appears
          is offered (bottom-line.js) */
       if (this.settings.dataSource === 'manual') {
@@ -52,6 +59,12 @@ class DiscoveryWorthItPlugin extends Plugin {
     this.registerEvent(this.app.vault.on('modify', touched));
     this.registerEvent(this.app.vault.on('create', touched));
     this.registerEvent(this.app.vault.on('delete', touched));
+    /* An offer note is read from its frontmatter, which the metadata cache
+       has only after 'modify' — so the cache's own 'changed' refreshes too
+       (the debounce makes the two one refresh). A note moved in or out of
+       the folder is a rename. */
+    if (this.app.metadataCache && this.app.metadataCache.on) this.registerEvent(this.app.metadataCache.on('changed', f => { if (f && inOffers(f.path)) this.scheduleRefresh(800); }));
+    this.registerEvent(this.app.vault.on('rename', (f, old) => { if (f && (inOffers(f.path) || inOffers(old))) this.scheduleRefresh(800); }));
   }
 
   onunload() {
@@ -87,6 +100,57 @@ class DiscoveryWorthItPlugin extends Plugin {
     const b = await loadBudget({ paths: () => [...files.keys()], read: p => vault.cachedRead(files.get(p)), stat: p => files.get(p).stat }, folder);
     this.budgetFolder = b.folder;
     return b;
+  }
+
+  /* The offers folder as typed, tidied the way Obsidian tidies paths; ''
+     when blank. */
+  offersFolderPath() {
+    const typed = String(this.settings.offersFolder || '').trim();
+    return typed ? normalizePath(typed) : '';
+  }
+
+  /* The Latest tab's offer notes: every note under the offers folder whose
+     frontmatter says discovery: offer (src/offers.js parseOffer), and how
+     many files wait in its Inbox. The example household gets made-up
+     offers and the vault is not read. */
+  async readOffers() {
+    if (this.settings.sample) return { folder: '', offers: sampleOffers(new Date()), inbox: null, example: true };
+    const folder = this.offersFolderPath();
+    if (!folder) return { folder: '', offers: [], inbox: null, example: false };
+    const inboxPath = folder + '/Inbox/';
+    const offers = [];
+    let inbox = 0;
+    for (const f of this.app.vault.getFiles()) {
+      if (!f.path.startsWith(folder + '/')) continue;
+      if (f.path.startsWith(inboxPath)) {
+        /* Inbox/Done holds what has been read already */
+        if (!f.path.startsWith(inboxPath + 'Done/')) inbox++;
+        continue;
+      }
+      if (f.extension !== 'md') continue;
+      const cache = this.app.metadataCache.getFileCache(f);
+      const o = parseOffer(cache && cache.frontmatter, f.path);
+      if (o) offers.push(o);
+    }
+    return { folder, offers, inbox, example: false };
+  }
+
+  /* "Used it", "Hide" and "Show again": the offer note's own state field. */
+  async setOfferState(path, state) {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!file || !file.extension) { new Notice('That offer note is no longer there.'); return; }
+    try {
+      await this.app.fileManager.processFrontMatter(file, fm => {
+        if (state) fm.state = state; else delete fm.state;
+      });
+    } catch (e) {
+      new Notice('Could not change the offer note: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  async openNote(path) {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (file && file.extension) await this.app.workspace.getLeaf('tab').openFile(file);
   }
 
   /* Turn the example household on or off (src/example.js). On: the person's

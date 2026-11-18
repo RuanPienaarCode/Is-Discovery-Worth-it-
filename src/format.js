@@ -38,6 +38,12 @@ function monthLabel(ym) {
   return `${MONTHS[m - 1]} ${y}`;
 }
 
+/* '2026-09-04' → '4 Sep' */
+function dayShort(ymd) {
+  const [, m, d] = ymd.split('-').map(Number);
+  return `${d} ${MONTHS[m - 1]}`;
+}
+
 /* '2026-09-04' → '4 Sep 2026' */
 function dayLabel(ymd) {
   const [y, m, d] = ymd.split('-').map(Number);
@@ -87,4 +93,4 @@ function showTyped(v) {
   return String(Number(v)).replace('.', ',');
 }
 
-module.exports = { money, pct, monthLabel, dayLabel, miles, parseTyped, showTyped };
+module.exports = { money, pct, monthLabel, dayLabel, miles, parseTyped, showTyped, dayShort };

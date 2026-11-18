@@ -53,6 +53,7 @@ Costs are never reduced. You pay them whether or not you use the benefit. Only t
 ## The tabs
 
 - **Overview.** A short not-affiliated notice, then a verdict for each product you have and the whole Discovery bill against what comes back, with dates to watch.
+- **Latest.** Discovery's current offers, kept as notes in a folder you choose (one note per offer), checked against what your household has: On now (soonest ending first), Coming up and Always on, with each card saying who at home can use it. Offers nobody can use, ones you marked used or hidden, and ended ones fold away. The notes are plain Markdown with a few frontmatter fields; you can write them by hand or have an AI agent write them from Discovery's emails and news pages. The format is in [docs/offer-notes.html](docs/offer-notes.html).
 - **Compare.** Stay with Discovery, or move everything away. Each cost and each benefit side by side, with a total for both. Anything nobody has priced is taken as the same on both sides, and the page says so.
 - **Flows.** An animated diagram of where your money goes and what comes back. Tap a product to follow it.
 - **Bank.** What your Discovery Bank package costs, what you would lose by leaving, and the same card spend at other South African banks.
@@ -76,7 +77,8 @@ Each figure is labelled with where it came from, so you can judge it:
 ## Privacy
 
 - It reads your Budget notes and the CSV files in your vault. Each CSV is opened once to see whether it is a Discovery Miles statement, and again only when the file changes.
-- It writes **only its own settings file**, `.obsidian/plugins/discovery-worth-it/data.json`. That holds your answers, not your transactions: your health plan, family size, Vitality statuses, health-check answers, benefits you use, any quotes you type, and your typed numbers if you use *Type in my numbers*. If your vault is synced or kept in git, `data.json` travels with it. Leave that file out of any vault you share or publish.
+- It reads the offer notes in the Latest tab's folder (only their frontmatter), and counts the files in that folder's `Inbox`. Pressing *Used it*, *Hide* or *Show again* on an offer writes one field, `state`, into that offer's own note. That is the only time it writes outside its settings.
+- Otherwise it writes **only its own settings file**, `.obsidian/plugins/discovery-worth-it/data.json`. That holds your answers, not your transactions: your health plan, family size, Vitality statuses, health-check answers, benefits you use, any quotes you type, and your typed numbers if you use *Type in my numbers*, and the names of the others at home you add for the Latest tab. If your vault is synced or kept in git, `data.json` travels with it. Leave that file out of any vault you share or publish.
 - **Nothing leaves your vault.** There are no network requests, no account, no telemetry and no AI.
 
 ## Market data and how fresh it is
